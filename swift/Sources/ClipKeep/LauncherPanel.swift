@@ -27,6 +27,9 @@ final class LauncherPanel: NSPanel {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command) {
+            if event.charactersIgnoringModifiers == "k", handleCommand?(NSSelectorFromString("showActions:")) == true {
+                return true
+            }
             if event.charactersIgnoringModifiers == "s", handleCommand?(#selector(NSDocument.save(_:))) == true {
                 return true
             }
@@ -35,6 +38,18 @@ final class LauncherPanel: NSPanel {
             }
         }
         return super.performKeyEquivalent(with: event)
+    }
+}
+
+private final class ResultsTableView: NSTableView {
+    var actionMenuProvider: (() -> NSMenu?)?
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let clicked = row(at: convert(event.locationInWindow, from: nil))
+        if clicked >= 0 {
+            selectRowIndexes(IndexSet(integer: clicked), byExtendingSelection: false)
+        }
+        return actionMenuProvider?()
     }
 }
 
@@ -79,7 +94,7 @@ final class LauncherPanelController: NSWindowController,
     private let splitView = ResultsSplitView()
     private let listPane = NSView()
     private let detailPane = NSView()
-    private let tableView = NSTableView()
+    private let tableView = ResultsTableView()
     private let scrollView = NSScrollView()
     private let detailText = NSTextField(wrappingLabelWithString: "")
     private let detailImage = PreviewImageView()
@@ -293,6 +308,7 @@ final class LauncherPanelController: NSWindowController,
         tableView.delegate = self
         tableView.target = self
         tableView.doubleAction = #selector(openSelected)
+        tableView.actionMenuProvider = { [weak self] in self?.makeActionsMenu() }
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = false
         scrollView.autohidesScrollers = false
@@ -438,19 +454,57 @@ final class LauncherPanelController: NSWindowController,
         if result.kind == .command,
            result.metadata["route"] == "clipboard_history" {
             switchSearchMode(to: .clipboard)
-        } else if result.kind.isClipboard {
-            let canPaste = ensureAccessibilityPermission()
-            coordinator.execute(result, actionId: "copy") { [weak self] success in
-                guard let self, success else { return }
-                self.hide(
-                    restorePreviousApplication: true,
-                    pasteAfterRestore: canPaste
-                )
-            }
-        } else {
-            coordinator.execute(result, actionId: "open")
+        } else if let action = result.actions.first(where: { $0.default }) ?? result.actions.first {
+            perform(action, on: result)
+        }
+    }
+
+    private func perform(_ action: ResultAction, on result: SearchResult) {
+        let canPaste = action.pasteToPrevious ? ensureAccessibilityPermission() : false
+        coordinator.execute(result, actionId: action.id) { [weak self] success in
+            guard let self, success, action.closesWindow else { return }
+            self.hide(
+                restorePreviousApplication: action.pasteToPrevious,
+                pasteAfterRestore: action.pasteToPrevious && canPaste
+            )
+        }
+        if action.closesWindow && !action.pasteToPrevious {
             hide()
         }
+    }
+
+    private func makeActionsMenu() -> NSMenu? {
+        guard let result = selectedResult, !result.actions.isEmpty else { return nil }
+        let menu = NSMenu(title: "Actions")
+        for action in result.actions {
+            let item = NSMenuItem(
+                title: action.title,
+                action: #selector(performMenuAction(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = ActionInvocation(result: result, action: action)
+            if action.destructive { item.attributedTitle = NSAttributedString(
+                string: action.title,
+                attributes: [.foregroundColor: NSColor.systemRed]
+            ) }
+            menu.addItem(item)
+        }
+        return menu
+    }
+
+    private func showActionsMenu() {
+        guard let menu = makeActionsMenu(), tableView.selectedRow >= 0 else { return }
+        let rowRect = tableView.rect(ofRow: tableView.selectedRow)
+        ignoreNextResign = true
+        menu.popUp(positioning: nil, at: NSPoint(x: rowRect.maxX - 8, y: rowRect.midY), in: tableView)
+        window?.makeKey()
+        window?.makeFirstResponder(searchField)
+    }
+
+    @objc private func performMenuAction(_ sender: NSMenuItem) {
+        guard let invocation = sender.representedObject as? ActionInvocation else { return }
+        perform(invocation.action, on: invocation.result)
     }
 
     private func switchSearchMode(to mode: SearchMode) {
@@ -490,14 +544,18 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func handle(_ selector: Selector) -> Bool {
-        guard let result = selectedResult, result.kind.isClipboard else { return false }
-        if selector == #selector(NSDocument.save(_:)) {
-            coordinator.execute(result, actionId: "favorite")
+        guard let result = selectedResult else { return false }
+        if selector == NSSelectorFromString("showActions:") {
+            showActionsMenu()
             return true
         }
+        if selector == #selector(NSDocument.save(_:)) {
+            guard let action = result.actions.first(where: { $0.id == "favorite" }) else { return false }
+            perform(action, on: result); return true
+        }
         if selector == #selector(NSResponder.deleteBackward(_:)) {
-            coordinator.execute(result, actionId: "delete")
-            return true
+            guard let action = result.actions.first(where: { $0.id == "delete" }) else { return false }
+            perform(action, on: result); return true
         }
         return false
     }
@@ -765,6 +823,16 @@ final class LauncherPanelController: NSWindowController,
     @objc private func windowResignedKey() {
         guard !ignoreNextResign else { ignoreNextResign = false; return }
         hide()
+    }
+}
+
+private final class ActionInvocation: NSObject {
+    let result: SearchResult
+    let action: ResultAction
+
+    init(result: SearchResult, action: ResultAction) {
+        self.result = result
+        self.action = action
     }
 }
 

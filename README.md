@@ -21,6 +21,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Clipboard mode opens expanded and immediately shows the existing history
 - Animated fade-in and fade-out when showing or hiding
 - Keyboard navigation: arrows, Enter, `Command-S`, and `Command-Backspace`
+- Plugin-defined action menus on right-click or `Command-K`; action behavior such
+  as closing the palette and pasting into the previous app is protocol-driven
 - `Command-Shift-Space` searches applications only
 - `Command-Shift-C` searches clipboard history only
 - Automatically hides when focus moves to another application
