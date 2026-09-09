@@ -49,6 +49,7 @@ final class LauncherPanelController: NSWindowController,
     private var searchMode = SearchMode.applications
     private var hiding = false
     private var ignoreNextResign = false
+    private var previousApplication: NSRunningApplication?
 
     var onPluginStateChanged: (() -> Void)?
 
@@ -87,6 +88,10 @@ final class LauncherPanelController: NSWindowController,
 
     func show(mode: SearchMode = .applications, query: String = "") {
         guard let panel = window as? LauncherPanel else { return }
+        if let frontmost = NSWorkspace.shared.frontmostApplication,
+           frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            previousApplication = frontmost
+        }
         searchMode = mode
         hiding = false
         searchField.stringValue = query
@@ -107,9 +112,10 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    func hide() {
+    func hide(restorePreviousApplication: Bool = false) {
         guard let panel = window, panel.isVisible, !hiding else { return }
         hiding = true
+        let applicationToRestore = restorePreviousApplication ? previousApplication : nil
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.13
             context.timingFunction = CAMediaTimingFunction(name: .easeIn)
@@ -118,6 +124,7 @@ final class LauncherPanelController: NSWindowController,
             panel?.orderOut(nil)
             panel?.alphaValue = 1
             self?.hiding = false
+            applicationToRestore?.activate(options: [.activateIgnoringOtherApps])
         })
     }
 
@@ -312,7 +319,7 @@ final class LauncherPanelController: NSWindowController,
         case #selector(NSResponder.insertNewline(_:)):
             openSelected(); return true
         case #selector(NSResponder.cancelOperation(_:)):
-            hide(); return true
+            hide(restorePreviousApplication: true); return true
         default:
             return false
         }

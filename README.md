@@ -20,6 +20,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - `Command-Shift-Space` searches applications only
 - `Command-Shift-C` searches clipboard history only
 - Automatically hides when focus moves to another application
+- Escape hides the palette and restores focus to the previously active application
 - Plugins keep running while the window is hidden
 - No network access or analytics
 
