@@ -4,9 +4,12 @@ import QuartzCore
 
 private enum Layout {
     static let width: CGFloat = 780
-    static let collapsedHeight: CGFloat = 84
+    static let collapsedHeight: CGFloat = 72
     static let expandedHeight: CGFloat = 520
     static let cornerRadius: CGFloat = 28
+    static let outerInset: CGFloat = 8
+    static let searchHeight: CGFloat = 56
+    static let contentSpacing: CGFloat = 8
 }
 
 final class LauncherPanel: NSPanel {
@@ -184,10 +187,10 @@ final class LauncherPanelController: NSWindowController,
         buildResults()
 
         NSLayoutConstraint.activate([
-            searchContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: 14),
-            searchContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
-            searchContainer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
-            searchContainer.heightAnchor.constraint(equalToConstant: 56),
+            searchContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: Layout.outerInset),
+            searchContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
+            searchContainer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Layout.outerInset),
+            searchContainer.heightAnchor.constraint(equalToConstant: Layout.searchHeight),
             searchIcon.leadingAnchor.constraint(equalTo: searchContainer.leadingAnchor, constant: 17),
             searchIcon.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
             searchIcon.widthAnchor.constraint(equalToConstant: 20),
@@ -195,10 +198,15 @@ final class LauncherPanelController: NSWindowController,
             searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 11),
             searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -12),
             searchField.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
-            content.topAnchor.constraint(equalTo: searchContainer.bottomAnchor, constant: 12),
-            content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
-            content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
-            content.heightAnchor.constraint(equalToConstant: Layout.expandedHeight - 94),
+            content.topAnchor.constraint(equalTo: searchContainer.bottomAnchor, constant: Layout.contentSpacing),
+            content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
+            content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Layout.outerInset),
+            content.heightAnchor.constraint(
+                equalToConstant: Layout.expandedHeight
+                    - Layout.outerInset * 2
+                    - Layout.searchHeight
+                    - Layout.contentSpacing
+            ),
         ])
     }
 
