@@ -11,6 +11,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Searches installed macOS applications and opens the selected result
 - Preserves native pasteboard representations such as UTF-8, RTF, HTML,
   PNG, TIFF, file URLs, and multiple pasteboard items
+- Generates compact image thumbnails in Rust for list and detail previews
 - Persists up to 500 entries locally between launches, with per-item and total
   storage limits for large binary content
 - Search, favorite, restore, and delete history entries

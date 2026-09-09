@@ -43,6 +43,7 @@ final class LauncherPanelController: NSWindowController,
     private let scrollView = NSScrollView()
     private let detailTitle = NSTextField(labelWithString: "")
     private let detailText = NSTextField(wrappingLabelWithString: "")
+    private let detailImage = NSImageView()
     private let detailInfo = NSStackView()
     private let statusLabel = NSTextField(labelWithString: "ClipKeep")
     private var results: [SearchResult] = []
@@ -244,12 +245,22 @@ final class LauncherPanelController: NSWindowController,
         detailText.textColor = .secondaryLabelColor
         detailText.maximumNumberOfLines = 8
         detailText.translatesAutoresizingMaskIntoConstraints = false
+        detailImage.imageScaling = .scaleProportionallyUpOrDown
+        detailImage.imageAlignment = .alignCenter
+        detailImage.wantsLayer = true
+        detailImage.layer?.cornerRadius = 12
+        detailImage.layer?.cornerCurve = .continuous
+        detailImage.layer?.masksToBounds = true
+        detailImage.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.16).cgColor
+        detailImage.translatesAutoresizingMaskIntoConstraints = false
+        detailImage.isHidden = true
         detailInfo.orientation = .vertical
         detailInfo.spacing = 6
         detailInfo.alignment = .leading
         detailInfo.translatesAutoresizingMaskIntoConstraints = false
         detailPane.addSubview(detailTitle)
         detailPane.addSubview(detailText)
+        detailPane.addSubview(detailImage)
         detailPane.addSubview(detailInfo)
 
         let footer = NSView()
@@ -282,6 +293,10 @@ final class LauncherPanelController: NSWindowController,
             detailText.topAnchor.constraint(equalTo: detailTitle.bottomAnchor, constant: 16),
             detailText.leadingAnchor.constraint(equalTo: detailTitle.leadingAnchor),
             detailText.trailingAnchor.constraint(equalTo: detailTitle.trailingAnchor),
+            detailImage.topAnchor.constraint(equalTo: detailTitle.bottomAnchor, constant: 16),
+            detailImage.leadingAnchor.constraint(equalTo: detailTitle.leadingAnchor),
+            detailImage.trailingAnchor.constraint(equalTo: detailTitle.trailingAnchor),
+            detailImage.heightAnchor.constraint(equalToConstant: 170),
             detailInfo.leadingAnchor.constraint(equalTo: detailTitle.leadingAnchor),
             detailInfo.trailingAnchor.constraint(equalTo: detailTitle.trailingAnchor),
             detailInfo.bottomAnchor.constraint(equalTo: detailPane.bottomAnchor, constant: -18),
@@ -395,13 +410,21 @@ final class LauncherPanelController: NSWindowController,
         guard let result = selectedResult else {
             detailTitle.stringValue = results.isEmpty ? "No results" : "Select a result"
             detailText.stringValue = ""
+            detailImage.image = nil
+            detailImage.isHidden = true
+            detailText.isHidden = false
             return
         }
         detailTitle.stringValue = result.title
         detailText.stringValue = result.preview
+        detailImage.image = thumbnailImage(from: result)
+        detailImage.isHidden = detailImage.image == nil
+        detailText.isHidden = detailImage.image != nil
         addInfo("Plugin", result.pluginId)
         addInfo("Type", result.kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-        for (key, value) in result.metadata.sorted(by: { $0.key < $1.key }) {
+        for (key, value) in result.metadata
+            .filter({ $0.key != "thumbnail_png" })
+            .sorted(by: { $0.key < $1.key }) {
             addInfo(key.capitalized, value)
         }
     }
@@ -473,6 +496,12 @@ final class LauncherPanelController: NSWindowController,
         keyUp.postToPid(application.processIdentifier)
     }
 
+    private func thumbnailImage(from result: SearchResult) -> NSImage? {
+        guard let encoded = result.metadata["thumbnail_png"],
+              let data = Data(base64Encoded: encoded) else { return nil }
+        return NSImage(data: data)
+    }
+
     private func position(_ panel: NSPanel) {
         let screen = NSScreen.main ?? NSScreen.screens.first
         guard let visible = screen?.visibleFrame else { return }
@@ -489,6 +518,7 @@ final class LauncherPanelController: NSWindowController,
 
 private final class ResultCellView: NSTableCellView {
     private let symbol = NSTextField(labelWithString: "")
+    private let thumbnail = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
 
@@ -502,6 +532,12 @@ private final class ResultCellView: NSTableCellView {
         symbol.wantsLayer = true
         symbol.layer?.cornerRadius = 8
         symbol.translatesAutoresizingMaskIntoConstraints = false
+        thumbnail.imageScaling = .scaleProportionallyUpOrDown
+        thumbnail.wantsLayer = true
+        thumbnail.layer?.cornerRadius = 8
+        thumbnail.layer?.cornerCurve = .continuous
+        thumbnail.layer?.masksToBounds = true
+        thumbnail.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -510,6 +546,7 @@ private final class ResultCellView: NSTableCellView {
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbol)
+        addSubview(thumbnail)
         addSubview(titleLabel)
         addSubview(subtitleLabel)
         NSLayoutConstraint.activate([
@@ -517,6 +554,10 @@ private final class ResultCellView: NSTableCellView {
             symbol.centerYAnchor.constraint(equalTo: centerYAnchor),
             symbol.widthAnchor.constraint(equalToConstant: 36),
             symbol.heightAnchor.constraint(equalToConstant: 36),
+            thumbnail.leadingAnchor.constraint(equalTo: symbol.leadingAnchor),
+            thumbnail.centerYAnchor.constraint(equalTo: symbol.centerYAnchor),
+            thumbnail.widthAnchor.constraint(equalTo: symbol.widthAnchor),
+            thumbnail.heightAnchor.constraint(equalTo: symbol.heightAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 10),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 9),
@@ -529,6 +570,12 @@ private final class ResultCellView: NSTableCellView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func configure(_ result: SearchResult, selected: Bool) {
+        let image = result.metadata["thumbnail_png"]
+            .flatMap { Data(base64Encoded: $0) }
+            .flatMap { NSImage(data: $0) }
+        thumbnail.image = image
+        thumbnail.isHidden = image == nil
+        symbol.isHidden = image != nil
         switch result.kind {
         case .application: symbol.stringValue = "A"
         case .clipboardText: symbol.stringValue = "T"

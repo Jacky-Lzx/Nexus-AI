@@ -32,17 +32,28 @@ impl ClipboardPlugin {
     fn new() -> io::Result<Self> {
         let history_path = history_path()
             .ok_or_else(|| io::Error::other("could not determine clipboard data directory"))?;
-        let items: Vec<ClipItem> = fs::read(&history_path)
+        let mut items: Vec<ClipItem> = fs::read(&history_path)
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
             .unwrap_or_default();
+        let mut added_thumbnails = false;
+        for item in &mut items {
+            if item.kind == ClipKind::Image && item.thumbnail.is_none() {
+                item.thumbnail = make_thumbnail(&item.representations);
+                added_thumbnails |= item.thumbnail.is_some();
+            }
+        }
         let next_id = items.iter().map(|item| item.id).max().unwrap_or(0) + 1;
-        Ok(Self {
+        let plugin = Self {
             clipboard: PlatformClipboard::new()?,
             items,
             next_id,
             history_path,
-        })
+        };
+        if added_thumbnails {
+            plugin.save().map_err(io::Error::other)?;
+        }
+        Ok(plugin)
     }
 
     fn save(&self) -> Result<(), String> {
@@ -187,6 +198,7 @@ struct CapturedContent {
     text: String,
     representations: Vec<Representation>,
     fingerprint: u64,
+    thumbnail: Option<String>,
 }
 
 impl CapturedContent {
@@ -209,6 +221,8 @@ struct ClipItem {
     representations: Vec<Representation>,
     #[serde(default)]
     fingerprint: u64,
+    #[serde(default)]
+    thumbnail: Option<String>,
 }
 
 impl ClipItem {
@@ -221,6 +235,7 @@ impl ClipItem {
             kind: content.kind,
             representations: content.representations,
             fingerprint: content.fingerprint,
+            thumbnail: content.thumbnail,
         }
     }
 
@@ -250,6 +265,11 @@ impl ClipItem {
                 .max()
                 .map_or(0, |index| index + 1);
             metadata.insert("items".into(), count.to_string());
+        }
+        if self.kind == ClipKind::Image
+            && let Some(thumbnail) = self.thumbnail_data()
+        {
+            metadata.insert("thumbnail_png".into(), thumbnail);
         }
         if matches!(self.kind, ClipKind::Text | ClipKind::RichText) {
             metadata.insert("characters".into(), self.text.chars().count().to_string());
@@ -302,6 +322,12 @@ impl ClipItem {
                 },
             ],
         }
+    }
+
+    fn thumbnail_data(&self) -> Option<String> {
+        self.thumbnail
+            .clone()
+            .or_else(|| make_thumbnail(&self.representations))
     }
 }
 
@@ -365,11 +391,16 @@ impl PlatformClipboard {
             .stringForType(text_type)
             .map(|value| value.to_string())
             .unwrap_or_default();
+        let kind = classify(&representations);
+        let thumbnail = (kind == ClipKind::Image)
+            .then(|| make_thumbnail(&representations))
+            .flatten();
         Ok(Some(CapturedContent {
-            kind: classify(&representations),
+            kind,
             text: plain_text,
             representations,
             fingerprint: hasher.finish(),
+            thumbnail,
         }))
     }
 
@@ -445,6 +476,7 @@ impl PlatformClipboard {
             text,
             representations: Vec::new(),
             fingerprint: hasher.finish(),
+            thumbnail: None,
         }))
     }
 
@@ -486,6 +518,21 @@ fn classify(representations: &[Representation]) -> ClipKind {
     } else {
         ClipKind::Text
     }
+}
+
+fn make_thumbnail(representations: &[Representation]) -> Option<String> {
+    use std::io::Cursor;
+
+    let source = representations
+        .iter()
+        .find(|value| value.uti == "public.png" || value.uti == "public.tiff")?;
+    let image = image::load_from_memory(&source.data).ok()?;
+    let thumbnail = image.thumbnail(320, 240);
+    let mut output = Cursor::new(Vec::new());
+    thumbnail
+        .write_to(&mut output, image::ImageFormat::Png)
+        .ok()?;
+    Some(BASE64.encode(output.into_inner()))
 }
 
 fn history_path() -> Option<PathBuf> {
