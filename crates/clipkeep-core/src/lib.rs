@@ -1,8 +1,10 @@
 use clipkeep_protocol::{HostRequest, PROTOCOL_VERSION, PluginEvent, SearchResult};
+use directories::ProjectDirs;
 use std::{
     collections::HashMap,
+    fs,
     io::{self, BufRead, BufReader, BufWriter, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::mpsc::{self, Receiver},
     thread,
@@ -68,13 +70,28 @@ impl Drop for PluginClient {
 }
 
 pub struct SearchCore {
-    plugins: Vec<PluginClient>,
+    plugins: Vec<PluginSlot>,
     current_query_id: u64,
     next_request_id: u64,
     current_query: String,
     results_by_plugin: HashMap<String, Vec<SearchResult>>,
     results: Vec<SearchResult>,
     status: Option<String>,
+    settings_path: Option<PathBuf>,
+}
+
+struct PluginSlot {
+    id: String,
+    name: String,
+    executable: PathBuf,
+    client: Option<PluginClient>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PluginState {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
 }
 
 impl Default for SearchCore {
@@ -87,13 +104,86 @@ impl Default for SearchCore {
             results_by_plugin: HashMap::new(),
             results: Vec::new(),
             status: None,
+            settings_path: None,
         }
     }
 }
 
 impl SearchCore {
-    pub fn add_plugin(&mut self, client: PluginClient) {
-        self.plugins.push(client);
+    pub fn with_builtin_plugins() -> io::Result<Self> {
+        let mut core = Self::default();
+        let (settings_path, settings) = load_plugin_settings();
+        core.settings_path = settings_path;
+        for (plugin_id, plugin_name, executable_name) in [
+            (
+                "io.clipkeep.applications",
+                "Applications",
+                "clipkeep-plugin-applications",
+            ),
+            (
+                "io.clipkeep.clipboard",
+                "Clipboard History",
+                "clipkeep-plugin-clipboard",
+            ),
+        ] {
+            let executable = sibling_executable(executable_name)?;
+            let enabled = settings.get(plugin_id).copied().unwrap_or(true);
+            core.register_plugin(plugin_id, plugin_name, executable, enabled)?;
+        }
+        core.search("");
+        Ok(core)
+    }
+
+    pub fn register_plugin(
+        &mut self,
+        plugin_id: impl Into<String>,
+        name: impl Into<String>,
+        executable: PathBuf,
+        enabled: bool,
+    ) -> io::Result<()> {
+        let plugin_id = plugin_id.into();
+        let client = enabled
+            .then(|| PluginClient::spawn(plugin_id.clone(), &executable))
+            .transpose()?;
+        self.plugins.push(PluginSlot {
+            id: plugin_id,
+            name: name.into(),
+            executable,
+            client,
+        });
+        Ok(())
+    }
+
+    pub fn plugin_states(&self) -> Vec<PluginState> {
+        self.plugins
+            .iter()
+            .map(|plugin| PluginState {
+                id: plugin.id.clone(),
+                name: plugin.name.clone(),
+                enabled: plugin.client.is_some(),
+            })
+            .collect()
+    }
+
+    pub fn set_plugin_enabled(&mut self, plugin_id: &str, enabled: bool) -> io::Result<()> {
+        let plugin = self
+            .plugins
+            .iter_mut()
+            .find(|plugin| plugin.id == plugin_id)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "plugin is not registered"))?;
+        match (enabled, plugin.client.is_some()) {
+            (true, false) => {
+                plugin.client = Some(PluginClient::spawn(&plugin.id, &plugin.executable)?);
+            }
+            (false, true) => {
+                plugin.client.take();
+                self.results_by_plugin.remove(plugin_id);
+            }
+            _ => return Ok(()),
+        }
+        self.save_plugin_settings()?;
+        self.search(self.current_query.clone());
+        Ok(())
     }
 
     pub fn search(&mut self, query: impl Into<String>) {
@@ -107,8 +197,11 @@ impl SearchCore {
             limit: 100,
         };
         for plugin in &mut self.plugins {
-            if let Err(error) = plugin.send(&request) {
-                self.status = Some(format!("{}: {error}", plugin.plugin_id()));
+            let Some(client) = &mut plugin.client else {
+                continue;
+            };
+            if let Err(error) = client.send(&request) {
+                self.status = Some(format!("{}: {error}", client.plugin_id()));
             }
         }
     }
@@ -121,13 +214,14 @@ impl SearchCore {
             result_id: result.id.clone(),
             action_id: action_id.into(),
         };
-        if let Some(plugin) = self
+        if let Some(client) = self
             .plugins
             .iter_mut()
-            .find(|plugin| plugin.plugin_id() == result.plugin_id)
-            && let Err(error) = plugin.send(&request)
+            .filter_map(|plugin| plugin.client.as_mut())
+            .find(|client| client.plugin_id() == result.plugin_id)
+            && let Err(error) = client.send(&request)
         {
-            self.status = Some(format!("{}: {error}", plugin.plugin_id()));
+            self.status = Some(format!("{}: {error}", client.plugin_id()));
         }
     }
 
@@ -135,13 +229,16 @@ impl SearchCore {
         let mut changed = false;
         let mut refresh = false;
         for plugin in &self.plugins {
-            while let Some(event) = plugin.try_event() {
+            let Some(client) = &plugin.client else {
+                continue;
+            };
+            while let Some(event) = client.try_event() {
                 match event {
                     PluginEvent::SearchResults { query_id, items }
                         if query_id == self.current_query_id =>
                     {
                         self.results_by_plugin
-                            .insert(plugin.plugin_id().to_owned(), items);
+                            .insert(client.plugin_id().to_owned(), items);
                         changed = true;
                     }
                     PluginEvent::CatalogChanged => refresh = true,
@@ -184,6 +281,56 @@ impl SearchCore {
                 .total_cmp(&left.score)
                 .then_with(|| left.title.cmp(&right.title))
         });
+    }
+
+    fn save_plugin_settings(&self) -> io::Result<()> {
+        let Some(path) = &self.settings_path else {
+            return Ok(());
+        };
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let settings: HashMap<_, _> = self
+            .plugins
+            .iter()
+            .map(|plugin| (plugin.id.clone(), plugin.client.is_some()))
+            .collect();
+        let bytes = serde_json::to_vec_pretty(&settings).map_err(io::Error::other)?;
+        let temporary = path.with_extension("json.tmp");
+        fs::write(&temporary, bytes)?;
+        fs::rename(temporary, path)
+    }
+}
+
+fn load_plugin_settings() -> (Option<PathBuf>, HashMap<String, bool>) {
+    let path = ProjectDirs::from("io", "clipkeep", "ClipKeep")
+        .map(|directories| directories.config_dir().join("plugins.json"));
+    let settings = path
+        .as_ref()
+        .and_then(|path| fs::read(path).ok())
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default();
+    (path, settings)
+}
+
+fn sibling_executable(name: &str) -> io::Result<std::path::PathBuf> {
+    let executable_name = if cfg!(windows) {
+        format!("{name}.exe")
+    } else {
+        name.to_owned()
+    };
+    let current = std::env::current_exe()?;
+    let path = current
+        .parent()
+        .ok_or_else(|| io::Error::other("application executable has no parent directory"))?
+        .join(executable_name);
+    if path.is_file() {
+        Ok(path)
+    } else {
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("built-in plugin not found: {}", path.display()),
+        ))
     }
 }
 

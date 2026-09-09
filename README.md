@@ -1,12 +1,14 @@
 # ClipKeep
 
-ClipKeep is a small, local-first clipboard history manager written in Rust. It
-works on macOS today and uses cross-platform libraries that also support Windows
-and Linux.
+ClipKeep is a local-first application launcher and clipboard history palette.
+The UI talks to process-isolated Rust plugins through a versioned JSON protocol.
+It works on macOS today, with the core and plugin architecture designed for
+Windows and Linux frontends later.
 
 ## Features
 
 - Watches the text clipboard while the app is running
+- Searches installed macOS applications and opens the selected result
 - Persists up to 500 entries locally between launches
 - Search, favorite, restore, and delete history entries
 - Deduplicates repeated clipboard contents
@@ -19,7 +21,8 @@ and Linux.
 Install a current stable Rust toolchain, then:
 
 ```sh
-cargo run --release
+cargo build --workspace
+cargo run
 ```
 
 To create a normal macOS application bundle that can be moved into
@@ -47,5 +50,17 @@ History is stored in the platform application-data directory:
 ## Privacy note
 
 Clipboard history can contain passwords and other sensitive text. ClipKeep never
-sends data over the network, but its history file is currently plain JSON. Use
-**Clear all** to remove all non-favorite entries.
+sends data over the network, but its history file is currently plain JSON.
+Individual clipboard entries can be removed from the result action bar.
+
+## Architecture
+
+- `crates/clipkeep-protocol`: stable, versioned host/plugin message types
+- `crates/clipkeep-plugin-sdk`: Rust plugin runtime over newline-delimited JSON
+- `crates/clipkeep-core`: plugin process lifecycle, concurrent result aggregation,
+  ranking, stale-query rejection, and action routing
+- `plugins/applications`: installed application index and launcher
+- `plugins/clipboard`: clipboard capture, search, persistence, and actions
+
+Built-in plugins are separate executables. A plugin crash cannot directly crash
+the UI, and disabling a plugin can be implemented by stopping its process.

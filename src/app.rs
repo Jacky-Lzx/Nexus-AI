@@ -1,165 +1,110 @@
-use crate::{
-    clipboard::{ClipboardEvent, ClipboardWorker},
-    model::ClipItem,
-    store,
-};
+use clipkeep_core::SearchCore;
+use clipkeep_protocol::{ResultKind, SearchResult};
 use eframe::egui::{
     self, Color32, FontData, FontDefinitions, FontFamily, FontId, Margin, RichText, Sense, Stroke,
     Vec2,
 };
 use std::{fs, time::Duration};
 
-const MAX_HISTORY: usize = 500;
 const PANEL: Color32 = Color32::from_rgb(27, 26, 31);
 const PANEL_ALT: Color32 = Color32::from_rgb(31, 30, 36);
 const SELECTED: Color32 = Color32::from_rgb(54, 53, 59);
 const MUTED: Color32 = Color32::from_rgb(160, 157, 164);
 const BORDER: Color32 = Color32::from_rgb(73, 71, 78);
 
-pub struct ClipboardApp {
-    items: Vec<ClipItem>,
-    next_id: u64,
+pub struct LauncherApp {
+    core: Option<SearchCore>,
+    items: Vec<SearchResult>,
     query: String,
-    selected_id: Option<u64>,
-    worker: ClipboardWorker,
+    selected_id: Option<String>,
     status: Option<String>,
-    dirty: bool,
     focus_search: bool,
     place_window: bool,
 }
 
-impl ClipboardApp {
+impl LauncherApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         configure_fonts(&cc.egui_ctx);
         configure_style(&cc.egui_ctx);
-
-        let items = store::load();
-        let selected_id = items.first().map(|item| item.id);
-        let next_id = items.iter().map(|item| item.id).max().unwrap_or(0) + 1;
+        let (core, status) = match SearchCore::with_builtin_plugins() {
+            Ok(core) => (Some(core), None),
+            Err(error) => (None, Some(format!("Could not start plugins: {error}"))),
+        };
         Self {
-            items,
-            next_id,
+            core,
+            items: Vec::new(),
             query: String::new(),
-            selected_id,
-            worker: ClipboardWorker::start(),
-            status: None,
-            dirty: false,
+            selected_id: None,
+            status,
             focus_search: true,
             place_window: true,
         }
     }
 
-    fn receive_clipboard(&mut self) {
-        while let Ok(event) = self.worker.events.try_recv() {
-            match event {
-                ClipboardEvent::Text(text) => self.push(text),
-                ClipboardEvent::Unavailable(error) => {
-                    self.status = Some(format!("Clipboard unavailable: {error}"));
-                }
-            }
-        }
-    }
-
-    fn push(&mut self, text: String) {
-        if let Some(position) = self.items.iter().position(|item| item.text == text) {
-            let mut existing = self.items.remove(position);
-            existing.created_at = crate::model::now_secs();
-            self.items.insert(0, existing);
-        } else {
-            self.items.insert(0, ClipItem::new(self.next_id, text));
-            self.next_id += 1;
-        }
-        if self.selected_id.is_none() {
-            self.selected_id = self.items.first().map(|item| item.id);
-        }
-        self.trim_history();
-        self.dirty = true;
-    }
-
-    fn trim_history(&mut self) {
-        if self.items.len() <= MAX_HISTORY {
+    fn poll_core(&mut self) {
+        let Some(core) = &mut self.core else {
             return;
+        };
+        if core.poll() {
+            self.items = core.results().to_vec();
         }
-        let mut index = self.items.len();
-        while self.items.len() > MAX_HISTORY && index > 0 {
-            index -= 1;
-            if !self.items[index].favorite {
-                self.items.remove(index);
-            }
+        if let Some(status) = core.take_status() {
+            self.status = Some(status);
         }
     }
 
-    fn visible_items(&self) -> Vec<ClipItem> {
-        let query = self.query.to_lowercase();
-        self.items
-            .iter()
-            .filter(|item| query.is_empty() || item.text.to_lowercase().contains(&query))
-            .cloned()
-            .collect()
+    fn search(&mut self) {
+        if let Some(core) = &mut self.core {
+            core.search(self.query.clone());
+        }
     }
 
-    fn move_selection(&mut self, visible: &[ClipItem], delta: isize) {
-        if visible.is_empty() {
+    fn move_selection(&mut self, delta: isize) {
+        if self.items.is_empty() {
             self.selected_id = None;
             return;
         }
         let current = self
             .selected_id
-            .and_then(|id| visible.iter().position(|item| item.id == id))
+            .as_ref()
+            .and_then(|id| self.items.iter().position(|item| &item.id == id))
             .unwrap_or(0);
-        let next = (current as isize + delta).clamp(0, visible.len() as isize - 1) as usize;
-        self.selected_id = Some(visible[next].id);
+        let next = (current as isize + delta).clamp(0, self.items.len() as isize - 1) as usize;
+        self.selected_id = Some(self.items[next].id.clone());
     }
 
-    fn copy_selected(&mut self) {
-        let Some(item) = self
-            .selected_id
-            .and_then(|id| self.items.iter().find(|item| item.id == id))
-        else {
+    fn selected(&self) -> Option<SearchResult> {
+        self.selected_id
+            .as_ref()
+            .and_then(|id| self.items.iter().find(|item| &item.id == id))
+            .cloned()
+    }
+
+    fn execute_selected(&mut self, action_id: &str) {
+        let Some(result) = self.selected() else {
             return;
         };
-        self.worker.set_text(item.text.clone());
-        self.status = Some("Copied to clipboard".to_owned());
+        if let Some(core) = &mut self.core {
+            core.execute(&result, action_id);
+        }
     }
 
-    fn delete_selected(&mut self) {
-        let Some(id) = self.selected_id else {
-            return;
+    fn primary_action(&mut self) {
+        let action = match self.selected().map(|result| result.kind) {
+            Some(ResultKind::Application) => "open",
+            Some(ResultKind::ClipboardText) => "copy",
+            _ => return,
         };
-        let position = self.items.iter().position(|item| item.id == id);
-        self.items.retain(|item| item.id != id);
-        self.selected_id = position
-            .and_then(|index| self.items.get(index).or_else(|| self.items.last()))
-            .map(|item| item.id);
-        self.dirty = true;
+        self.execute_selected(action);
     }
 
-    fn toggle_favorite(&mut self) {
-        if let Some(item) = self
-            .selected_id
-            .and_then(|id| self.items.iter_mut().find(|item| item.id == id))
-        {
-            item.favorite = !item.favorite;
-            self.dirty = true;
-        }
-    }
-
-    fn persist_if_needed(&mut self) {
-        if !self.dirty {
-            return;
-        }
-        match store::save(&self.items) {
-            Ok(()) => self.dirty = false,
-            Err(error) => self.status = Some(format!("Could not save history: {error}")),
-        }
-    }
-
-    fn header(&mut self, ui: &mut egui::Ui) {
+    fn header(&mut self, ui: &mut egui::Ui) -> bool {
         let drag = ui.allocate_response(Vec2::new(ui.available_width(), 8.0), Sense::drag());
         if drag.drag_started() {
             ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
         }
 
+        let mut changed = false;
         ui.horizontal(|ui| {
             ui.add_space(14.0);
             if ui
@@ -170,7 +115,6 @@ impl ClipboardApp {
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
             }
             ui.add_space(8.0);
-
             let search_width = (ui.available_width() - 170.0).max(200.0);
             let response = ui.add_sized(
                 [search_width, 48.0],
@@ -178,44 +122,73 @@ impl ClipboardApp {
                     .id(egui::Id::new("search"))
                     .font(FontId::proportional(25.0))
                     .frame(egui::Frame::NONE)
-                    .hint_text("Type to filter entries…"),
+                    .hint_text("Search applications and clipboard…"),
             );
+            changed = response.changed();
             if self.focus_search {
                 response.request_focus();
                 self.focus_search = false;
             }
-
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(16.0);
-                ui.label(RichText::new("Text").size(17.0).color(MUTED));
+                ui.menu_button(RichText::new("Plugins").size(17.0).color(MUTED), |ui| {
+                    let states = self
+                        .core
+                        .as_ref()
+                        .map(SearchCore::plugin_states)
+                        .unwrap_or_default();
+                    for state in states {
+                        let mut enabled = state.enabled;
+                        if ui.checkbox(&mut enabled, &state.name).changed()
+                            && let Some(core) = &mut self.core
+                            && let Err(error) = core.set_plugin_enabled(&state.id, enabled)
+                        {
+                            self.status = Some(format!("Could not update plugin: {error}"));
+                        }
+                    }
+                });
             });
         });
         ui.add_space(9.0);
+        changed
     }
 
-    fn history_list(&mut self, ui: &mut egui::Ui, visible: &[ClipItem]) -> bool {
-        let mut copy = false;
+    fn result_list(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut execute = false;
         ui.add_space(10.0);
-        ui.label(RichText::new("Today").size(14.0).strong().color(MUTED));
+        ui.label(
+            RichText::new(format!("Results · {}", self.items.len()))
+                .size(14.0)
+                .strong()
+                .color(MUTED),
+        );
         ui.add_space(7.0);
 
-        if visible.is_empty() {
+        if self.items.is_empty() {
             ui.add_space(70.0);
             ui.vertical_centered(|ui| {
-                ui.label(RichText::new("No matching clips").size(17.0).color(MUTED));
+                ui.label(RichText::new("No results").size(17.0).color(MUTED));
             });
             return false;
         }
 
+        let items = self.items.clone();
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                for item in visible {
-                    let selected = self.selected_id == Some(item.id);
+                for item in &items {
+                    let selected = self.selected_id.as_ref() == Some(&item.id);
                     let fill = if selected {
                         SELECTED
                     } else {
                         Color32::TRANSPARENT
+                    };
+                    let icon = match item.kind {
+                        ResultKind::Application => "A",
+                        ResultKind::ClipboardText => "T",
+                        ResultKind::Command => ">",
+                        ResultKind::File => "F",
+                        ResultKind::Other => "·",
                     };
                     let row = egui::Frame::new()
                         .fill(fill)
@@ -228,21 +201,23 @@ impl ClipboardApp {
                                     .corner_radius(8)
                                     .inner_margin(7)
                                     .show(ui, |ui| {
-                                        ui.label(RichText::new("T").size(18.0).strong());
+                                        ui.label(RichText::new(icon).size(17.0).strong());
                                     });
                                 ui.add_space(8.0);
                                 ui.vertical(|ui| {
                                     ui.add_space(2.0);
-                                    ui.label(RichText::new(item.preview(46)).size(16.0).strong());
-                                    ui.label(
-                                        RichText::new(item.age_label()).size(11.0).color(MUTED),
-                                    );
+                                    ui.label(RichText::new(&item.title).size(16.0).strong());
+                                    ui.label(RichText::new(&item.subtitle).size(11.0).color(MUTED));
                                 });
-                                if item.favorite {
+                                if item
+                                    .metadata
+                                    .get("favorite")
+                                    .is_some_and(|value| value == "true")
+                                {
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            ui.label(RichText::new("★").color(Color32::YELLOW));
+                                            ui.label(RichText::new("*").color(Color32::YELLOW));
                                         },
                                     );
                                 }
@@ -250,41 +225,38 @@ impl ClipboardApp {
                         });
                     let response = row.response.interact(Sense::click());
                     if response.clicked() {
-                        self.selected_id = Some(item.id);
+                        self.selected_id = Some(item.id.clone());
                     }
                     if response.double_clicked() {
-                        self.selected_id = Some(item.id);
-                        copy = true;
+                        self.selected_id = Some(item.id.clone());
+                        execute = true;
                     }
                     ui.add_space(4.0);
                 }
             });
-        copy
+        execute
     }
 
-    fn details(ui: &mut egui::Ui, selected: Option<&ClipItem>) {
+    fn details(ui: &mut egui::Ui, selected: Option<&SearchResult>) {
         ui.add_space(20.0);
         let Some(item) = selected else {
             ui.vertical_centered(|ui| {
                 ui.add_space(90.0);
-                ui.label(RichText::new("Select an entry").size(18.0).color(MUTED));
+                ui.label(RichText::new("Select a result").size(18.0).color(MUTED));
             });
             return;
         };
 
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.label(RichText::new(&item.text).size(18.0).strong());
+            ui.label(RichText::new(&item.preview).size(18.0).strong());
         });
         ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
             ui.add_space(18.0);
-            detail_row(ui, "Copied", &item.age_label());
-            detail_row(
-                ui,
-                "Words",
-                &item.text.split_whitespace().count().to_string(),
-            );
-            detail_row(ui, "Characters", &item.text.chars().count().to_string());
-            detail_row(ui, "Type", "Text");
+            for (key, value) in item.metadata.iter().rev() {
+                detail_row(ui, &title_case(key), value);
+            }
+            detail_row(ui, "Plugin", &item.plugin_id);
+            detail_row(ui, "Type", result_kind_name(item.kind));
             ui.add_space(8.0);
             ui.label(
                 RichText::new("Information")
@@ -296,6 +268,12 @@ impl ClipboardApp {
     }
 
     fn footer(&mut self, ui: &mut egui::Ui) {
+        let selected = self.selected();
+        let primary_label = match selected.as_ref().map(|result| result.kind) {
+            Some(ResultKind::Application) => "Open   Enter",
+            Some(ResultKind::ClipboardText) => "Copy   Enter",
+            _ => "Run   Enter",
+        };
         ui.add_space(9.0);
         ui.horizontal(|ui| {
             ui.add_space(12.0);
@@ -306,30 +284,33 @@ impl ClipboardApp {
                     .color(Color32::from_rgb(255, 109, 45)),
             );
             ui.label(
-                RichText::new(self.status.as_deref().unwrap_or("Clipboard History"))
+                RichText::new(self.status.as_deref().unwrap_or("ClipKeep Launcher"))
                     .size(16.0)
                     .strong(),
             );
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(12.0);
+                if selected
+                    .as_ref()
+                    .is_some_and(|result| result.kind == ResultKind::ClipboardText)
+                {
+                    if ui
+                        .button("Delete")
+                        .on_hover_text("Command + Backspace")
+                        .clicked()
+                    {
+                        self.execute_selected("delete");
+                    }
+                    if ui.button("Favorite").on_hover_text("Command + S").clicked() {
+                        self.execute_selected("favorite");
+                    }
+                }
                 if ui
-                    .button("Delete")
-                    .on_hover_text("Command + Backspace")
+                    .add(egui::Button::new(RichText::new(primary_label).strong()).corner_radius(18))
                     .clicked()
                 {
-                    self.delete_selected();
-                }
-                if ui.button("Favorite").on_hover_text("Command + S").clicked() {
-                    self.toggle_favorite();
-                }
-                if ui
-                    .add(
-                        egui::Button::new(RichText::new("Copy   Enter").strong()).corner_radius(18),
-                    )
-                    .clicked()
-                {
-                    self.copy_selected();
+                    self.primary_action();
                 }
             });
         });
@@ -337,11 +318,11 @@ impl ClipboardApp {
     }
 }
 
-impl eframe::App for ClipboardApp {
+impl eframe::App for LauncherApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        self.receive_clipboard();
+        self.poll_core();
         let ctx = ui.ctx().clone();
-        ctx.request_repaint_after(Duration::from_millis(250));
+        ctx.request_repaint_after(Duration::from_millis(50));
 
         if self.place_window
             && let Some(monitor) = ctx.input(|input| input.viewport().monitor_size)
@@ -354,29 +335,28 @@ impl eframe::App for ClipboardApp {
             self.place_window = false;
         }
 
-        let visible = self.visible_items();
         if self
             .selected_id
-            .is_none_or(|id| !visible.iter().any(|item| item.id == id))
+            .as_ref()
+            .is_none_or(|id| !self.items.iter().any(|item| &item.id == id))
         {
-            self.selected_id = visible.first().map(|item| item.id);
+            self.selected_id = self.items.first().map(|item| item.id.clone());
         }
-
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown)) {
-            self.move_selection(&visible, 1);
+            self.move_selection(1);
         }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp)) {
-            self.move_selection(&visible, -1);
+            self.move_selection(-1);
         }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Enter)) {
-            self.copy_selected();
+            self.primary_action();
         }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::S)) {
-            self.toggle_favorite();
+            self.execute_selected("favorite");
         }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::COMMAND, egui::Key::Backspace))
         {
-            self.delete_selected();
+            self.execute_selected("delete");
         }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -389,7 +369,9 @@ impl eframe::App for ClipboardApp {
             .inner_margin(0)
             .show(ui, |ui| {
                 ui.set_min_size(ui.available_size());
-                self.header(ui);
+                if self.header(ui) {
+                    self.search();
+                }
                 ui.separator();
 
                 let footer_height = 56.0;
@@ -404,23 +386,21 @@ impl eframe::App for ClipboardApp {
                             egui::Layout::top_down(egui::Align::Min),
                             |ui| {
                                 ui.set_width(left_width);
-                                if self.history_list(ui, &visible) {
-                                    self.copy_selected();
+                                if self.result_list(ui) {
+                                    self.primary_action();
                                 }
                             },
                         );
                         ui.add(egui::Separator::default().vertical().grow(0.0));
                         let detail_width = ui.available_width();
-                        let selected = self
-                            .selected_id
-                            .and_then(|id| visible.iter().find(|item| item.id == id));
+                        let selected = self.selected();
                         ui.allocate_ui_with_layout(
                             Vec2::new(detail_width, content_height),
                             egui::Layout::top_down(egui::Align::Min),
                             |ui| {
                                 ui.set_width(detail_width);
                                 ui.add_space(18.0);
-                                ui.indent("detail", |ui| Self::details(ui, selected));
+                                ui.indent("detail", |ui| Self::details(ui, selected.as_ref()));
                             },
                         );
                     },
@@ -428,17 +408,29 @@ impl eframe::App for ClipboardApp {
                 ui.separator();
                 self.footer(ui);
             });
-
-        self.persist_if_needed();
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
         [0.0, 0.0, 0.0, 0.0]
     }
+}
 
-    fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
-        let _ = store::save(&self.items);
+fn result_kind_name(kind: ResultKind) -> &'static str {
+    match kind {
+        ResultKind::Application => "Application",
+        ResultKind::ClipboardText => "Clipboard Text",
+        ResultKind::Command => "Command",
+        ResultKind::File => "File",
+        ResultKind::Other => "Other",
     }
+}
+
+fn title_case(value: &str) -> String {
+    let mut chars = value.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().collect::<String>() + chars.as_str())
+        .unwrap_or_default()
 }
 
 fn detail_row(ui: &mut egui::Ui, label: &str, value: &str) {
@@ -451,7 +443,7 @@ fn detail_row(ui: &mut egui::Ui, label: &str, value: &str) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(label).size(14.0).color(MUTED));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(RichText::new(value).size(14.0).strong());
+                    ui.add(egui::Label::new(RichText::new(value).size(14.0).strong()).truncate());
                 });
             });
         });

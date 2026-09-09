@@ -1,0 +1,10 @@
+[package]
+name = "clipkeep-plugin-applications"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol.workspace = true
+directories = "6.0"

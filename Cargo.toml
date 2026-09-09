@@ -11,6 +11,7 @@ members = [
     "crates/clipkeep-core",
     "crates/clipkeep-plugin-sdk",
     "crates/clipkeep-protocol",
+    "plugins/applications",
     "plugins/clipboard",
 ]
 resolver = "3"
@@ -26,11 +27,9 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [dependencies]
-arboard = "3.6"
-directories = "6.0"
+clipkeep-core = { path = "crates/clipkeep-core" }
+clipkeep-protocol.workspace = true
 eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 
 [profile.release]
 strip = true

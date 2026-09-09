@@ -285,11 +285,9 @@ dependencies = [
 name = "clipkeep"
 version = "0.1.0"
 dependencies = [
- "arboard",
- "directories",
+ "clipkeep-core",
+ "clipkeep-protocol",
  "eframe",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -297,7 +295,17 @@ name = "clipkeep-core"
 version = "0.1.0"
 dependencies = [
  "clipkeep-protocol",
+ "directories",
  "serde_json",
+]
+
+[[package]]
+name = "clipkeep-plugin-applications"
+version = "0.1.0"
+dependencies = [
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "directories",
 ]
 
 [[package]]

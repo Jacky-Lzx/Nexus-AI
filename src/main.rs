@@ -1,7 +1,4 @@
 mod app;
-mod clipboard;
-mod model;
-mod store;
 
 use eframe::egui;
 
@@ -22,6 +19,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "ClipKeep",
         options,
-        Box::new(|cc| Ok(Box::new(app::ClipboardApp::new(cc)))),
+        Box::new(|cc| Ok(Box::new(app::LauncherApp::new(cc)))),
     )
 }

@@ -1,0 +1,7 @@
+id = "io.clipkeep.applications"
+name = "Applications"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-applications"
+default_enabled = true
+capabilities = ["applications.read", "applications.open", "background"]

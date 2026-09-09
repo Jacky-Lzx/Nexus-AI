@@ -6,5 +6,5 @@ license.workspace = true
 
 [dependencies]
 clipkeep-protocol.workspace = true
+directories = "6.0"
 serde_json.workspace = true
-
