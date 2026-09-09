@@ -9,11 +9,25 @@ MACOSX_DEPLOYMENT_TARGET=26.0 cargo build --workspace --release
 "$project_dir/scripts/build-swift.sh"
 install -d "$bundle_dir/Contents/MacOS"
 install -d "$bundle_dir/Contents/Resources"
+install -d "$bundle_dir/Contents/PlugIns"
 # Remove the executable name used by the former egui host when updating a bundle in place.
 rm -f "$bundle_dir/Contents/MacOS/clipkeep"
 install -m 755 target/swift/ClipKeep "$bundle_dir/Contents/MacOS/ClipKeep"
-install -m 755 target/release/clipkeep-plugin-applications "$bundle_dir/Contents/MacOS/clipkeep-plugin-applications"
-install -m 755 target/release/clipkeep-plugin-clipboard "$bundle_dir/Contents/MacOS/clipkeep-plugin-clipboard"
+applications_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.applications.clipkeepplugin"
+clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplugin"
+rm -f "$applications_plugin/clipkeep-plugin-applications" "$applications_plugin/plugin.toml"
+rm -f "$clipboard_plugin/clipkeep-plugin-clipboard" "$clipboard_plugin/plugin.toml"
+install -d "$applications_plugin/Contents/MacOS" "$applications_plugin/Contents/Resources"
+install -d "$clipboard_plugin/Contents/MacOS" "$clipboard_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-applications "$applications_plugin/Contents/MacOS/clipkeep-plugin-applications"
+install -m 644 plugins/applications/plugin.toml "$applications_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-Applications-Info.plist "$applications_plugin/Contents/Info.plist"
+install -m 755 target/release/clipkeep-plugin-clipboard "$clipboard_plugin/Contents/MacOS/clipkeep-plugin-clipboard"
+install -m 644 plugins/clipboard/plugin.toml "$clipboard_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-Clipboard-Info.plist "$clipboard_plugin/Contents/Info.plist"
+# Remove legacy plugin locations when updating a bundle in place.
+rm -f "$bundle_dir/Contents/MacOS/clipkeep-plugin-applications"
+rm -f "$bundle_dir/Contents/MacOS/clipkeep-plugin-clipboard"
 install -m 644 packaging/macos/Info.plist "$bundle_dir/Contents/Info.plist"
 
 signing_identity=${CLIPKEEP_CODESIGN_IDENTITY:-}
@@ -24,10 +38,10 @@ fi
 if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.applications \
-        "$bundle_dir/Contents/MacOS/clipkeep-plugin-applications"
+        "$applications_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.clipboard \
-        "$bundle_dir/Contents/MacOS/clipkeep-plugin-clipboard"
+        "$clipboard_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep "$bundle_dir"
     codesign --verify --deep --strict "$bundle_dir"

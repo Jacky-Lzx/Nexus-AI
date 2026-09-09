@@ -12,16 +12,6 @@ private struct SettingsPaneItem {
     let symbolName: String
     let plugin: PluginDescriptor?
 
-    static let all: [SettingsPaneItem] = [
-        SettingsPaneItem(id: "key-mappings", name: "Key Mappings", symbolName: "keyboard", plugin: nil),
-    ] + builtInPlugins.map { plugin in
-        SettingsPaneItem(
-            id: plugin.id,
-            name: plugin.name,
-            symbolName: plugin.id == "io.clipkeep.clipboard" ? "clipboard" : "square.grid.2x2",
-            plugin: plugin
-        )
-    }
 }
 
 final class SettingsWindowController: NSWindowController,
@@ -37,7 +27,8 @@ final class SettingsWindowController: NSWindowController,
     private let searchField = NSSearchField()
     private let tableView = NSTableView()
     private let detailPane = NSView()
-    private var visiblePanes = SettingsPaneItem.all
+    private let allPanes: [SettingsPaneItem]
+    private var visiblePanes: [SettingsPaneItem]
 
     init(
         coordinator: SearchCoordinator,
@@ -47,6 +38,17 @@ final class SettingsWindowController: NSWindowController,
         self.coordinator = coordinator
         self.launcher = launcher
         self.onShortcutChanged = onShortcutChanged
+        allPanes = [SettingsPaneItem(
+            id: "key-mappings", name: "Key Mappings", symbolName: "keyboard", plugin: nil
+        )] + coordinator.descriptors.map { plugin in
+            SettingsPaneItem(
+                id: plugin.id,
+                name: plugin.name,
+                symbolName: plugin.symbolName,
+                plugin: plugin
+            )
+        }
+        visiblePanes = allPanes
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: SettingsLayout.windowSize),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -170,8 +172,8 @@ final class SettingsWindowController: NSWindowController,
     func controlTextDidChange(_ obj: Notification) {
         let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         visiblePanes = query.isEmpty
-            ? SettingsPaneItem.all
-            : SettingsPaneItem.all.filter { $0.name.localizedCaseInsensitiveContains(query) }
+            ? allPanes
+            : allPanes.filter { $0.name.localizedCaseInsensitiveContains(query) }
         tableView.reloadData()
         if !visiblePanes.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
@@ -208,7 +210,7 @@ final class SettingsWindowController: NSWindowController,
 
         let icon = NSImageView()
         icon.image = NSImage(
-            systemSymbolName: plugin.id == "io.clipkeep.clipboard" ? "clipboard" : "square.grid.2x2",
+            systemSymbolName: plugin.symbolName,
             accessibilityDescription: plugin.name
         )
         icon.contentTintColor = .labelColor
@@ -219,9 +221,16 @@ final class SettingsWindowController: NSWindowController,
         title.font = .systemFont(ofSize: 28, weight: .bold)
         title.translatesAutoresizingMaskIntoConstraints = false
 
-        let description = NSTextField(labelWithString: plugin.id == "io.clipkeep.clipboard"
-            ? "Search, preview, and paste your clipboard history"
-            : "Quickly search and open applications installed on this Mac")
+        let pluginDescription: String
+        switch plugin.id {
+        case "io.clipkeep.clipboard":
+            pluginDescription = "Search, preview, and paste your clipboard history"
+        case "io.clipkeep.applications":
+            pluginDescription = "Quickly search and open applications installed on this Mac"
+        default:
+            pluginDescription = "Rust plugin \(plugin.id) · version \(plugin.version)"
+        }
+        let description = NSTextField(labelWithString: pluginDescription)
         description.font = .systemFont(ofSize: 14)
         description.textColor = .secondaryLabelColor
         description.translatesAutoresizingMaskIntoConstraints = false
@@ -246,20 +255,18 @@ final class SettingsWindowController: NSWindowController,
         options.layer?.cornerCurve = .continuous
         options.translatesAutoresizingMaskIntoConstraints = false
 
-        if let action = GlobalHotKey.Action(pluginId: plugin.id) {
-            let shortcut = ShortcutRecorderButton(
-                shortcut: { action.shortcut },
-                onChange: { [weak self] shortcut in
-                    action.save(shortcut: shortcut)
-                    self?.onShortcutChanged()
-                }
-            )
-            options.addArrangedSubview(settingRow(
-                title: "Keyboard Shortcut",
-                description: "Click and press a shortcut to open this plugin",
-                control: shortcut
-            ))
-        }
+        let shortcut = ShortcutRecorderButton(
+            shortcut: { GlobalHotKey.shortcut(for: plugin.id) },
+            onChange: { [weak self] shortcut in
+                GlobalHotKey.save(shortcut, for: plugin.id)
+                self?.onShortcutChanged()
+            }
+        )
+        options.addArrangedSubview(settingRow(
+            title: "Keyboard Shortcut",
+            description: "Click and press a shortcut to open this plugin",
+            control: shortcut
+        ))
 
         if plugin.id == "io.clipkeep.clipboard" {
             let quality = NSPopUpButton()
@@ -320,7 +327,7 @@ final class SettingsWindowController: NSWindowController,
                 description: "Favorites are not removed",
                 control: clear
             ))
-        } else {
+        } else if plugin.id == "io.clipkeep.applications" {
             let locations = NSTextField(labelWithString: "/Applications and /System/Applications")
             locations.textColor = .secondaryLabelColor
             locations.lineBreakMode = .byTruncatingMiddle
@@ -328,6 +335,15 @@ final class SettingsWindowController: NSWindowController,
                 title: "Indexed Locations",
                 description: "Application results refresh automatically every 60 seconds",
                 control: locations
+            ))
+        } else {
+            let capabilities = NSTextField(labelWithString: plugin.capabilities.joined(separator: ", "))
+            capabilities.textColor = .secondaryLabelColor
+            capabilities.lineBreakMode = .byTruncatingTail
+            options.addArrangedSubview(settingRow(
+                title: "Capabilities",
+                description: "Permissions declared by plugin.toml",
+                control: capabilities
             ))
         }
 
@@ -434,9 +450,9 @@ final class SettingsWindowController: NSWindowController,
         row.addSubview(descriptionLabel)
         row.addSubview(control)
         NSLayoutConstraint.activate([
-            row.heightAnchor.constraint(equalToConstant: 76),
+            row.heightAnchor.constraint(equalToConstant: 68),
             titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 20),
-            titleLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 16),
+            titleLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 12),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: control.leadingAnchor, constant: -16),
             descriptionLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             descriptionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 5),
@@ -492,13 +508,13 @@ final class SettingsWindowController: NSWindowController,
 }
 
 private final class ShortcutRecorderButton: NSButton {
-    private let shortcut: () -> PluginShortcut
+    private let shortcut: () -> PluginShortcut?
     private let onChange: (PluginShortcut) -> Void
     private var monitor: Any?
     private var isRecording = false
 
     init(
-        shortcut: @escaping () -> PluginShortcut,
+        shortcut: @escaping () -> PluginShortcut?,
         onChange: @escaping (PluginShortcut) -> Void
     ) {
         self.shortcut = shortcut
@@ -538,11 +554,11 @@ private final class ShortcutRecorderButton: NSButton {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
-        title = (newShortcut ?? shortcut()).displayName
+        title = newShortcut?.displayName ?? shortcut()?.displayName ?? "Record Shortcut"
     }
 
     private func updateTitle() {
-        title = shortcut().displayName
+        title = shortcut()?.displayName ?? "Record Shortcut"
     }
 
     deinit {

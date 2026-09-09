@@ -599,7 +599,7 @@ final class LauncherPanelController: NSWindowController,
 
     private func updateModeLayout() {
         enforcePanelWidth()
-        let showsDetails = searchMode == .clipboard
+        let showsDetails = searchMode.showsDetails
         splitView.showsDivider = showsDetails
         detailPane.isHidden = !showsDetails
         listWidthConstraint?.isActive = showsDetails
@@ -645,11 +645,11 @@ final class LauncherPanelController: NSWindowController,
         forDrawnRect drawnRect: NSRect,
         ofDividerAt dividerIndex: Int
     ) -> NSRect {
-        searchMode == .clipboard ? proposedEffectiveRect : .zero
+        searchMode.showsDetails ? proposedEffectiveRect : .zero
     }
 
     func splitView(_ splitView: NSSplitView, shouldHideDividerAt dividerIndex: Int) -> Bool {
-        searchMode == .applications
+        !searchMode.showsDetails
     }
 
     private func updateDetailInfo(_ items: [(String, String)]) {
@@ -721,7 +721,7 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func shouldExpand(for query: String) -> Bool {
-        searchMode == .clipboard
+        searchMode.expandsWhenEmpty
             || !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 

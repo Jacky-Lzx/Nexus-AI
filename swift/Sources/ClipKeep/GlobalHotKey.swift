@@ -118,59 +118,43 @@ enum LauncherKeyAction: String, CaseIterable {
 }
 
 final class GlobalHotKey {
-    enum Action: UInt32, CaseIterable {
-        case applications = 1
-        case clipboard = 2
-
-        var pluginId: String {
-            switch self {
-            case .applications: return "io.clipkeep.applications"
-            case .clipboard: return "io.clipkeep.clipboard"
-            }
-        }
-
-        var defaultShortcut: PluginShortcut {
-            switch self {
-            case .applications:
-                return PluginShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey | shiftKey), keyLabel: "Space")
-            case .clipboard:
-                return PluginShortcut(keyCode: UInt32(kVK_ANSI_C), modifiers: UInt32(cmdKey | shiftKey), keyLabel: "C")
-            }
-        }
-
-        private var storageKey: String { "plugin.shortcut.\(pluginId)" }
-
-        var shortcut: PluginShortcut {
-            guard let data = UserDefaults.standard.data(forKey: storageKey),
-                  let shortcut = try? JSONDecoder().decode(PluginShortcut.self, from: data)
-            else { return defaultShortcut }
+    static func shortcut(for pluginId: String) -> PluginShortcut? {
+        if let data = UserDefaults.standard.data(forKey: "plugin.shortcut.\(pluginId)"),
+           let shortcut = try? JSONDecoder().decode(PluginShortcut.self, from: data) {
             return shortcut
         }
-
-        func save(shortcut: PluginShortcut) {
-            guard let data = try? JSONEncoder().encode(shortcut) else { return }
-            UserDefaults.standard.set(data, forKey: storageKey)
-        }
-
-        init?(pluginId: String) {
-            guard let action = Self.allCases.first(where: { $0.pluginId == pluginId }) else { return nil }
-            self = action
+        switch pluginId {
+        case "io.clipkeep.applications":
+            return PluginShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey | shiftKey), keyLabel: "Space")
+        case "io.clipkeep.clipboard":
+            return PluginShortcut(keyCode: UInt32(kVK_ANSI_C), modifiers: UInt32(cmdKey | shiftKey), keyLabel: "C")
+        default:
+            return nil
         }
     }
 
-    static let shared = GlobalHotKey()
-    var handler: ((Action) -> Void)?
+    static func save(_ shortcut: PluginShortcut, for pluginId: String) {
+        guard let data = try? JSONEncoder().encode(shortcut) else { return }
+        UserDefaults.standard.set(data, forKey: "plugin.shortcut.\(pluginId)")
+    }
 
-    private var hotKeys: [Action: EventHotKeyRef] = [:]
+    static let shared = GlobalHotKey()
+    var handler: ((String) -> Void)?
+
+    private var hotKeys: [String: EventHotKeyRef] = [:]
+    private var pluginIdsByEventId: [UInt32: String] = [:]
     private var eventHandler: EventHandlerRef?
 
-    func configure(enabledActions: Set<Action>) -> [Action] {
-        guard installHandlerIfNeeded() else { return Array(enabledActions) }
+    func configure(enabledPluginIds: [String]) -> [String] {
+        guard installHandlerIfNeeded() else { return enabledPluginIds }
         hotKeys.values.forEach { UnregisterEventHotKey($0) }
         hotKeys.removeAll()
+        pluginIdsByEventId.removeAll()
 
-        return enabledActions.sorted { $0.rawValue < $1.rawValue }.filter { action in
-            !register(action.shortcut, action: action)
+        return enabledPluginIds.enumerated().compactMap { offset, pluginId in
+            guard let shortcut = Self.shortcut(for: pluginId) else { return nil }
+            let eventId = UInt32(offset + 1)
+            return register(shortcut, pluginId: pluginId, eventId: eventId) ? nil : pluginId
         }
     }
 
@@ -191,10 +175,11 @@ final class GlobalHotKey {
                     nil,
                     &identifier
                 )
-                guard status == noErr, let action = Action(rawValue: identifier.id) else {
+                guard status == noErr,
+                      let pluginId = GlobalHotKey.shared.pluginIdsByEventId[identifier.id] else {
                     return OSStatus(eventNotHandledErr)
                 }
-                DispatchQueue.main.async { GlobalHotKey.shared.handler?(action) }
+                DispatchQueue.main.async { GlobalHotKey.shared.handler?(pluginId) }
                 return noErr
             },
             1,
@@ -205,8 +190,8 @@ final class GlobalHotKey {
         return status == noErr
     }
 
-    private func register(_ shortcut: PluginShortcut, action: Action) -> Bool {
-        let identifier = EventHotKeyID(signature: OSType(0x434B4559), id: action.rawValue) // CKEY
+    private func register(_ shortcut: PluginShortcut, pluginId: String, eventId: UInt32) -> Bool {
+        let identifier = EventHotKeyID(signature: OSType(0x434B4559), id: eventId) // CKEY
         var reference: EventHotKeyRef?
         let status = RegisterEventHotKey(
             shortcut.keyCode,
@@ -216,7 +201,10 @@ final class GlobalHotKey {
             0,
             &reference
         )
-        if status == noErr, let reference { hotKeys[action] = reference }
+        if status == noErr, let reference {
+            hotKeys[pluginId] = reference
+            pluginIdsByEventId[eventId] = pluginId
+        }
         return status == noErr
     }
 

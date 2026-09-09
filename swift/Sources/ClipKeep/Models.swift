@@ -12,14 +12,16 @@ enum ImagePreviewQuality: String, CaseIterable {
     }
 }
 
-enum SearchMode {
+enum SearchMode: Equatable {
     case applications
     case clipboard
+    case plugin(PluginDescriptor)
 
     var pluginId: String {
         switch self {
         case .applications: "io.clipkeep.applications"
         case .clipboard: "io.clipkeep.clipboard"
+        case let .plugin(plugin): plugin.id
         }
     }
 
@@ -27,6 +29,7 @@ enum SearchMode {
         switch self {
         case .applications: "Search applications…"
         case .clipboard: "Search clipboard history…"
+        case let .plugin(plugin): "Search \(plugin.name)…"
         }
     }
 
@@ -34,6 +37,15 @@ enum SearchMode {
         switch self {
         case .applications: "Applications"
         case .clipboard: "Clipboard History"
+        case let .plugin(plugin): plugin.name
+        }
+    }
+
+    var showsDetails: Bool { self == .clipboard }
+    var expandsWhenEmpty: Bool {
+        switch self {
+        case .applications: false
+        case .clipboard, .plugin: true
         }
     }
 }
@@ -70,6 +82,17 @@ struct ResultAction: Codable {
         case id, title, destructive, `default`
         case closesWindow = "closes_window"
         case pasteToPrevious = "paste_to_previous"
+    }
+
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        title = try values.decode(String.self, forKey: .title)
+        destructive = try values.decodeIfPresent(Bool.self, forKey: .destructive) ?? false
+        `default` = try values.decodeIfPresent(Bool.self, forKey: .default) ?? false
+        closesWindow = try values.decodeIfPresent(Bool.self, forKey: .closesWindow) ?? false
+        pasteToPrevious = try values.decodeIfPresent(Bool.self, forKey: .pasteToPrevious) ?? false
     }
 }
 
@@ -112,21 +135,116 @@ struct SearchResult: Codable {
     }
 }
 
-struct PluginDescriptor {
+struct PluginDescriptor: Equatable {
     let id: String
     let name: String
+    let version: String
+    let protocolVersion: Int
     let executable: String
+    let executableURL: URL
+    let defaultEnabled: Bool
+    let capabilities: [String]
+
+    var symbolName: String {
+        switch id {
+        case "io.clipkeep.clipboard": "clipboard"
+        case "io.clipkeep.applications": "square.grid.2x2"
+        default: "puzzlepiece.extension"
+        }
+    }
 }
 
-let builtInPlugins = [
+private let fallbackBuiltInPlugins = [
     PluginDescriptor(
         id: "io.clipkeep.applications",
         name: "Applications",
-        executable: "clipkeep-plugin-applications"
+        version: "0.1.0",
+        protocolVersion: 1,
+        executable: "clipkeep-plugin-applications",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-applications"),
+        defaultEnabled: true,
+        capabilities: ["applications.read", "applications.open", "background"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.clipboard",
         name: "Clipboard History",
-        executable: "clipkeep-plugin-clipboard"
+        version: "0.1.0",
+        protocolVersion: 1,
+        executable: "clipkeep-plugin-clipboard",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-clipboard"),
+        defaultEnabled: true,
+        capabilities: ["clipboard.read", "clipboard.write", "storage", "background"]
     ),
 ]
+
+enum PluginRegistry {
+    static func discover() -> [PluginDescriptor] {
+        var roots: [URL] = []
+        roots.append(Bundle.main.bundleURL.appendingPathComponent("Contents/PlugIns", isDirectory: true))
+        if let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            roots.append(support.appendingPathComponent("io.clipkeep.ClipKeep/Plugins", isDirectory: true))
+        }
+        var descriptors: [PluginDescriptor] = []
+        for root in roots {
+            let children = (try? FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            for directory in children.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                let flatManifest = directory.appendingPathComponent("plugin.toml")
+                let bundledManifest = directory.appendingPathComponent("Contents/Resources/plugin.toml")
+                let manifest = FileManager.default.fileExists(atPath: bundledManifest.path)
+                    ? bundledManifest : flatManifest
+                let executableDirectory = FileManager.default.fileExists(
+                    atPath: directory.appendingPathComponent("Contents/MacOS").path
+                ) ? directory.appendingPathComponent("Contents/MacOS") : directory
+                if let descriptor = parseManifest(at: manifest, directory: executableDirectory) {
+                    if !descriptors.contains(where: { $0.id == descriptor.id }) {
+                        descriptors.append(descriptor)
+                    }
+                }
+            }
+        }
+        return descriptors.isEmpty ? fallbackBuiltInPlugins : descriptors.sorted { $0.name < $1.name }
+    }
+    private static func parseManifest(at url: URL, directory: URL) -> PluginDescriptor? {
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        var values: [String: String] = [:]
+        for rawLine in source.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = rawLine.split(separator: "#", maxSplits: 1).first?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !line.isEmpty, !line.hasPrefix("["), let separator = line.firstIndex(of: "=") else { continue }
+            let key = line[..<separator].trimmingCharacters(in: .whitespaces)
+            let value = line[line.index(after: separator)...].trimmingCharacters(in: .whitespaces)
+            values[key] = value
+        }
+        func string(_ key: String) -> String? {
+            guard let raw = values[key], raw.hasPrefix("\""), raw.hasSuffix("\"") else { return nil }
+            return String(raw.dropFirst().dropLast())
+        }
+        func strings(_ key: String) -> [String] {
+            guard let raw = values[key], raw.hasPrefix("["), raw.hasSuffix("]") else { return [] }
+            return raw.dropFirst().dropLast().split(separator: ",").compactMap { element in
+                let value = element.trimmingCharacters(in: .whitespaces)
+                guard value.hasPrefix("\""), value.hasSuffix("\"") else { return nil }
+                return String(value.dropFirst().dropLast())
+            }
+        }
+        guard let id = string("id"), id.range(of: #"^[A-Za-z0-9][A-Za-z0-9._-]+$"#, options: .regularExpression) != nil,
+              let name = string("name"), let version = string("version"),
+              let entrypoint = string("entrypoint"), !entrypoint.contains("/") && !entrypoint.contains(".."),
+              let protocolVersion = values["protocol_version"].flatMap(Int.init), protocolVersion == 1
+        else { return nil }
+        return PluginDescriptor(
+            id: id,
+            name: name,
+            version: version,
+            protocolVersion: protocolVersion,
+            executable: entrypoint,
+            executableURL: directory.appendingPathComponent(entrypoint),
+            defaultEnabled: values["default_enabled"] != "false",
+            capabilities: strings("capabilities")
+        )
+    }
+}

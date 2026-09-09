@@ -5,10 +5,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var launcher: LauncherPanelController!
     private var statusItem: NSStatusItem!
     private var settingsWindow: SettingsWindowController?
+    private var plugins: [PluginDescriptor] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        coordinator = SearchCoordinator()
+        plugins = PluginRegistry.discover()
+        coordinator = SearchCoordinator(descriptors: plugins)
         launcher = LauncherPanelController(coordinator: coordinator)
         launcher.onPluginStateChanged = { [weak self] in
             self?.refreshHotKeys()
@@ -16,11 +18,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         configureStatusItem()
 
-        GlobalHotKey.shared.handler = { [weak self] action in
-            guard let self, self.coordinator.isEnabled(action.pluginId) else { return }
-            switch action {
-            case .applications: self.launcher.toggle(mode: .applications)
-            case .clipboard: self.launcher.toggle(mode: .clipboard)
+        GlobalHotKey.shared.handler = { [weak self] pluginId in
+            guard let self, self.coordinator.isEnabled(pluginId),
+                  let descriptor = self.plugins.first(where: { $0.id == pluginId }) else { return }
+            switch pluginId {
+            case "io.clipkeep.applications": self.launcher.toggle(mode: .applications)
+            case "io.clipkeep.clipboard": self.launcher.toggle(mode: .clipboard)
+            default: self.launcher.toggle(mode: .plugin(descriptor))
             }
         }
         refreshHotKeys()
@@ -46,35 +50,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func rebuildMenu() {
         let menu = NSMenu()
         let applications = menu.addItem(
-            withTitle: "Search Applications  \(GlobalHotKey.Action.applications.shortcut.displayName)",
+            withTitle: "Search Applications  \(GlobalHotKey.shortcut(for: "io.clipkeep.applications")?.displayName ?? "")",
             action: #selector(showApplications),
             keyEquivalent: ""
         )
         applications.target = self
-        applications.isEnabled = coordinator.isEnabled(GlobalHotKey.Action.applications.pluginId)
+        applications.isEnabled = coordinator.isEnabled("io.clipkeep.applications")
         let clipboard = menu.addItem(
-            withTitle: "Search Clipboard  \(GlobalHotKey.Action.clipboard.shortcut.displayName)",
+            withTitle: "Search Clipboard  \(GlobalHotKey.shortcut(for: "io.clipkeep.clipboard")?.displayName ?? "")",
             action: #selector(showClipboard),
             keyEquivalent: ""
         )
         clipboard.target = self
-        clipboard.isEnabled = coordinator.isEnabled(GlobalHotKey.Action.clipboard.pluginId)
+        clipboard.isEnabled = coordinator.isEnabled("io.clipkeep.clipboard")
         menu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
         menu.addItem(settings)
         menu.addItem(.separator())
 
-        let plugins = NSMenu()
-        for descriptor in builtInPlugins {
-            let item = NSMenuItem(title: descriptor.name, action: #selector(togglePlugin(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = descriptor.id
-            item.state = coordinator.isEnabled(descriptor.id) ? .on : .off
-            plugins.addItem(item)
+        let pluginsMenu = NSMenu()
+        for descriptor in plugins {
+            let submenu = NSMenu()
+            let open = NSMenuItem(title: "Open", action: #selector(showPlugin(_:)), keyEquivalent: "")
+            open.target = self
+            open.representedObject = descriptor.id
+            open.isEnabled = coordinator.isEnabled(descriptor.id)
+            submenu.addItem(open)
+            let enabled = NSMenuItem(title: "Enabled", action: #selector(togglePlugin(_:)), keyEquivalent: "")
+            enabled.target = self
+            enabled.representedObject = descriptor.id
+            enabled.state = coordinator.isEnabled(descriptor.id) ? .on : .off
+            submenu.addItem(enabled)
+            let item = NSMenuItem(title: descriptor.name, action: nil, keyEquivalent: "")
+            item.submenu = submenu
+            pluginsMenu.addItem(item)
         }
         let pluginsItem = NSMenuItem(title: "Plugins", action: nil, keyEquivalent: "")
-        pluginsItem.submenu = plugins
+        pluginsItem.submenu = pluginsMenu
         menu.addItem(pluginsItem)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit ClipKeep", action: #selector(quit), keyEquivalent: "q")
@@ -84,12 +97,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showApplications() {
-        guard coordinator.isEnabled(GlobalHotKey.Action.applications.pluginId) else { return }
+        guard coordinator.isEnabled("io.clipkeep.applications") else { return }
         launcher.show(mode: .applications)
     }
 
     @objc private func showClipboard() {
-        guard coordinator.isEnabled(GlobalHotKey.Action.clipboard.pluginId) else { return }
+        guard coordinator.isEnabled("io.clipkeep.clipboard") else { return }
         launcher.show(mode: .clipboard)
     }
 
@@ -109,21 +122,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func togglePlugin(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
-              let descriptor = builtInPlugins.first(where: { $0.id == id }) else { return }
+              let descriptor = plugins.first(where: { $0.id == id }) else { return }
         coordinator.setEnabled(!coordinator.isEnabled(id), descriptor: descriptor)
         settingsWindow?.refresh()
+    }
+
+    @objc private func showPlugin(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String,
+              coordinator.isEnabled(id),
+              let descriptor = plugins.first(where: { $0.id == id }) else { return }
+        switch id {
+        case "io.clipkeep.applications": launcher.show(mode: .applications)
+        case "io.clipkeep.clipboard": launcher.show(mode: .clipboard)
+        default: launcher.show(mode: .plugin(descriptor))
+        }
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
 
     private func refreshHotKeys() {
-        let enabledActions = Set(GlobalHotKey.Action.allCases.filter {
-            coordinator.isEnabled($0.pluginId)
-        })
-        let failures = GlobalHotKey.shared.configure(enabledActions: enabledActions)
+        let enabledPluginIds = plugins.map(\.id).filter { coordinator.isEnabled($0) }
+        let failures = GlobalHotKey.shared.configure(enabledPluginIds: enabledPluginIds)
         if !failures.isEmpty {
             coordinator.onStatusChanged?(
-                "Could not register: \(failures.map { $0.shortcut.displayName }.joined(separator: ", "))"
+                "Could not register shortcuts for: \(failures.joined(separator: ", "))"
             )
         }
         rebuildMenu()

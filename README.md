@@ -29,6 +29,9 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Escape hides the palette and restores focus to the previously active application
 - Choosing a clipboard entry restores the previous application and pastes it directly
 - Plugins keep running while the window is hidden
+- Discovers versioned plugin bundles from the app bundle and the user plugin
+  directory, with manifest validation, per-plugin logs, search timeouts, and
+  bounded automatic restart after a crash
 - No network access or analytics
 - Configurable history retention, sensitive-content filtering, ignored source
   applications, and time-range clearing (favorites are preserved)
@@ -114,4 +117,32 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 
 Built-in plugins are separate executables. A plugin crash cannot directly crash
-the UI, and disabling a plugin can be implemented by stopping its process.
+the UI. A crashed plugin is restarted with bounded backoff, while disabling it
+stops the process and unregisters its shortcut.
+
+## Plugin bundles
+
+A plugin bundle is a directory ending in `.clipkeepplugin` that contains a Rust
+executable and `plugin.toml`. ClipKeep scans both `Contents/PlugIns` inside the
+application and:
+
+```text
+~/Library/Application Support/io.clipkeep.ClipKeep/Plugins
+```
+
+Example manifest:
+
+```toml
+id = "com.example.clipkeep.plugin"
+name = "Example"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-example"
+default_enabled = true
+capabilities = ["search"]
+```
+
+Discovered plugins automatically receive a settings pane, enable switch,
+configurable global shortcut, status-menu entry, and isolated process lifecycle.
+Run `ClipKeep --list-plugins` against a built app to validate discovery. Plugin
+stderr logs are written under the app-support `Logs` directory.

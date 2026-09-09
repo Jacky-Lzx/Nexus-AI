@@ -2,10 +2,12 @@ import Foundation
 
 final class PluginProcess {
     enum Event {
+        case initialized(pluginId: String, protocolVersion: Int)
         case searchResults(queryId: UInt64, items: [SearchResult])
         case catalogChanged
         case actionFinished(requestId: UInt64, success: Bool, message: String?)
         case error(String)
+        case terminated
     }
 
     let descriptor: PluginDescriptor
@@ -14,6 +16,7 @@ final class PluginProcess {
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
+    private let logHandle: FileHandle?
     private let decodeQueue: DispatchQueue
     private var buffer = Data()
 
@@ -24,21 +27,29 @@ final class PluginProcess {
         let requestId: UInt64?
         let success: Bool?
         let message: String?
+        let pluginId: String?
+        let protocolVersion: Int?
 
         enum CodingKeys: String, CodingKey {
             case type, items, success, message
             case queryId = "query_id"
             case requestId = "request_id"
+            case pluginId = "plugin_id"
+            case protocolVersion = "protocol_version"
         }
     }
 
     init(descriptor: PluginDescriptor, executableURL: URL) throws {
         self.descriptor = descriptor
+        logHandle = Self.makeLogHandle(pluginId: descriptor.id)
         decodeQueue = DispatchQueue(label: "io.clipkeep.plugin.decode.\(descriptor.id)")
         process.executableURL = executableURL
         process.standardInput = input
         process.standardOutput = output
-        process.standardError = FileHandle.standardError
+        process.standardError = logHandle ?? FileHandle.standardError
+        process.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async { [weak self] in self?.onEvent?(.terminated) }
+        }
 
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
@@ -46,6 +57,9 @@ final class PluginProcess {
             self?.decodeQueue.async { [weak self] in self?.consume(data) }
         }
         try process.run()
+    }
+
+    func initialize() {
         send(["type": "initialize", "protocol_version": 1])
     }
 
@@ -55,6 +69,21 @@ final class PluginProcess {
             send(["type": "shutdown"])
             process.terminate()
         }
+    }
+
+    private static func makeLogHandle(pluginId: String) -> FileHandle? {
+        guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        let directory = support.appendingPathComponent("io.clipkeep.ClipKeep/Logs", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("\(pluginId).log")
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        guard let handle = try? FileHandle(forWritingTo: url) else { return nil }
+        _ = try? handle.seekToEnd()
+        return handle
     }
 
     func search(queryId: UInt64, query: String) {
@@ -104,6 +133,9 @@ final class PluginProcess {
         guard let envelope = try? JSONDecoder().decode(EventEnvelope.self, from: data) else { return }
         let event: Event?
         switch envelope.type {
+        case "initialized":
+            guard let pluginId = envelope.pluginId, let protocolVersion = envelope.protocolVersion else { return }
+            event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion)
         case "search_results":
             guard let queryId = envelope.queryId, let items = envelope.items else { return }
             event = .searchResults(queryId: queryId, items: items)
@@ -130,6 +162,7 @@ final class SearchCoordinator {
     var onResultsChanged: (([SearchResult]) -> Void)?
     var onStatusChanged: ((String) -> Void)?
     var onPluginStateChanged: (() -> Void)?
+    let descriptors: [PluginDescriptor]
 
     private var processes: [String: PluginProcess] = [:]
     private var resultsByPlugin: [String: [SearchResult]] = [:]
@@ -137,11 +170,14 @@ final class SearchCoordinator {
     private var currentPluginId = "io.clipkeep.applications"
     private var queryId: UInt64 = 0
     private var requestId: UInt64 = 0
-    private var actionCompletions: [UInt64: (Bool) -> Void] = [:]
+    private var actionCompletions: [UInt64: (pluginId: String, completion: (Bool) -> Void)] = [:]
+    private var restartAttempts: [String: Int] = [:]
+    private var pendingSearches: [String: UInt64] = [:]
 
-    init() {
+    init(descriptors: [PluginDescriptor]) {
+        self.descriptors = descriptors
         ClipboardPreference.registerDefaults()
-        for plugin in builtInPlugins where isEnabled(plugin.id) {
+        for plugin in descriptors where isEnabled(plugin.id) {
             start(plugin)
         }
         search("", pluginId: currentPluginId)
@@ -149,8 +185,9 @@ final class SearchCoordinator {
 
     func isEnabled(_ id: String) -> Bool {
         let key = "plugin.enabled.\(id)"
+        let defaultEnabled = descriptors.first(where: { $0.id == id })?.defaultEnabled ?? false
         return UserDefaults.standard.object(forKey: key) == nil
-            ? true
+            ? defaultEnabled
             : UserDefaults.standard.bool(forKey: key)
     }
 
@@ -176,27 +213,49 @@ final class SearchCoordinator {
             resultsByPlugin.removeAll()
             publishResults()
         }
-        processes[pluginId]?.search(queryId: queryId, query: query)
+        guard let process = processes[pluginId] else { return }
+        pendingSearches[pluginId] = queryId
+        process.search(queryId: queryId, query: query)
+        let sentQueryId = queryId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self, weak process] in
+            guard let self, let process,
+                  self.processes[pluginId] === process,
+                  self.pendingSearches[pluginId] == sentQueryId else { return }
+            let name = self.descriptors.first(where: { $0.id == pluginId })?.name ?? pluginId
+            self.onStatusChanged?("\(name) is taking longer than expected…")
+        }
     }
 
     func execute(_ result: SearchResult, actionId: String, completion: ((Bool) -> Void)? = nil) {
-        requestId += 1
-        if let completion { actionCompletions[requestId] = completion }
-        processes[result.pluginId]?.execute(
-            requestId: requestId,
-            resultId: result.id,
-            actionId: actionId
-        )
+        execute(pluginId: result.pluginId, resultId: result.id, actionId: actionId, completion: completion)
     }
 
     func execute(pluginId: String, actionId: String, completion: ((Bool) -> Void)? = nil) {
+        execute(pluginId: pluginId, resultId: "plugin:settings", actionId: actionId, completion: completion)
+    }
+
+    private func execute(
+        pluginId: String,
+        resultId: String,
+        actionId: String,
+        completion: ((Bool) -> Void)?
+    ) {
+        guard let process = processes[pluginId] else { completion?(false); return }
         requestId += 1
-        if let completion { actionCompletions[requestId] = completion }
-        processes[pluginId]?.execute(
-            requestId: requestId,
-            resultId: "plugin:settings",
+        let sentRequestId = requestId
+        if let completion { actionCompletions[sentRequestId] = (pluginId, completion) }
+        process.execute(
+            requestId: sentRequestId,
+            resultId: resultId,
             actionId: actionId
         )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak process] in
+            guard let self, let process,
+                  self.processes[pluginId] === process,
+                  let pending = self.actionCompletions.removeValue(forKey: sentRequestId) else { return }
+            self.onStatusChanged?("Plugin action timed out")
+            pending.completion(false)
+        }
     }
 
     func reloadSettings(for pluginId: String) {
@@ -205,17 +264,19 @@ final class SearchCoordinator {
 
     private func start(_ descriptor: PluginDescriptor) {
         guard processes[descriptor.id] == nil else { return }
-        let executable = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/MacOS")
-            .appendingPathComponent(descriptor.executable)
+        let executable = descriptor.executableURL
         guard FileManager.default.isExecutableFile(atPath: executable.path) else {
             onStatusChanged?("Missing plugin: \(descriptor.name)")
             return
         }
         do {
             let plugin = try PluginProcess(descriptor: descriptor, executableURL: executable)
-            plugin.onEvent = { [weak self] event in self?.handle(event, from: descriptor.id) }
+            plugin.onEvent = { [weak self, weak plugin] event in
+                guard let plugin else { return }
+                self?.handle(event, from: descriptor.id, process: plugin)
+            }
             processes[descriptor.id] = plugin
+            plugin.initialize()
             plugin.configure(settings: settings(for: descriptor.id))
         } catch {
             onStatusChanged?("Could not start \(descriptor.name): \(error.localizedDescription)")
@@ -226,21 +287,59 @@ final class SearchCoordinator {
         pluginId == "io.clipkeep.clipboard" ? ClipboardPreference.pluginSettings : [:]
     }
 
-    private func handle(_ event: PluginProcess.Event, from pluginId: String) {
+    private func handle(_ event: PluginProcess.Event, from pluginId: String, process: PluginProcess) {
         switch event {
+        case let .initialized(actualPluginId, protocolVersion):
+            guard actualPluginId == pluginId, protocolVersion == 1 else {
+                onStatusChanged?("Rejected incompatible plugin: \(pluginId)")
+                processes[pluginId] = nil
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self, weak process] in
+                guard let self, let process, self.processes[pluginId] === process else { return }
+                self.restartAttempts[pluginId] = 0
+            }
         case let .searchResults(eventQueryId, items) where eventQueryId == queryId:
+            pendingSearches[pluginId] = nil
             resultsByPlugin[pluginId] = items
             publishResults()
         case .catalogChanged:
             search(currentQuery, pluginId: currentPluginId)
         case let .actionFinished(requestId, success, message):
             onStatusChanged?(message ?? "Done")
-            actionCompletions.removeValue(forKey: requestId)?(success)
+            actionCompletions.removeValue(forKey: requestId)?.completion(success)
             search(currentQuery, pluginId: currentPluginId)
         case let .error(message):
             onStatusChanged?(message)
+        case .terminated:
+            guard processes[pluginId] === process else { return }
+            let failedActions = actionCompletions.filter { $0.value.pluginId == pluginId }
+            failedActions.keys.forEach { actionCompletions[$0] = nil }
+            failedActions.values.forEach { $0.completion(false) }
+            processes[pluginId] = nil
+            resultsByPlugin[pluginId] = nil
+            publishResults()
+            scheduleRestart(pluginId: pluginId)
         default:
             break
+        }
+    }
+
+    private func scheduleRestart(pluginId: String) {
+        guard isEnabled(pluginId), let descriptor = descriptors.first(where: { $0.id == pluginId }) else { return }
+        let attempt = (restartAttempts[pluginId] ?? 0) + 1
+        restartAttempts[pluginId] = attempt
+        guard attempt <= 3 else {
+            onStatusChanged?("\(descriptor.name) stopped after repeated crashes")
+            return
+        }
+        onStatusChanged?("Restarting \(descriptor.name)…")
+        DispatchQueue.main.asyncAfter(deadline: .now() + Double(attempt)) { [weak self] in
+            guard let self, self.isEnabled(pluginId), self.processes[pluginId] == nil else { return }
+            self.start(descriptor)
+            if pluginId == self.currentPluginId {
+                self.search(self.currentQuery, pluginId: pluginId)
+            }
         }
     }
 

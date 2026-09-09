@@ -108,4 +108,26 @@ mod tests {
         assert_eq!(json["type"], "search");
         assert_eq!(json["query_id"], 7);
     }
+
+    #[test]
+    fn older_result_actions_get_safe_behavior_defaults() {
+        let action: ResultAction =
+            serde_json::from_str(r#"{"id":"open","title":"Open","destructive":false}"#).unwrap();
+        assert!(!action.default);
+        assert!(!action.closes_window);
+        assert!(!action.paste_to_previous);
+    }
+
+    #[test]
+    fn configure_request_carries_plugin_settings() {
+        let request: HostRequest =
+            serde_json::from_str(r#"{"type":"configure","settings":{"retention_days":"30"}}"#)
+                .unwrap();
+        assert_eq!(
+            request,
+            HostRequest::Configure {
+                settings: BTreeMap::from([("retention_days".into(), "30".into())]),
+            }
+        );
+    }
 }
