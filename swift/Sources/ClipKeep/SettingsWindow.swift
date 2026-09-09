@@ -36,7 +36,14 @@ final class SettingsWindowController: NSWindowController,
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func refresh() {
+        let selectedId = selectedPlugin?.id
         tableView.reloadData()
+        let row = selectedId.flatMap { id in
+            visiblePlugins.firstIndex(where: { $0.id == id })
+        } ?? (visiblePlugins.isEmpty ? nil : 0)
+        if let row {
+            tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
         showSelectedPlugin()
     }
 
@@ -111,6 +118,7 @@ final class SettingsWindowController: NSWindowController,
             scrollView.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor, constant: -12),
         ])
 
+        tableView.reloadData()
         tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         showSelectedPlugin()
     }
@@ -127,7 +135,10 @@ final class SettingsWindowController: NSWindowController,
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
-        tableView.reloadData()
+        tableView.reloadData(
+            forRowIndexes: IndexSet(integersIn: 0..<visiblePlugins.count),
+            columnIndexes: IndexSet(integer: 0)
+        )
         showSelectedPlugin()
     }
 
