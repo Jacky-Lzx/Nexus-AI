@@ -683,7 +683,7 @@ fn first_line_preview(text: &str, max_chars: usize) -> String {
     let first_line = cleaned.lines().next().unwrap_or_default().trim();
     let first_line = preview(first_line, max_chars.saturating_sub(2));
     if has_more_lines {
-        format!("{first_line} ↵")
+        format!("{first_line} ↩")
     } else {
         first_line
     }
@@ -746,10 +746,10 @@ mod tests {
     fn list_preview_only_shows_the_first_line() {
         assert_eq!(
             first_line_preview("first line\nsecond line", 60),
-            "first line ↵"
+            "first line ↩"
         );
         assert_eq!(first_line_preview("one line", 60), "one line");
-        assert_eq!(first_line_preview("first\r\nsecond", 60), "first ↵");
+        assert_eq!(first_line_preview("first\r\nsecond", 60), "first ↩");
     }
 
     #[test]
