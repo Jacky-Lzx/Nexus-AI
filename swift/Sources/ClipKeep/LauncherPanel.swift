@@ -379,7 +379,10 @@ final class LauncherPanelController: NSWindowController,
 
     @objc private func openSelected() {
         guard let result = selectedResult else { return }
-        if result.kind.isClipboard {
+        if result.kind == .command,
+           result.metadata["route"] == "clipboard_history" {
+            switchSearchMode(to: .clipboard)
+        } else if result.kind.isClipboard {
             let canPaste = ensureAccessibilityPermission()
             coordinator.execute(result, actionId: "copy") { [weak self] success in
                 guard let self, success else { return }
@@ -392,6 +395,16 @@ final class LauncherPanelController: NSWindowController,
             coordinator.execute(result, actionId: "open")
             hide()
         }
+    }
+
+    private func switchSearchMode(to mode: SearchMode) {
+        searchMode = mode
+        searchField.stringValue = ""
+        searchField.placeholderString = mode.placeholder
+        statusLabel.stringValue = mode.title
+        coordinator.search("", pluginId: mode.pluginId)
+        setExpanded(shouldExpand(for: ""), animated: true)
+        window?.makeFirstResponder(searchField)
     }
 
     private var selectedResult: SearchResult? {
@@ -438,7 +451,7 @@ final class LauncherPanelController: NSWindowController,
         addInfo("Plugin", result.pluginId)
         addInfo("Type", result.kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
         for (key, value) in result.metadata
-            .filter({ $0.key != "thumbnail_png" })
+            .filter({ !["route", "thumbnail_png"].contains($0.key) })
             .sorted(by: { $0.key < $1.key }) {
             addInfo(key.capitalized, value)
         }
@@ -597,6 +610,7 @@ private final class ResultCellView: NSTableCellView {
         case .clipboardRichText: symbol.stringValue = "R"
         case .clipboardImage: symbol.stringValue = "I"
         case .clipboardFiles: symbol.stringValue = "F"
+        case .command: symbol.stringValue = "⌘"
         default: symbol.stringValue = "·"
         }
         symbol.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor

@@ -48,11 +48,22 @@ impl Plugin for ApplicationsPlugin {
                 .total_cmp(left_score)
                 .then_with(|| left.name.cmp(&right.name))
         });
-        Ok(matches
+        let mut results: Vec<_> = matches
             .into_iter()
             .take(limit)
             .map(|(score, application)| application.as_result(score))
-            .collect())
+            .collect();
+        if let Some(command) = clipboard_history_command(&query) {
+            results.push(command);
+            results.sort_by(|left, right| {
+                right
+                    .score
+                    .total_cmp(&left.score)
+                    .then_with(|| left.title.cmp(&right.title))
+            });
+            results.truncate(limit);
+        }
+        Ok(results)
     }
 
     fn execute(&mut self, result_id: &str, action_id: &str) -> Result<Option<String>, String> {
@@ -76,6 +87,30 @@ impl Plugin for ApplicationsPlugin {
         self.applications = applications;
         Ok(changed)
     }
+}
+
+fn clipboard_history_command(query: &str) -> Option<SearchResult> {
+    if query.is_empty() {
+        return None;
+    }
+    let score = fuzzy_score("Clipboard History", query)? + 500.0;
+    let mut metadata = BTreeMap::new();
+    metadata.insert("route".into(), "clipboard_history".into());
+    Some(SearchResult {
+        plugin_id: PLUGIN_ID.into(),
+        id: "command:clipboard-history".into(),
+        title: "Clipboard History".into(),
+        subtitle: "Search copied text, images, and files".into(),
+        preview: "Open Clipboard History".into(),
+        kind: ResultKind::Command,
+        score,
+        metadata,
+        actions: vec![ResultAction {
+            id: "open".into(),
+            title: "Open".into(),
+            destructive: false,
+        }],
+    })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -217,5 +252,14 @@ mod tests {
         assert!(fuzzy_score("Visual Studio Code", "vsc").is_some());
         assert!(fuzzy_score("Safari", "xyz").is_none());
         assert!(fuzzy_score("Safari", "saf").unwrap() > fuzzy_score("Safari", "sfr").unwrap());
+    }
+
+    #[test]
+    fn clipboard_history_is_exposed_as_a_searchable_command() {
+        let command = clipboard_history_command("clipboard history").unwrap();
+        assert_eq!(command.kind, ResultKind::Command);
+        assert_eq!(command.metadata["route"], "clipboard_history");
+        assert!(clipboard_history_command("clip hist").is_some());
+        assert!(clipboard_history_command("").is_none());
     }
 }
