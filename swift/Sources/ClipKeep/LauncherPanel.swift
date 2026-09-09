@@ -349,7 +349,7 @@ final class LauncherPanelController: NSWindowController,
 
     @objc private func openSelected() {
         guard let result = selectedResult else { return }
-        if result.kind == .clipboardText {
+        if result.kind.isClipboard {
             let canPaste = ensureAccessibilityPermission()
             coordinator.execute(result, actionId: "copy") { [weak self] success in
                 guard let self, success else { return }
@@ -378,7 +378,7 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func handle(_ selector: Selector) -> Bool {
-        guard let result = selectedResult, result.kind == .clipboardText else { return false }
+        guard let result = selectedResult, result.kind.isClipboard else { return false }
         if selector == #selector(NSDocument.save(_:)) {
             coordinator.execute(result, actionId: "favorite")
             return true
@@ -529,7 +529,14 @@ private final class ResultCellView: NSTableCellView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func configure(_ result: SearchResult, selected: Bool) {
-        symbol.stringValue = result.kind == .application ? "A" : "T"
+        switch result.kind {
+        case .application: symbol.stringValue = "A"
+        case .clipboardText: symbol.stringValue = "T"
+        case .clipboardRichText: symbol.stringValue = "R"
+        case .clipboardImage: symbol.stringValue = "I"
+        case .clipboardFiles: symbol.stringValue = "F"
+        default: symbol.stringValue = "·"
+        }
         symbol.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
         titleLabel.stringValue = result.title
         subtitleLabel.stringValue = result.subtitle

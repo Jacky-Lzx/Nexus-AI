@@ -7,9 +7,12 @@ plugin protocol remains portable to future Windows and Linux frontends.
 
 ## Features
 
-- Watches the text clipboard while the app is running
+- Watches text, rich text, images, URLs, and file lists while the app is running
 - Searches installed macOS applications and opens the selected result
-- Persists up to 500 entries locally between launches
+- Preserves native pasteboard representations such as UTF-8, RTF, HTML,
+  PNG, TIFF, file URLs, and multiple pasteboard items
+- Persists up to 500 entries locally between launches, with per-item and total
+  storage limits for large binary content
 - Search, favorite, restore, and delete history entries
 - Deduplicates repeated clipboard contents
 - Translucent, rounded, borderless, always-on-top command palette
@@ -71,8 +74,9 @@ History is stored in the platform application-data directory:
 
 ## Privacy note
 
-Clipboard history can contain passwords and other sensitive text. ClipKeep never
-sends data over the network, but its history file is currently plain JSON.
+Clipboard history can contain passwords, images, files, and other sensitive
+content. ClipKeep never sends data over the network, but its history file is
+currently plain JSON; binary representations are Base64 encoded, not encrypted.
 Individual clipboard entries can be removed from the result action bar.
 
 ## Architecture

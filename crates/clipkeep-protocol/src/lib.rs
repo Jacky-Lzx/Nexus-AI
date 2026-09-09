@@ -67,6 +67,9 @@ pub struct SearchResult {
 pub enum ResultKind {
     Application,
     ClipboardText,
+    ClipboardRichText,
+    ClipboardImage,
+    ClipboardFiles,
     Command,
     File,
     Other,

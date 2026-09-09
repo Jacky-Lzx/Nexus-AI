@@ -29,9 +29,21 @@ enum SearchMode {
 enum ResultKind: String, Codable {
     case application
     case clipboardText = "clipboard_text"
+    case clipboardRichText = "clipboard_rich_text"
+    case clipboardImage = "clipboard_image"
+    case clipboardFiles = "clipboard_files"
     case command
     case file
     case other
+}
+
+extension ResultKind {
+    var isClipboard: Bool {
+        switch self {
+        case .clipboardText, .clipboardRichText, .clipboardImage, .clipboardFiles: true
+        default: false
+        }
+    }
 }
 
 struct ResultAction: Codable {
