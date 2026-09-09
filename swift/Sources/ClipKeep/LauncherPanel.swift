@@ -84,8 +84,12 @@ final class LauncherPanelController: NSWindowController,
     var isPresented: Bool { window?.isVisible == true && !hiding }
 
     func toggle(mode: SearchMode) {
-        if isPresented, searchMode == mode {
-            hide(restorePreviousApplication: true)
+        if isPresented {
+            if searchMode == mode {
+                hide(restorePreviousApplication: true)
+            } else {
+                switchSearchMode(to: mode)
+            }
         } else {
             show(mode: mode)
         }
