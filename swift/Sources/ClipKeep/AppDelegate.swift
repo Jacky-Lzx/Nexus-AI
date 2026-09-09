@@ -59,6 +59,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pluginsItem = NSMenuItem(title: "Plugins", action: nil, keyEquivalent: "")
         pluginsItem.submenu = plugins
         menu.addItem(pluginsItem)
+
+        let previewQuality = NSMenu()
+        for quality in ImagePreviewQuality.allCases {
+            let item = NSMenuItem(
+                title: quality.title,
+                action: #selector(setImagePreviewQuality(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = quality.rawValue
+            item.state = launcher.imagePreviewQuality == quality ? .on : .off
+            previewQuality.addItem(item)
+        }
+        let previewQualityItem = NSMenuItem(title: "Image Preview Quality", action: nil, keyEquivalent: "")
+        previewQualityItem.submenu = previewQuality
+        menu.addItem(previewQualityItem)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit ClipKeep", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -73,6 +89,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let id = sender.representedObject as? String,
               let descriptor = builtInPlugins.first(where: { $0.id == id }) else { return }
         coordinator.setEnabled(!coordinator.isEnabled(id), descriptor: descriptor)
+    }
+
+    @objc private func setImagePreviewQuality(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let quality = ImagePreviewQuality(rawValue: rawValue) else { return }
+        launcher.imagePreviewQuality = quality
+        rebuildMenu()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }

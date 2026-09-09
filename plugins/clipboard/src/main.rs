@@ -8,7 +8,7 @@ use std::{
     fs,
     hash::{Hash, Hasher},
     io,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::SystemTime,
 };
 
@@ -26,12 +26,15 @@ struct ClipboardPlugin {
     items: Vec<ClipItem>,
     next_id: u64,
     history_path: PathBuf,
+    preview_cache_dir: PathBuf,
 }
 
 impl ClipboardPlugin {
     fn new() -> io::Result<Self> {
         let history_path = history_path()
             .ok_or_else(|| io::Error::other("could not determine clipboard data directory"))?;
+        let preview_cache_dir = preview_cache_dir()
+            .ok_or_else(|| io::Error::other("could not determine clipboard cache directory"))?;
         let mut items: Vec<ClipItem> = fs::read(&history_path)
             .ok()
             .and_then(|bytes| serde_json::from_slice(&bytes).ok())
@@ -49,6 +52,7 @@ impl ClipboardPlugin {
             items,
             next_id,
             history_path,
+            preview_cache_dir,
         };
         if added_thumbnails {
             plugin.save().map_err(io::Error::other)?;
@@ -87,7 +91,7 @@ impl Plugin for ClipboardPlugin {
             .filter(|item| query.is_empty() || item.search_text().to_lowercase().contains(&query))
             .take(limit)
             .enumerate()
-            .map(|(index, item)| item.as_result(index, &query))
+            .map(|(index, item)| item.as_result(index, &query, &self.preview_cache_dir))
             .collect())
     }
 
@@ -122,7 +126,13 @@ impl Plugin for ClipboardPlugin {
                 ))
             }
             "delete" => {
-                self.items.retain(|item| item.id != id);
+                let position = self
+                    .items
+                    .iter()
+                    .position(|item| item.id == id)
+                    .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
+                let item = self.items.remove(position);
+                item.remove_image_preview_files(&self.preview_cache_dir);
                 self.save()?;
                 Ok(Some("Deleted".to_owned()))
             }
@@ -147,7 +157,7 @@ impl Plugin for ClipboardPlugin {
             self.items.insert(0, ClipItem::new(self.next_id, content));
             self.next_id += 1;
         }
-        trim_history(&mut self.items);
+        trim_history(&mut self.items, &self.preview_cache_dir);
         self.save()?;
         Ok(true)
     }
@@ -257,7 +267,7 @@ impl ClipItem {
         }
     }
 
-    fn as_result(&self, index: usize, query: &str) -> SearchResult {
+    fn as_result(&self, index: usize, query: &str, preview_cache_dir: &Path) -> SearchResult {
         let mut metadata = BTreeMap::new();
         metadata.insert("format".into(), self.kind.label().into());
         metadata.insert("size".into(), byte_size(self.byte_len()));
@@ -276,6 +286,18 @@ impl ClipItem {
             && let Some(thumbnail) = self.thumbnail_data()
         {
             metadata.insert("thumbnail_png".into(), thumbnail);
+        }
+        if self.kind == ClipKind::Image
+            && let Some((preview, original)) = self.image_preview_paths(preview_cache_dir)
+        {
+            metadata.insert(
+                "preview_image_path".into(),
+                preview.to_string_lossy().into_owned(),
+            );
+            metadata.insert(
+                "original_image_path".into(),
+                original.to_string_lossy().into_owned(),
+            );
         }
         if matches!(self.kind, ClipKind::Text | ClipKind::RichText) {
             metadata.insert("characters".into(), self.text.chars().count().to_string());
@@ -334,6 +356,53 @@ impl ClipItem {
         self.thumbnail
             .clone()
             .or_else(|| make_thumbnail(&self.representations))
+    }
+
+    fn image_preview_paths(&self, cache_dir: &Path) -> Option<(PathBuf, PathBuf)> {
+        let source = self
+            .representations
+            .iter()
+            .find(|value| value.uti == "public.png")
+            .or_else(|| {
+                self.representations
+                    .iter()
+                    .find(|value| value.uti == "public.tiff")
+            })?;
+        fs::create_dir_all(cache_dir).ok()?;
+        let stem = self.preview_cache_stem();
+        let extension = if source.uti == "public.png" {
+            "png"
+        } else {
+            "tiff"
+        };
+        let original = cache_dir.join(format!("{stem}-original.{extension}"));
+        if !original.is_file() {
+            fs::write(&original, &source.data).ok()?;
+        }
+
+        let preview = cache_dir.join(format!("{stem}-preview.png"));
+        if !preview.is_file() {
+            use std::io::BufWriter;
+
+            let image = image::load_from_memory(&source.data).ok()?;
+            let image = image.thumbnail(1280, 960);
+            let file = fs::File::create(&preview).ok()?;
+            image
+                .write_to(&mut BufWriter::new(file), image::ImageFormat::Png)
+                .ok()?;
+        }
+        Some((preview, original))
+    }
+
+    fn preview_cache_stem(&self) -> String {
+        format!("{}-{:016x}", self.id, self.fingerprint)
+    }
+
+    fn remove_image_preview_files(&self, cache_dir: &Path) {
+        let stem = self.preview_cache_stem();
+        for suffix in ["preview.png", "original.png", "original.tiff"] {
+            let _ = fs::remove_file(cache_dir.join(format!("{stem}-{suffix}")));
+        }
     }
 }
 
@@ -555,14 +624,20 @@ fn history_path() -> Option<PathBuf> {
         .map(|dirs| dirs.data_local_dir().join("history.json"))
 }
 
-fn trim_history(items: &mut Vec<ClipItem>) {
+fn preview_cache_dir() -> Option<PathBuf> {
+    ProjectDirs::from("io", "clipkeep", "ClipKeep")
+        .map(|dirs| dirs.cache_dir().join("image-previews"))
+}
+
+fn trim_history(items: &mut Vec<ClipItem>, preview_cache_dir: &Path) {
     let mut total_bytes: usize = items.iter().map(ClipItem::byte_len).sum();
     let mut index = items.len();
     while (items.len() > MAX_HISTORY || total_bytes > MAX_TOTAL_BYTES) && index > 0 {
         index -= 1;
         if !items[index].favorite {
             total_bytes = total_bytes.saturating_sub(items[index].byte_len());
-            items.remove(index);
+            let item = items.remove(index);
+            item.remove_image_preview_files(preview_cache_dir);
         }
     }
 }

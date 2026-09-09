@@ -84,6 +84,17 @@ final class LauncherPanelController: NSWindowController,
 
     var onPluginStateChanged: (() -> Void)?
 
+    var imagePreviewQuality: ImagePreviewQuality {
+        get {
+            UserDefaults.standard.string(forKey: "clipboard.imagePreviewQuality")
+                .flatMap(ImagePreviewQuality.init(rawValue:)) ?? .highDefinition
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: "clipboard.imagePreviewQuality")
+            updateDetails()
+        }
+    }
+
     init(coordinator: SearchCoordinator) {
         self.coordinator = coordinator
         let panel = LauncherPanel(
@@ -479,7 +490,7 @@ final class LauncherPanelController: NSWindowController,
             return
         }
         detailText.stringValue = result.preview
-        detailImage.image = thumbnailImage(from: result)
+        detailImage.image = previewImage(from: result)
         detailImage.isHidden = detailImage.image == nil
         detailText.isHidden = detailImage.image != nil
         var info = [
@@ -487,7 +498,14 @@ final class LauncherPanelController: NSWindowController,
             ("Type", result.kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized),
         ]
         for (key, value) in result.metadata
-            .filter({ !["route", "thumbnail_png"].contains($0.key) })
+            .filter({
+                ![
+                    "route",
+                    "thumbnail_png",
+                    "preview_image_path",
+                    "original_image_path",
+                ].contains($0.key)
+            })
             .sorted(by: { $0.key < $1.key }) {
             info.append((key.capitalized, value))
         }
@@ -633,7 +651,14 @@ final class LauncherPanelController: NSWindowController,
         keyUp.postToPid(application.processIdentifier)
     }
 
-    private func thumbnailImage(from result: SearchResult) -> NSImage? {
+    private func previewImage(from result: SearchResult) -> NSImage? {
+        let pathKey = imagePreviewQuality == .original
+            ? "original_image_path"
+            : "preview_image_path"
+        if let path = result.metadata[pathKey],
+           let image = NSImage(contentsOfFile: path) {
+            return image
+        }
         guard let encoded = result.metadata["thumbnail_png"],
               let data = Data(base64Encoded: encoded) else { return nil }
         return NSImage(data: data)

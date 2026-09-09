@@ -1,5 +1,17 @@
 import Foundation
 
+enum ImagePreviewQuality: String, CaseIterable {
+    case highDefinition = "high_definition"
+    case original
+
+    var title: String {
+        switch self {
+        case .highDefinition: "High Definition"
+        case .original: "Original"
+        }
+    }
+}
+
 enum SearchMode {
     case applications
     case clipboard
