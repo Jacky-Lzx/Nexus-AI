@@ -320,10 +320,10 @@ impl ClipItem {
         }
         let title = match self.kind {
             ClipKind::Text | ClipKind::RichText if !self.text.is_empty() => {
-                single_line_preview(&self.text, 60)
+                first_line_preview(&self.text, 60)
             }
             ClipKind::Image => "Image".to_owned(),
-            ClipKind::Files if !self.text.is_empty() => single_line_preview(&self.text, 60),
+            ClipKind::Files if !self.text.is_empty() => first_line_preview(&self.text, 60),
             ClipKind::Files => "Files".to_owned(),
             _ => self.kind.label().to_owned(),
         };
@@ -677,11 +677,16 @@ fn preview(text: &str, max_chars: usize) -> String {
     }
 }
 
-fn single_line_preview(text: &str, max_chars: usize) -> String {
-    preview(
-        &text.split_whitespace().collect::<Vec<_>>().join(" "),
-        max_chars,
-    )
+fn first_line_preview(text: &str, max_chars: usize) -> String {
+    let has_more_lines = text.contains(['\r', '\n']);
+    let cleaned = text.trim();
+    let first_line = cleaned.lines().next().unwrap_or_default().trim();
+    let first_line = preview(first_line, max_chars.saturating_sub(2));
+    if has_more_lines {
+        format!("{first_line} ↵")
+    } else {
+        first_line
+    }
 }
 
 fn byte_size(bytes: usize) -> String {
@@ -738,11 +743,13 @@ mod tests {
     }
 
     #[test]
-    fn list_preview_collapses_line_breaks_and_repeated_whitespace() {
+    fn list_preview_only_shows_the_first_line() {
         assert_eq!(
-            single_line_preview("first line\nsecond\t\tline", 60),
-            "first line second line"
+            first_line_preview("first line\nsecond line", 60),
+            "first line ↵"
         );
+        assert_eq!(first_line_preview("one line", 60), "one line");
+        assert_eq!(first_line_preview("first\r\nsecond", 60), "first ↵");
     }
 
     #[test]
