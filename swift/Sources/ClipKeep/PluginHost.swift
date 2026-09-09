@@ -177,6 +177,7 @@ final class SearchCoordinator {
     init(descriptors: [PluginDescriptor]) {
         self.descriptors = descriptors
         ClipboardPreference.registerDefaults()
+        CalendarPreference.registerDefaults()
         for plugin in descriptors where isEnabled(plugin.id) {
             start(plugin)
         }
@@ -284,7 +285,11 @@ final class SearchCoordinator {
     }
 
     private func settings(for pluginId: String) -> [String: String] {
-        pluginId == "io.clipkeep.clipboard" ? ClipboardPreference.pluginSettings : [:]
+        switch pluginId {
+        case "io.clipkeep.clipboard": ClipboardPreference.pluginSettings
+        case "io.clipkeep.calendar": CalendarPreference.pluginSettings
+        default: [:]
+        }
     }
 
     private func handle(_ event: PluginProcess.Event, from pluginId: String, process: PluginProcess) {

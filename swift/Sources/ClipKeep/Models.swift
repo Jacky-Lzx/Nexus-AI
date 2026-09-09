@@ -118,6 +118,18 @@ enum ClipboardPreference {
     }
 }
 
+enum CalendarPreference {
+    static let futureDays = "calendar.futureDays"
+
+    static func registerDefaults() {
+        UserDefaults.standard.register(defaults: [futureDays: 14])
+    }
+
+    static var pluginSettings: [String: String] {
+        ["future_days": String(UserDefaults.standard.integer(forKey: futureDays))]
+    }
+}
+
 struct SearchResult: Codable {
     let pluginId: String
     let id: String
@@ -149,6 +161,9 @@ struct PluginDescriptor: Equatable {
         switch id {
         case "io.clipkeep.clipboard": "clipboard"
         case "io.clipkeep.applications": "square.grid.2x2"
+        case "io.clipkeep.calculator": "function"
+        case "io.clipkeep.calendar": "calendar"
+        case "io.clipkeep.system-commands": "power"
         default: "puzzlepiece.extension"
         }
     }
@@ -174,6 +189,24 @@ private let fallbackBuiltInPlugins = [
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-clipboard"),
         defaultEnabled: true,
         capabilities: ["clipboard.read", "clipboard.write", "storage", "background"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.calculator", name: "Calculator", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-calculator",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-calculator"),
+        defaultEnabled: true, capabilities: ["calculate", "clipboard.write"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.calendar", name: "Upcoming Events", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-calendar",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-calendar"),
+        defaultEnabled: true, capabilities: ["calendar.read", "applications.open"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.system-commands", name: "System Commands", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-system-commands",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-system-commands"),
+        defaultEnabled: true, capabilities: ["system.control", "applications.open"]
     ),
 ]
 

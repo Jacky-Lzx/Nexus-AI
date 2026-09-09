@@ -460,6 +460,19 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func perform(_ action: ResultAction, on result: SearchResult) {
+        if action.destructive {
+            let alert = NSAlert()
+            alert.messageText = "\(action.title)?"
+            alert.informativeText = "This system action may interrupt your current work."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: action.title)
+            alert.addButton(withTitle: "Cancel")
+            ignoreNextResign = true
+            let response = alert.runModal()
+            window?.makeKey()
+            window?.makeFirstResponder(searchField)
+            guard response == .alertFirstButtonReturn else { return }
+        }
         let canPaste = action.pasteToPrevious ? ensureAccessibilityPermission() : false
         coordinator.execute(result, actionId: action.id) { [weak self] success in
             guard let self, success, action.closesWindow else { return }
@@ -861,6 +874,7 @@ private final class ResultCellView: NSTableCellView {
         symbol.layer?.cornerRadius = 8
         symbol.translatesAutoresizingMaskIntoConstraints = false
         artwork.imageScaling = .scaleProportionallyUpOrDown
+        artwork.contentTintColor = .labelColor
         artwork.wantsLayer = true
         artwork.layer?.cornerRadius = 8
         artwork.layer?.cornerCurve = .continuous
@@ -966,6 +980,9 @@ private final class ResultCellView: NSTableCellView {
     }
 
     private static func artworkImage(for result: SearchResult) -> NSImage? {
+        if let symbolName = result.metadata["symbol_name"] {
+            return NSImage(systemSymbolName: symbolName, accessibilityDescription: result.title)
+        }
         if let path = result.metadata["thumbnail_image_path"] {
             let cacheKey = path as NSString
             if let image = applicationIconCache.object(forKey: cacheKey) { return image }

@@ -1,0 +1,30 @@
+[package]
+name = "clipkeep-plugin-calendar"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+block2 = "0.6"
+chrono = "0.4"
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol.workspace = true
+objc2 = "0.6"
+objc2-event-kit = { version = "0.3.2", default-features = false, features = [
+    "block2",
+    "EKCalendar",
+    "EKCalendarItem",
+    "EKEvent",
+    "EKEventStore",
+    "EKObject",
+    "EKTypes",
+] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+    "NSArray",
+    "NSDate",
+    "NSError",
+    "NSObject",
+    "NSPredicate",
+    "NSString",
+    "NSURL",
+] }

@@ -227,6 +227,12 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Search, preview, and paste your clipboard history"
         case "io.clipkeep.applications":
             pluginDescription = "Quickly search and open applications installed on this Mac"
+        case "io.clipkeep.calculator":
+            pluginDescription = "Evaluate expressions and paste the result"
+        case "io.clipkeep.calendar":
+            pluginDescription = "Read-only access to your upcoming calendar events"
+        case "io.clipkeep.system-commands":
+            pluginDescription = "Quickly run common macOS system actions"
         default:
             pluginDescription = "Rust plugin \(plugin.id) · version \(plugin.version)"
         }
@@ -335,6 +341,19 @@ final class SettingsWindowController: NSWindowController,
                 title: "Indexed Locations",
                 description: "Application results refresh automatically every 60 seconds",
                 control: locations
+            ))
+        } else if plugin.id == "io.clipkeep.calendar" {
+            let days = NSPopUpButton()
+            let choices = [1, 7, 14, 30, 90]
+            days.addItems(withTitles: choices.map { $0 == 1 ? "Next 24 Hours" : "Next \($0) Days" })
+            let selectedDays = UserDefaults.standard.integer(forKey: CalendarPreference.futureDays)
+            days.selectItem(at: choices.firstIndex(of: selectedDays) ?? 2)
+            days.target = self
+            days.action = #selector(changeCalendarRange(_:))
+            options.addArrangedSubview(settingRow(
+                title: "Event Range",
+                description: "How far ahead to include events",
+                control: days
             ))
         } else {
             let capabilities = NSTextField(labelWithString: plugin.capabilities.joined(separator: ", "))
@@ -504,6 +523,13 @@ final class SettingsWindowController: NSWindowController,
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         coordinator.execute(pluginId: "io.clipkeep.clipboard", actionId: action)
+    }
+
+    @objc private func changeCalendarRange(_ sender: NSPopUpButton) {
+        let choices = [1, 7, 14, 30, 90]
+        guard choices.indices.contains(sender.indexOfSelectedItem) else { return }
+        UserDefaults.standard.set(choices[sender.indexOfSelectedItem], forKey: CalendarPreference.futureDays)
+        coordinator.reloadSettings(for: "io.clipkeep.calendar")
     }
 }
 

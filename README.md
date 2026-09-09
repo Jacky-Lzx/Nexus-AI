@@ -9,6 +9,12 @@ plugin protocol remains portable to future Windows and Linux frontends.
 
 - Watches text, rich text, images, URLs, and file lists while the app is running
 - Searches installed macOS applications and opens the selected result
+- Evaluates calculator expressions with parentheses, constants, powers, and
+  common functions, then copies or pastes the result
+- Reads and searches upcoming EventKit calendar events, with a configurable
+  1–90 day range and on-demand calendar permission
+- Runs common macOS commands including Lock Screen, display sleep, screen saver,
+  system sleep, Settings, Force Quit, log out, restart, and shut down
 - Preserves native pasteboard representations such as UTF-8, RTF, HTML,
   PNG, TIFF, file URLs, and multiple pasteboard items
 - Generates compact image thumbnails in Rust for list and detail previews
@@ -115,6 +121,10 @@ applications can be excluded by bundle identifier in Settings.
   non-macOS frontends and protocol tests
 - `plugins/applications`: installed application index and launcher
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
+- `plugins/calculator`: expression parser and result copy/paste actions
+- `plugins/calendar`: read-only EventKit upcoming-event search
+- `plugins/system-commands`: curated macOS system actions with confirmation for
+  disruptive commands
 
 Built-in plugins are separate executables. A plugin crash cannot directly crash
 the UI. A crashed plugin is restarted with bounded backoff, while disabling it

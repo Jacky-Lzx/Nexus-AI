@@ -4,7 +4,10 @@ members = [
     "crates/clipkeep-plugin-sdk",
     "crates/clipkeep-protocol",
     "plugins/applications",
+    "plugins/calculator",
+    "plugins/calendar",
     "plugins/clipboard",
+    "plugins/system-commands",
 ]
 resolver = "3"
 

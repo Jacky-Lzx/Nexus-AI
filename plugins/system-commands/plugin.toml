@@ -1,0 +1,7 @@
+id = "io.clipkeep.system-commands"
+name = "System Commands"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-system-commands"
+default_enabled = true
+capabilities = ["system.control", "applications.open"]

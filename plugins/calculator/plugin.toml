@@ -1,0 +1,7 @@
+id = "io.clipkeep.calculator"
+name = "Calculator"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-calculator"
+default_enabled = true
+capabilities = ["calculate", "clipboard.write"]

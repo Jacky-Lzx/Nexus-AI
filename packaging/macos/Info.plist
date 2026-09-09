@@ -26,5 +26,9 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>ClipKeep reads upcoming events to show them in the launcher.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>ClipKeep uses System Events only when you run a selected system command.</string>
 </dict>
 </plist>

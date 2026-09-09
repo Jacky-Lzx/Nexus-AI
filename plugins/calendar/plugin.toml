@@ -1,0 +1,7 @@
+id = "io.clipkeep.calendar"
+name = "Upcoming Events"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-calendar"
+default_enabled = true
+capabilities = ["calendar.read", "applications.open"]
