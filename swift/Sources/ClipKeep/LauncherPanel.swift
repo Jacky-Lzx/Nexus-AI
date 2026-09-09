@@ -645,6 +645,9 @@ private final class ResultCellView: NSTableCellView {
     private let artwork = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
+    private var stackedTextConstraints: [NSLayoutConstraint] = []
+    private var inlineTextConstraints: [NSLayoutConstraint] = []
+    private var usesInlineSubtitle = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -664,10 +667,12 @@ private final class ResultCellView: NSTableCellView {
         artwork.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
+        subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbol)
         addSubview(artwork)
@@ -683,12 +688,23 @@ private final class ResultCellView: NSTableCellView {
             artwork.widthAnchor.constraint(equalTo: symbol.widthAnchor),
             artwork.heightAnchor.constraint(equalTo: symbol.heightAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 10),
+            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+        ])
+        stackedTextConstraints = [
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 9),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            subtitleLabel.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 3),
-        ])
+        ]
+        inlineTextConstraints = [
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: subtitleLabel.leadingAnchor,
+                constant: -16
+            ),
+            subtitleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ]
+        NSLayoutConstraint.activate(stackedTextConstraints)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -708,11 +724,19 @@ private final class ResultCellView: NSTableCellView {
         default: symbol.stringValue = "·"
         }
         symbol.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        setInlineSubtitle(result.kind == .application)
         titleLabel.stringValue = result.title
         subtitleLabel.stringValue = result.subtitle
         layer?.backgroundColor = selected
             ? NSColor.controlAccentColor.withAlphaComponent(0.28).cgColor
             : NSColor.clear.cgColor
+    }
+
+    private func setInlineSubtitle(_ inline: Bool) {
+        guard usesInlineSubtitle != inline else { return }
+        usesInlineSubtitle = inline
+        NSLayoutConstraint.deactivate(inline ? stackedTextConstraints : inlineTextConstraints)
+        NSLayoutConstraint.activate(inline ? inlineTextConstraints : stackedTextConstraints)
     }
 
     private static func artworkImage(for result: SearchResult) -> NSImage? {
