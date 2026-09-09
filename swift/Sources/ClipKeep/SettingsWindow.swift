@@ -2,7 +2,7 @@ import AppKit
 import Carbon
 
 private enum SettingsLayout {
-    static let windowSize = NSSize(width: 900, height: 600)
+    static let windowSize = NSSize(width: 900, height: 700)
     static let sidebarWidth: CGFloat = 240
 }
 
@@ -272,6 +272,54 @@ final class SettingsWindowController: NSWindowController,
                 description: "Choose a fast high-resolution preview or the original image",
                 control: quality
             ))
+
+            let retention = NSPopUpButton()
+            let retentionChoices = [(1, "24 Hours"), (7, "7 Days"), (30, "30 Days"), (90, "3 Months")]
+            retention.addItems(withTitles: retentionChoices.map(\.1))
+            let currentDays = UserDefaults.standard.integer(forKey: ClipboardPreference.retentionDays)
+            retention.selectItem(at: retentionChoices.firstIndex(where: { $0.0 == currentDays }) ?? 2)
+            retention.tag = retentionChoices[retention.indexOfSelectedItem].0
+            retention.target = self
+            retention.action = #selector(changeClipboardRetention(_:))
+            options.addArrangedSubview(settingRow(
+                title: "Keep History",
+                description: "Favorites are kept until you delete them",
+                control: retention
+            ))
+
+            let concealed = NSSwitch()
+            concealed.state = UserDefaults.standard.bool(forKey: ClipboardPreference.ignoreConcealed) ? .on : .off
+            concealed.target = self
+            concealed.action = #selector(changeIgnoreConcealed(_:))
+            options.addArrangedSubview(settingRow(
+                title: "Ignore Sensitive Content",
+                description: "Do not save concealed or transient pasteboard data",
+                control: concealed
+            ))
+
+            let ignoredApps = NSTextField(string: UserDefaults.standard.string(
+                forKey: ClipboardPreference.ignoredBundleIds
+            ) ?? "")
+            ignoredApps.placeholderString = "com.example.password-manager"
+            ignoredApps.identifier = NSUserInterfaceItemIdentifier("ignoredBundleIds")
+            ignoredApps.target = self
+            ignoredApps.action = #selector(changeIgnoredApplications(_:))
+            ignoredApps.widthAnchor.constraint(equalToConstant: 245).isActive = true
+            options.addArrangedSubview(settingRow(
+                title: "Ignored Applications",
+                description: "Comma-separated bundle identifiers; press Return to save",
+                control: ignoredApps
+            ))
+
+            let clear = NSPopUpButton()
+            clear.addItems(withTitles: ["Clear…", "Last 5 Minutes", "Last 15 Minutes", "All History"])
+            clear.target = self
+            clear.action = #selector(clearClipboardHistory(_:))
+            options.addArrangedSubview(settingRow(
+                title: "Clear History",
+                description: "Favorites are not removed",
+                control: clear
+            ))
         } else {
             let locations = NSTextField(labelWithString: "/Applications and /System/Applications")
             locations.textColor = .secondaryLabelColor
@@ -298,7 +346,7 @@ final class SettingsWindowController: NSWindowController,
             description.leadingAnchor.constraint(greaterThanOrEqualTo: detailPane.leadingAnchor, constant: 28),
             enabled.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 22),
             enabled.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -24),
-            optionsTitle.topAnchor.constraint(equalTo: description.bottomAnchor, constant: 64),
+            optionsTitle.topAnchor.constraint(equalTo: description.bottomAnchor, constant: 30),
             optionsTitle.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 30),
             options.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
             options.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -24),
@@ -409,6 +457,37 @@ final class SettingsWindowController: NSWindowController,
         guard let title = sender.selectedItem?.title,
               let quality = ImagePreviewQuality.allCases.first(where: { $0.title == title }) else { return }
         launcher.imagePreviewQuality = quality
+    }
+
+    @objc private func changeClipboardRetention(_ sender: NSPopUpButton) {
+        let days = [1, 7, 30, 90][max(0, sender.indexOfSelectedItem)]
+        UserDefaults.standard.set(days, forKey: ClipboardPreference.retentionDays)
+        coordinator.reloadSettings(for: "io.clipkeep.clipboard")
+    }
+
+    @objc private func changeIgnoreConcealed(_ sender: NSSwitch) {
+        UserDefaults.standard.set(sender.state == .on, forKey: ClipboardPreference.ignoreConcealed)
+        coordinator.reloadSettings(for: "io.clipkeep.clipboard")
+    }
+
+    @objc private func changeIgnoredApplications(_ sender: NSTextField) {
+        UserDefaults.standard.set(sender.stringValue, forKey: ClipboardPreference.ignoredBundleIds)
+        coordinator.reloadSettings(for: "io.clipkeep.clipboard")
+    }
+
+    @objc private func clearClipboardHistory(_ sender: NSPopUpButton) {
+        let actions = [nil, "clear_5m", "clear_15m", "clear_all"]
+        guard actions.indices.contains(sender.indexOfSelectedItem),
+              let action = actions[sender.indexOfSelectedItem] else { return }
+        sender.selectItem(at: 0)
+        let alert = NSAlert()
+        alert.messageText = "Clear Clipboard History?"
+        alert.informativeText = "This removes the selected non-favorite entries and cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        coordinator.execute(pluginId: "io.clipkeep.clipboard", actionId: action)
     }
 }
 

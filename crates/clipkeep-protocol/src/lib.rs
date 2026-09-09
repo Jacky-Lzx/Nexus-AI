@@ -9,6 +9,10 @@ pub enum HostRequest {
     Initialize {
         protocol_version: u32,
     },
+    Configure {
+        #[serde(default)]
+        settings: BTreeMap<String, String>,
+    },
     Search {
         query_id: u64,
         query: String,
@@ -81,6 +85,12 @@ pub struct ResultAction {
     pub title: String,
     #[serde(default)]
     pub destructive: bool,
+    #[serde(default)]
+    pub default: bool,
+    #[serde(default)]
+    pub closes_window: bool,
+    #[serde(default)]
+    pub paste_to_previous: bool,
 }
 
 #[cfg(test)]

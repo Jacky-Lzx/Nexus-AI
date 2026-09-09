@@ -1,5 +1,6 @@
 use clipkeep_protocol::{HostRequest, PROTOCOL_VERSION, PluginEvent, SearchResult};
 use std::{
+    collections::BTreeMap,
     io::{self, BufRead, BufReader, BufWriter, Write},
     sync::mpsc::{self, Receiver},
     thread,
@@ -12,6 +13,10 @@ pub trait Plugin {
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String>;
 
     fn execute(&mut self, result_id: &str, action_id: &str) -> Result<Option<String>, String>;
+
+    fn configure(&mut self, _settings: &BTreeMap<String, String>) -> Result<bool, String> {
+        Ok(false)
+    }
 
     fn tick(&mut self) -> Result<bool, String> {
         Ok(false)
@@ -78,6 +83,11 @@ fn handle_request(
                 )?;
             }
         }
+        HostRequest::Configure { settings } => match plugin.configure(&settings) {
+            Ok(true) => send(output, &PluginEvent::CatalogChanged)?,
+            Ok(false) => {}
+            Err(message) => send(output, &PluginEvent::Error { message })?,
+        },
         HostRequest::Search {
             query_id,
             query,

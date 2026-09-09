@@ -12,8 +12,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Preserves native pasteboard representations such as UTF-8, RTF, HTML,
   PNG, TIFF, file URLs, and multiple pasteboard items
 - Generates compact image thumbnails in Rust for list and detail previews
-- Persists up to 500 entries locally between launches, with per-item and total
-  storage limits for large binary content
+- Persists up to 500 entries locally between launches, encrypted with AES-256-GCM
+  using a key stored in the macOS Keychain, with per-item and total storage limits
 - Search, favorite, restore, and delete history entries
 - Deduplicates repeated clipboard contents
 - Native Liquid Glass, rounded, borderless, always-on-top command palette
@@ -28,6 +28,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Choosing a clipboard entry restores the previous application and pastes it directly
 - Plugins keep running while the window is hidden
 - No network access or analytics
+- Configurable history retention, sensitive-content filtering, ignored source
+  applications, and time-range clearing (favorites are preserved)
 
 ## Run
 
@@ -85,18 +87,18 @@ search clipboard history. Escape and focus loss hide the panel without stopping
 its plugin processes. Use
 **Quit** in the bottom action bar to stop ClipKeep completely.
 
-History is stored in the platform application-data directory:
+Encrypted history is stored in the platform application-data directory:
 
-- macOS: `~/Library/Application Support/io.clipkeep.ClipKeep/history.json`
+- macOS: `~/Library/Application Support/io.clipkeep.ClipKeep/history.ckh`
 - Windows: `%APPDATA%\\clipkeep\\ClipKeep\\data\\history.json`
 - Linux: `~/.local/share/clipkeep/history.json` (subject to XDG settings)
 
 ## Privacy note
 
 Clipboard history can contain passwords, images, files, and other sensitive
-content. ClipKeep never sends data over the network, but its history file is
-currently plain JSON; binary representations are Base64 encoded, not encrypted.
-Individual clipboard entries can be removed from the result action bar.
+content. ClipKeep never sends data over the network. History is encrypted at
+rest, concealed/transient pasteboard data is ignored by default, and additional
+applications can be excluded by bundle identifier in Settings.
 
 ## Architecture
 

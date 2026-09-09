@@ -111,6 +111,9 @@ fn clipboard_history_command(query: &str) -> Option<SearchResult> {
             id: "open".into(),
             title: "Open".into(),
             destructive: false,
+            default: true,
+            closes_window: true,
+            paste_to_previous: false,
         }],
     })
 }
@@ -161,6 +164,9 @@ impl Application {
                 id: "open".into(),
                 title: "Open".into(),
                 destructive: false,
+                default: true,
+                closes_window: true,
+                paste_to_previous: false,
             }],
         }
     }

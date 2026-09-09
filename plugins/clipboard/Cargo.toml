@@ -11,10 +11,11 @@ clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
 clipkeep-protocol.workspace = true
 directories = "6.0"
 image = { version = "0.25", default-features = false, features = ["png", "tiff"] }
+ring = "0.17"
 serde.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.3"
-objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSPasteboard", "NSPasteboardItem"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSPasteboard", "NSPasteboardItem", "NSRunningApplication", "NSWorkspace"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["NSArray", "NSData", "NSString"] }

@@ -2,6 +2,10 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use clipkeep_plugin_sdk::{Plugin, run_plugin};
 use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
 use directories::ProjectDirs;
+use ring::{
+    aead,
+    rand::{SecureRandom, SystemRandom},
+};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
@@ -9,6 +13,7 @@ use std::{
     hash::{Hash, Hasher},
     io,
     path::{Path, PathBuf},
+    process::Command,
     time::SystemTime,
 };
 
@@ -16,6 +21,24 @@ const PLUGIN_ID: &str = "io.clipkeep.clipboard";
 const MAX_HISTORY: usize = 500;
 const MAX_ITEM_BYTES: usize = 25 * 1024 * 1024;
 const MAX_TOTAL_BYTES: usize = 250 * 1024 * 1024;
+const HISTORY_MAGIC: &[u8; 4] = b"CKH1";
+
+#[derive(Clone, Debug)]
+struct ClipboardSettings {
+    retention_days: u64,
+    ignore_concealed: bool,
+    ignored_bundle_ids: Vec<String>,
+}
+
+impl Default for ClipboardSettings {
+    fn default() -> Self {
+        Self {
+            retention_days: 30,
+            ignore_concealed: true,
+            ignored_bundle_ids: Vec::new(),
+        }
+    }
+}
 
 fn main() -> io::Result<()> {
     run_plugin(ClipboardPlugin::new()?)
@@ -27,6 +50,8 @@ struct ClipboardPlugin {
     next_id: u64,
     history_path: PathBuf,
     preview_cache_dir: PathBuf,
+    encryption_key: [u8; 32],
+    settings: ClipboardSettings,
 }
 
 impl ClipboardPlugin {
@@ -35,10 +60,11 @@ impl ClipboardPlugin {
             .ok_or_else(|| io::Error::other("could not determine clipboard data directory"))?;
         let preview_cache_dir = preview_cache_dir()
             .ok_or_else(|| io::Error::other("could not determine clipboard cache directory"))?;
-        let mut items: Vec<ClipItem> = fs::read(&history_path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default();
+        let encryption_key = history_encryption_key()?;
+        let legacy_path = legacy_history_path();
+        let mut items: Vec<ClipItem> =
+            load_history(&history_path, legacy_path.as_deref(), &encryption_key)
+                .unwrap_or_default();
         let mut added_thumbnails = false;
         for item in &mut items {
             if item.kind == ClipKind::Image && item.thumbnail.is_none() {
@@ -53,9 +79,14 @@ impl ClipboardPlugin {
             next_id,
             history_path,
             preview_cache_dir,
+            encryption_key,
+            settings: ClipboardSettings::default(),
         };
-        if added_thumbnails {
+        if added_thumbnails || legacy_path.as_ref().is_some_and(|path| path.is_file()) {
             plugin.save().map_err(io::Error::other)?;
+            if let Some(path) = legacy_path {
+                let _ = fs::remove_file(path);
+            }
         }
         Ok(plugin)
     }
@@ -65,7 +96,8 @@ impl ClipboardPlugin {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
         let temp = self.history_path.with_extension("json.tmp");
-        let bytes = serde_json::to_vec_pretty(&self.items).map_err(|error| error.to_string())?;
+        let plaintext = serde_json::to_vec(&self.items).map_err(|error| error.to_string())?;
+        let bytes = encrypt_history(&plaintext, &self.encryption_key)?;
         fs::write(&temp, bytes).map_err(|error| error.to_string())?;
         fs::rename(temp, &self.history_path).map_err(|error| error.to_string())
     }
@@ -96,6 +128,25 @@ impl Plugin for ClipboardPlugin {
     }
 
     fn execute(&mut self, result_id: &str, action_id: &str) -> Result<Option<String>, String> {
+        if action_id.starts_with("clear_") {
+            let cutoff = match action_id {
+                "clear_5m" => Some(now_secs().saturating_sub(5 * 60)),
+                "clear_15m" => Some(now_secs().saturating_sub(15 * 60)),
+                "clear_all" => None,
+                _ => return Err(format!("unknown clipboard action: {action_id}")),
+            };
+            let cache = &self.preview_cache_dir;
+            self.items.retain(|item| {
+                let remove =
+                    !item.favorite && cutoff.is_none_or(|cutoff| item.created_at >= cutoff);
+                if remove {
+                    item.remove_image_preview_files(cache);
+                }
+                !remove
+            });
+            self.save()?;
+            return Ok(Some("Clipboard history cleared".into()));
+        }
         let id = Self::item_id(result_id)?;
         match action_id {
             "copy" => {
@@ -141,7 +192,7 @@ impl Plugin for ClipboardPlugin {
     }
 
     fn tick(&mut self) -> Result<bool, String> {
-        let Some(content) = self.clipboard.capture()? else {
+        let Some(content) = self.clipboard.capture(&self.settings)? else {
             return Ok(false);
         };
         if content.byte_len() > MAX_ITEM_BYTES {
@@ -160,6 +211,41 @@ impl Plugin for ClipboardPlugin {
         trim_history(&mut self.items, &self.preview_cache_dir);
         self.save()?;
         Ok(true)
+    }
+
+    fn configure(&mut self, settings: &BTreeMap<String, String>) -> Result<bool, String> {
+        self.settings.retention_days = settings
+            .get("retention_days")
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(30);
+        self.settings.ignore_concealed = settings
+            .get("ignore_concealed")
+            .is_none_or(|value| value == "true");
+        self.settings.ignored_bundle_ids = settings
+            .get("ignored_bundle_ids")
+            .map(|value| {
+                value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        let cutoff = now_secs().saturating_sub(self.settings.retention_days * 86_400);
+        let cache = &self.preview_cache_dir;
+        let before = self.items.len();
+        self.items.retain(|item| {
+            let keep = item.favorite || item.created_at >= cutoff;
+            if !keep {
+                item.remove_image_preview_files(cache);
+            }
+            keep
+        });
+        if self.items.len() != before {
+            self.save()?;
+        }
+        Ok(self.items.len() != before)
     }
 }
 
@@ -351,16 +437,25 @@ impl ClipItem {
                     id: "copy".into(),
                     title: "Paste".into(),
                     destructive: false,
+                    default: true,
+                    closes_window: true,
+                    paste_to_previous: true,
                 },
                 ResultAction {
                     id: "favorite".into(),
                     title: "Favorite".into(),
                     destructive: false,
+                    default: false,
+                    closes_window: false,
+                    paste_to_previous: false,
                 },
                 ResultAction {
                     id: "delete".into(),
                     title: "Delete".into(),
                     destructive: true,
+                    default: false,
+                    closes_window: false,
+                    paste_to_previous: false,
                 },
             ],
         }
@@ -440,7 +535,7 @@ impl PlatformClipboard {
         })
     }
 
-    fn capture(&mut self) -> Result<Option<CapturedContent>, String> {
+    fn capture(&mut self, settings: &ClipboardSettings) -> Result<Option<CapturedContent>, String> {
         let change_count = self.pasteboard.changeCount();
         if change_count == self.last_change_count {
             return Ok(None);
@@ -449,6 +544,13 @@ impl PlatformClipboard {
         let Some(items) = self.pasteboard.pasteboardItems() else {
             return Ok(None);
         };
+
+        if settings.ignore_concealed && pasteboard_is_sensitive(&items) {
+            return Ok(None);
+        }
+        if current_application_is_ignored(&settings.ignored_bundle_ids) {
+            return Ok(None);
+        }
 
         let mut representations = Vec::new();
         let mut hasher = DefaultHasher::new();
@@ -562,7 +664,10 @@ impl PlatformClipboard {
         })
     }
 
-    fn capture(&mut self) -> Result<Option<CapturedContent>, String> {
+    fn capture(
+        &mut self,
+        _settings: &ClipboardSettings,
+    ) -> Result<Option<CapturedContent>, String> {
         let text = self
             .clipboard
             .get_text()
@@ -609,6 +714,44 @@ fn supported_type(uti: &str) -> bool {
 }
 
 #[cfg(target_os = "macos")]
+fn pasteboard_is_sensitive(
+    items: &objc2_foundation::NSArray<objc2_app_kit::NSPasteboardItem>,
+) -> bool {
+    const SENSITIVE_TYPES: [&str; 4] = [
+        "org.nspasteboard.ConcealedType",
+        "org.nspasteboard.TransientType",
+        "org.nspasteboard.AutoGeneratedType",
+        "com.agilebits.onepassword",
+    ];
+    for item_index in 0..items.count() {
+        let types = items.objectAtIndex(item_index).types();
+        for type_index in 0..types.count() {
+            let uti = types.objectAtIndex(type_index).to_string();
+            if SENSITIVE_TYPES.iter().any(|candidate| uti == *candidate) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "macos")]
+fn current_application_is_ignored(ignored_bundle_ids: &[String]) -> bool {
+    use objc2_app_kit::NSWorkspace;
+    let workspace = NSWorkspace::sharedWorkspace();
+    let Some(application) = workspace.frontmostApplication() else {
+        return false;
+    };
+    let Some(bundle_id) = application.bundleIdentifier() else {
+        return false;
+    };
+    let bundle_id = bundle_id.to_string();
+    ignored_bundle_ids
+        .iter()
+        .any(|ignored| ignored.eq_ignore_ascii_case(&bundle_id))
+}
+
+#[cfg(target_os = "macos")]
 fn classify(representations: &[Representation]) -> ClipKind {
     let contains = |needle: &str| representations.iter().any(|value| value.uti == needle);
     if contains("public.file-url") || contains("NSFilenamesPboardType") {
@@ -639,12 +782,132 @@ fn make_thumbnail(representations: &[Representation]) -> Option<String> {
 
 fn history_path() -> Option<PathBuf> {
     ProjectDirs::from("io", "clipkeep", "ClipKeep")
+        .map(|dirs| dirs.data_local_dir().join("history.ckh"))
+}
+
+fn legacy_history_path() -> Option<PathBuf> {
+    ProjectDirs::from("io", "clipkeep", "ClipKeep")
         .map(|dirs| dirs.data_local_dir().join("history.json"))
 }
 
 fn preview_cache_dir() -> Option<PathBuf> {
     ProjectDirs::from("io", "clipkeep", "ClipKeep")
         .map(|dirs| dirs.cache_dir().join("image-previews"))
+}
+
+fn load_history(path: &Path, legacy_path: Option<&Path>, key: &[u8; 32]) -> Option<Vec<ClipItem>> {
+    if let Ok(bytes) = fs::read(path) {
+        let plaintext = decrypt_history(&bytes, key).ok()?;
+        return serde_json::from_slice(&plaintext).ok();
+    }
+    legacy_path
+        .and_then(|path| fs::read(path).ok())
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+}
+
+fn encrypt_history(plaintext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
+    let mut nonce = [0u8; 12];
+    SystemRandom::new()
+        .fill(&mut nonce)
+        .map_err(|_| "could not create encryption nonce")?;
+    let unbound = aead::UnboundKey::new(&aead::AES_256_GCM, key)
+        .map_err(|_| "could not initialize history encryption")?;
+    let key = aead::LessSafeKey::new(unbound);
+    let mut ciphertext = plaintext.to_vec();
+    key.seal_in_place_append_tag(
+        aead::Nonce::assume_unique_for_key(nonce),
+        aead::Aad::from(HISTORY_MAGIC.as_slice()),
+        &mut ciphertext,
+    )
+    .map_err(|_| "could not encrypt clipboard history")?;
+    let mut output = Vec::with_capacity(HISTORY_MAGIC.len() + nonce.len() + ciphertext.len());
+    output.extend_from_slice(HISTORY_MAGIC);
+    output.extend_from_slice(&nonce);
+    output.extend_from_slice(&ciphertext);
+    Ok(output)
+}
+
+fn decrypt_history(bytes: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
+    if bytes.len() < HISTORY_MAGIC.len() + 12 || &bytes[..4] != HISTORY_MAGIC {
+        return Err("invalid encrypted history".into());
+    }
+    let nonce: [u8; 12] = bytes[4..16]
+        .try_into()
+        .map_err(|_| "invalid history nonce")?;
+    let unbound = aead::UnboundKey::new(&aead::AES_256_GCM, key)
+        .map_err(|_| "could not initialize history decryption")?;
+    let key = aead::LessSafeKey::new(unbound);
+    let mut plaintext = bytes[16..].to_vec();
+    let plaintext = key
+        .open_in_place(
+            aead::Nonce::assume_unique_for_key(nonce),
+            aead::Aad::from(HISTORY_MAGIC.as_slice()),
+            &mut plaintext,
+        )
+        .map_err(|_| "clipboard history could not be decrypted")?;
+    Ok(plaintext.to_vec())
+}
+
+#[cfg(target_os = "macos")]
+fn history_encryption_key() -> io::Result<[u8; 32]> {
+    const SERVICE: &str = "io.clipkeep.ClipKeep.clipboard-history";
+    const ACCOUNT: &str = "history";
+    let existing = Command::new("/usr/bin/security")
+        .args(["find-generic-password", "-s", SERVICE, "-a", ACCOUNT, "-w"])
+        .output()?;
+    if existing.status.success() {
+        let encoded = String::from_utf8_lossy(&existing.stdout).trim().to_owned();
+        if let Ok(bytes) = BASE64.decode(encoded)
+            && let Ok(key) = <[u8; 32]>::try_from(bytes)
+        {
+            return Ok(key);
+        }
+    }
+    let mut key = [0u8; 32];
+    SystemRandom::new()
+        .fill(&mut key)
+        .map_err(|_| io::Error::other("could not generate history key"))?;
+    let encoded = BASE64.encode(key);
+    let status = Command::new("/usr/bin/security")
+        .args([
+            "add-generic-password",
+            "-U",
+            "-s",
+            SERVICE,
+            "-a",
+            ACCOUNT,
+            "-w",
+            &encoded,
+        ])
+        .status()?;
+    if !status.success() {
+        return Err(io::Error::other(
+            "could not save clipboard history key in Keychain",
+        ));
+    }
+    Ok(key)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn history_encryption_key() -> io::Result<[u8; 32]> {
+    let path = ProjectDirs::from("io", "clipkeep", "ClipKeep")
+        .ok_or_else(|| io::Error::other("could not determine key directory"))?
+        .data_local_dir()
+        .join("history.key");
+    if let Ok(bytes) = fs::read(&path)
+        && let Ok(key) = <[u8; 32]>::try_from(bytes)
+    {
+        return Ok(key);
+    }
+    let mut key = [0u8; 32];
+    SystemRandom::new()
+        .fill(&mut key)
+        .map_err(|_| io::Error::other("could not generate history key"))?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, key)?;
+    Ok(key)
 }
 
 fn trim_history(items: &mut Vec<ClipItem>, preview_cache_dir: &Path) {
@@ -773,6 +1036,17 @@ mod tests {
         let decoded: Representation = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.data, representation.data);
         assert!(json.contains("AAEC/w=="));
+    }
+
+    #[test]
+    fn encrypted_history_round_trips_and_hides_plaintext() {
+        let key = [7u8; 32];
+        let plaintext = br#"[{"text":"secret clipboard value"}]"#;
+        let encrypted = encrypt_history(plaintext, &key).unwrap();
+
+        assert!(encrypted.starts_with(HISTORY_MAGIC));
+        assert!(!encrypted.windows(6).any(|window| window == b"secret"));
+        assert_eq!(decrypt_history(&encrypted, &key).unwrap(), plaintext);
     }
 
     #[test]

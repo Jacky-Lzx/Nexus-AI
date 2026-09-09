@@ -62,6 +62,37 @@ struct ResultAction: Codable {
     let id: String
     let title: String
     let destructive: Bool
+    let `default`: Bool
+    let closesWindow: Bool
+    let pasteToPrevious: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, destructive, `default`
+        case closesWindow = "closes_window"
+        case pasteToPrevious = "paste_to_previous"
+    }
+}
+
+enum ClipboardPreference {
+    static let retentionDays = "clipboard.retentionDays"
+    static let ignoreConcealed = "clipboard.ignoreConcealed"
+    static let ignoredBundleIds = "clipboard.ignoredBundleIds"
+
+    static func registerDefaults() {
+        UserDefaults.standard.register(defaults: [
+            retentionDays: 30,
+            ignoreConcealed: true,
+            ignoredBundleIds: "com.1password.1password,com.agilebits.onepassword7",
+        ])
+    }
+
+    static var pluginSettings: [String: String] {
+        [
+            "retention_days": String(UserDefaults.standard.integer(forKey: retentionDays)),
+            "ignore_concealed": String(UserDefaults.standard.bool(forKey: ignoreConcealed)),
+            "ignored_bundle_ids": UserDefaults.standard.string(forKey: ignoredBundleIds) ?? "",
+        ]
+    }
 }
 
 struct SearchResult: Codable {

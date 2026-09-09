@@ -66,6 +66,10 @@ final class PluginProcess {
         ])
     }
 
+    func configure(settings: [String: String]) {
+        send(["type": "configure", "settings": settings])
+    }
+
     func execute(requestId: UInt64, resultId: String, actionId: String) {
         send([
             "type": "execute",
@@ -136,6 +140,7 @@ final class SearchCoordinator {
     private var actionCompletions: [UInt64: (Bool) -> Void] = [:]
 
     init() {
+        ClipboardPreference.registerDefaults()
         for plugin in builtInPlugins where isEnabled(plugin.id) {
             start(plugin)
         }
@@ -184,6 +189,20 @@ final class SearchCoordinator {
         )
     }
 
+    func execute(pluginId: String, actionId: String, completion: ((Bool) -> Void)? = nil) {
+        requestId += 1
+        if let completion { actionCompletions[requestId] = completion }
+        processes[pluginId]?.execute(
+            requestId: requestId,
+            resultId: "plugin:settings",
+            actionId: actionId
+        )
+    }
+
+    func reloadSettings(for pluginId: String) {
+        processes[pluginId]?.configure(settings: settings(for: pluginId))
+    }
+
     private func start(_ descriptor: PluginDescriptor) {
         guard processes[descriptor.id] == nil else { return }
         let executable = Bundle.main.bundleURL
@@ -197,9 +216,14 @@ final class SearchCoordinator {
             let plugin = try PluginProcess(descriptor: descriptor, executableURL: executable)
             plugin.onEvent = { [weak self] event in self?.handle(event, from: descriptor.id) }
             processes[descriptor.id] = plugin
+            plugin.configure(settings: settings(for: descriptor.id))
         } catch {
             onStatusChanged?("Could not start \(descriptor.name): \(error.localizedDescription)")
         }
+    }
+
+    private func settings(for pluginId: String) -> [String: String] {
+        pluginId == "io.clipkeep.clipboard" ? ClipboardPreference.pluginSettings : [:]
     }
 
     private func handle(_ event: PluginProcess.Event, from pluginId: String) {
