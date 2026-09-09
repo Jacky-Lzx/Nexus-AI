@@ -42,6 +42,9 @@ final class LauncherPanelController: NSWindowController,
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
     private let content = NSView()
+    private let splitView = NSSplitView()
+    private let listPane = NSView()
+    private let detailPane = NSView()
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let detailTitle = NSTextField(labelWithString: "")
@@ -55,6 +58,8 @@ final class LauncherPanelController: NSWindowController,
     private var hiding = false
     private var ignoreNextResign = false
     private var previousApplication: NSRunningApplication?
+    private var listWidthConstraint: NSLayoutConstraint?
+    private var scrollTrailingConstraint: NSLayoutConstraint?
 
     var onPluginStateChanged: (() -> Void)?
 
@@ -106,6 +111,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.stringValue = query
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
+        updateModeLayout()
         coordinator.search(query, pluginId: mode.pluginId)
         setExpanded(shouldExpand(for: query), animated: false)
         position(panel)
@@ -215,17 +221,15 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func buildResults() {
-        let split = NSSplitView()
-        split.translatesAutoresizingMaskIntoConstraints = false
-        split.isVertical = true
-        split.dividerStyle = .thin
-        content.addSubview(split)
+        splitView.translatesAutoresizingMaskIntoConstraints = false
+        splitView.isVertical = true
+        splitView.dividerStyle = .thin
+        content.addSubview(splitView)
 
-        let listPane = NSView()
-        let detailPane = NSView()
-        split.addArrangedSubview(listPane)
-        split.addArrangedSubview(detailPane)
-        listPane.widthAnchor.constraint(equalToConstant: 316).isActive = true
+        splitView.addArrangedSubview(listPane)
+        splitView.addArrangedSubview(detailPane)
+        listWidthConstraint = listPane.widthAnchor.constraint(equalToConstant: 316)
+        listWidthConstraint?.isActive = true
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("result"))
         tableView.addTableColumn(column)
@@ -286,14 +290,18 @@ final class LauncherPanelController: NSWindowController,
         hint.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(hint)
 
+        scrollTrailingConstraint = scrollView.trailingAnchor.constraint(
+            equalTo: listPane.trailingAnchor,
+            constant: -8
+        )
         NSLayoutConstraint.activate([
-            split.topAnchor.constraint(equalTo: content.topAnchor),
-            split.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            split.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            split.bottomAnchor.constraint(equalTo: footer.topAnchor),
+            splitView.topAnchor.constraint(equalTo: content.topAnchor),
+            splitView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            splitView.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            splitView.bottomAnchor.constraint(equalTo: footer.topAnchor),
             scrollView.topAnchor.constraint(equalTo: listPane.topAnchor),
             scrollView.leadingAnchor.constraint(equalTo: listPane.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: listPane.trailingAnchor, constant: -8),
+            scrollTrailingConstraint!,
             scrollView.bottomAnchor.constraint(equalTo: listPane.bottomAnchor),
             detailTitle.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 12),
             detailTitle.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
@@ -317,6 +325,7 @@ final class LauncherPanelController: NSWindowController,
             hint.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -12),
             hint.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
         ])
+        updateModeLayout()
     }
 
     private func installGlassSurface(in panel: NSWindow) {
@@ -406,6 +415,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.stringValue = ""
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
+        updateModeLayout()
         coordinator.search("", pluginId: mode.pluginId)
         setExpanded(shouldExpand(for: ""), animated: true)
         window?.makeFirstResponder(searchField)
@@ -438,6 +448,7 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func updateDetails() {
+        guard searchMode == .clipboard else { return }
         detailInfo.arrangedSubviews.forEach { detailInfo.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard let result = selectedResult else {
             detailTitle.stringValue = results.isEmpty ? "No results" : "Select a result"
@@ -459,6 +470,14 @@ final class LauncherPanelController: NSWindowController,
             .sorted(by: { $0.key < $1.key }) {
             addInfo(key.capitalized, value)
         }
+    }
+
+    private func updateModeLayout() {
+        let showsDetails = searchMode == .clipboard
+        detailPane.isHidden = !showsDetails
+        listWidthConstraint?.isActive = showsDetails
+        scrollTrailingConstraint?.constant = showsDetails ? -8 : 0
+        splitView.needsLayout = true
     }
 
     private func addInfo(_ key: String, _ value: String) {
