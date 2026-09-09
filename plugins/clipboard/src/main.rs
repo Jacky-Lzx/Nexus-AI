@@ -267,6 +267,15 @@ impl ClipItem {
         }
     }
 
+    fn subtitle(&self) -> String {
+        let age = age_label(self.created_at);
+        match self.kind {
+            ClipKind::Text => age,
+            ClipKind::Image => format!("{} · {age}", byte_size(self.byte_len())),
+            ClipKind::RichText | ClipKind::Files => format!("{} · {age}", self.kind.label()),
+        }
+    }
+
     fn as_result(&self, index: usize, query: &str, preview_cache_dir: &Path) -> SearchResult {
         let mut metadata = BTreeMap::new();
         metadata.insert("format".into(), self.kind.label().into());
@@ -311,7 +320,7 @@ impl ClipItem {
         }
         let title = match self.kind {
             ClipKind::Text | ClipKind::RichText if !self.text.is_empty() => preview(&self.text, 60),
-            ClipKind::Image => format!("Image · {}", byte_size(self.byte_len())),
+            ClipKind::Image => "Image".to_owned(),
             ClipKind::Files if !self.text.is_empty() => preview(&self.text, 60),
             ClipKind::Files => "Files".to_owned(),
             _ => self.kind.label().to_owned(),
@@ -326,7 +335,7 @@ impl ClipItem {
             plugin_id: PLUGIN_ID.into(),
             id: format!("clipboard:{}", self.id),
             title,
-            subtitle: format!("{} · {}", self.kind.label(), age_label(self.created_at)),
+            subtitle: self.subtitle(),
             preview: if self.text.is_empty() {
                 format!("{} clipboard content", self.kind.label())
             } else {
@@ -358,7 +367,9 @@ impl ClipItem {
     fn thumbnail_path(&self, cache_dir: &Path) -> Option<PathBuf> {
         fs::create_dir_all(cache_dir).ok()?;
         let path = cache_dir.join(format!("{}-thumbnail.png", self.preview_cache_stem()));
-        if path.is_file() { return Some(path) }
+        if path.is_file() {
+            return Some(path);
+        }
         let bytes = if let Some(encoded) = self.thumbnail.as_deref() {
             BASE64.decode(encoded).ok()?
         } else {
@@ -400,7 +411,12 @@ impl ClipItem {
 
     fn remove_image_preview_files(&self, cache_dir: &Path) {
         let stem = self.preview_cache_stem();
-        for suffix in ["thumbnail.png", "preview.png", "original.png", "original.tiff"] {
+        for suffix in [
+            "thumbnail.png",
+            "preview.png",
+            "original.png",
+            "original.tiff",
+        ] {
             let _ = fs::remove_file(cache_dir.join(format!("{stem}-{suffix}")));
         }
     }
@@ -746,5 +762,26 @@ mod tests {
             [3, 1, 2]
         );
         assert_eq!(items[0].created_at, 40);
+    }
+
+    #[test]
+    fn subtitles_only_show_type_when_it_adds_information() {
+        let item = |kind| ClipItem {
+            id: 1,
+            text: "content".into(),
+            created_at: now_secs(),
+            favorite: false,
+            kind,
+            representations: Vec::new(),
+            fingerprint: 1,
+            thumbnail: None,
+        };
+        let text = item(ClipKind::Text);
+        let image = item(ClipKind::Image);
+        let rich_text = item(ClipKind::RichText);
+
+        assert_eq!(text.subtitle(), "just now");
+        assert_eq!(image.subtitle(), "0 B · just now");
+        assert_eq!(rich_text.subtitle(), "Rich text · just now");
     }
 }
