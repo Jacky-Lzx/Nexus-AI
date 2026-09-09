@@ -22,14 +22,14 @@ struct PluginShortcut: Codable, Equatable {
         self.keyLabel = keyLabel
     }
 
-    init?(event: NSEvent) {
+    init?(event: NSEvent, requiresModifier: Bool = true) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         var carbonModifiers: UInt32 = 0
         if flags.contains(.control) { carbonModifiers |= UInt32(controlKey) }
         if flags.contains(.option) { carbonModifiers |= UInt32(optionKey) }
         if flags.contains(.shift) { carbonModifiers |= UInt32(shiftKey) }
         if flags.contains(.command) { carbonModifiers |= UInt32(cmdKey) }
-        guard carbonModifiers != 0 else { return nil }
+        guard !requiresModifier || carbonModifiers != 0 else { return nil }
 
         keyCode = UInt32(event.keyCode)
         modifiers = carbonModifiers
@@ -65,6 +65,55 @@ struct PluginShortcut: Codable, Equatable {
                 .uppercased() ?? ""
             return characters.isEmpty ? "Key \(event.keyCode)" : characters
         }
+    }
+}
+
+enum LauncherKeyAction: String, CaseIterable {
+    case moveDown
+    case moveUp
+
+    var title: String {
+        switch self {
+        case .moveDown: return "Move Down"
+        case .moveUp: return "Move Up"
+        }
+    }
+
+    var defaultShortcut: PluginShortcut {
+        switch self {
+        case .moveDown:
+            return PluginShortcut(
+                keyCode: UInt32(kVK_ANSI_J),
+                modifiers: UInt32(optionKey),
+                keyLabel: "J"
+            )
+        case .moveUp:
+            return PluginShortcut(
+                keyCode: UInt32(kVK_ANSI_K),
+                modifiers: UInt32(optionKey),
+                keyLabel: "K"
+            )
+        }
+    }
+
+    private var storageKey: String { "launcher.keyMapping.\(rawValue)" }
+
+    var shortcut: PluginShortcut {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let shortcut = try? JSONDecoder().decode(PluginShortcut.self, from: data)
+        else { return defaultShortcut }
+        return shortcut
+    }
+
+    func save(shortcut: PluginShortcut) {
+        guard let data = try? JSONEncoder().encode(shortcut) else { return }
+        UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    func matches(_ event: NSEvent) -> Bool {
+        guard let pressed = PluginShortcut(event: event) else { return false }
+        let configured = shortcut
+        return pressed.keyCode == configured.keyCode && pressed.modifiers == configured.modifiers
     }
 }
 

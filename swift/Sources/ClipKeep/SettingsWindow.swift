@@ -6,6 +6,24 @@ private enum SettingsLayout {
     static let sidebarWidth: CGFloat = 240
 }
 
+private struct SettingsPaneItem {
+    let id: String
+    let name: String
+    let symbolName: String
+    let plugin: PluginDescriptor?
+
+    static let all: [SettingsPaneItem] = [
+        SettingsPaneItem(id: "key-mappings", name: "Key Mappings", symbolName: "keyboard", plugin: nil),
+    ] + builtInPlugins.map { plugin in
+        SettingsPaneItem(
+            id: plugin.id,
+            name: plugin.name,
+            symbolName: plugin.id == "io.clipkeep.clipboard" ? "clipboard" : "square.grid.2x2",
+            plugin: plugin
+        )
+    }
+}
+
 final class SettingsWindowController: NSWindowController,
     NSSearchFieldDelegate,
     NSTableViewDataSource,
@@ -19,7 +37,7 @@ final class SettingsWindowController: NSWindowController,
     private let searchField = NSSearchField()
     private let tableView = NSTableView()
     private let detailPane = NSView()
-    private var visiblePlugins = builtInPlugins
+    private var visiblePanes = SettingsPaneItem.all
 
     init(
         coordinator: SearchCoordinator,
@@ -43,11 +61,11 @@ final class SettingsWindowController: NSWindowController,
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func refresh() {
-        let selectedId = selectedPlugin?.id
+        let selectedId = selectedPane?.id
         tableView.reloadData()
         let row = selectedId.flatMap { id in
-            visiblePlugins.firstIndex(where: { $0.id == id })
-        } ?? (visiblePlugins.isEmpty ? nil : 0)
+            visiblePanes.firstIndex(where: { $0.id == id })
+        } ?? (visiblePanes.isEmpty ? nil : 0)
         if let row {
             tableView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
@@ -87,7 +105,7 @@ final class SettingsWindowController: NSWindowController,
         splitView.addArrangedSubview(detailPane)
         sidebar.widthAnchor.constraint(equalToConstant: SettingsLayout.sidebarWidth).isActive = true
 
-        searchField.placeholderString = "Search plugins…"
+        searchField.placeholderString = "Search settings…"
         searchField.delegate = self
         searchField.translatesAutoresizingMaskIntoConstraints = false
         sidebar.addSubview(searchField)
@@ -130,20 +148,20 @@ final class SettingsWindowController: NSWindowController,
         showSelectedPlugin()
     }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { visiblePlugins.count }
+    func numberOfRows(in tableView: NSTableView) -> Int { visiblePanes.count }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let identifier = NSUserInterfaceItemIdentifier("PluginSettingsCell")
         let cell = tableView.makeView(withIdentifier: identifier, owner: self) as? PluginSettingsCell
             ?? PluginSettingsCell()
         cell.identifier = identifier
-        cell.configure(visiblePlugins[row], selected: row == tableView.selectedRow)
+        cell.configure(visiblePanes[row], selected: row == tableView.selectedRow)
         return cell
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         tableView.reloadData(
-            forRowIndexes: IndexSet(integersIn: 0..<visiblePlugins.count),
+            forRowIndexes: IndexSet(integersIn: 0..<visiblePanes.count),
             columnIndexes: IndexSet(integer: 0)
         )
         showSelectedPlugin()
@@ -151,25 +169,29 @@ final class SettingsWindowController: NSWindowController,
 
     func controlTextDidChange(_ obj: Notification) {
         let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        visiblePlugins = query.isEmpty
-            ? builtInPlugins
-            : builtInPlugins.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        visiblePanes = query.isEmpty
+            ? SettingsPaneItem.all
+            : SettingsPaneItem.all.filter { $0.name.localizedCaseInsensitiveContains(query) }
         tableView.reloadData()
-        if !visiblePlugins.isEmpty {
+        if !visiblePanes.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
         showSelectedPlugin()
     }
 
+    private var selectedPane: SettingsPaneItem? {
+        guard visiblePanes.indices.contains(tableView.selectedRow) else { return nil }
+        return visiblePanes[tableView.selectedRow]
+    }
+
     private var selectedPlugin: PluginDescriptor? {
-        guard visiblePlugins.indices.contains(tableView.selectedRow) else { return nil }
-        return visiblePlugins[tableView.selectedRow]
+        selectedPane?.plugin
     }
 
     private func showSelectedPlugin() {
         detailPane.subviews.forEach { $0.removeFromSuperview() }
-        guard let plugin = selectedPlugin else {
-            let empty = NSTextField(labelWithString: "No plugins found")
+        guard let pane = selectedPane else {
+            let empty = NSTextField(labelWithString: "No settings found")
             empty.textColor = .secondaryLabelColor
             empty.translatesAutoresizingMaskIntoConstraints = false
             detailPane.addSubview(empty)
@@ -177,6 +199,10 @@ final class SettingsWindowController: NSWindowController,
                 empty.centerXAnchor.constraint(equalTo: detailPane.centerXAnchor),
                 empty.centerYAnchor.constraint(equalTo: detailPane.centerYAnchor),
             ])
+            return
+        }
+        guard let plugin = pane.plugin else {
+            showKeyMappings()
             return
         }
 
@@ -221,9 +247,13 @@ final class SettingsWindowController: NSWindowController,
         options.translatesAutoresizingMaskIntoConstraints = false
 
         if let action = GlobalHotKey.Action(pluginId: plugin.id) {
-            let shortcut = ShortcutRecorderButton(action: action) { [weak self] in
-                self?.onShortcutChanged()
-            }
+            let shortcut = ShortcutRecorderButton(
+                shortcut: { action.shortcut },
+                onChange: { [weak self] shortcut in
+                    action.save(shortcut: shortcut)
+                    self?.onShortcutChanged()
+                }
+            )
             options.addArrangedSubview(settingRow(
                 title: "Keyboard Shortcut",
                 description: "Click and press a shortcut to open this plugin",
@@ -276,6 +306,70 @@ final class SettingsWindowController: NSWindowController,
         ])
     }
 
+    private func showKeyMappings() {
+        let icon = NSImageView()
+        icon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Key Mappings")
+        icon.contentTintColor = .labelColor
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 44, weight: .medium)
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let title = NSTextField(labelWithString: "Key Mappings")
+        title.font = .systemFont(ofSize: 28, weight: .bold)
+        title.translatesAutoresizingMaskIntoConstraints = false
+
+        let description = NSTextField(labelWithString: "Customize keyboard navigation in the launcher")
+        description.font = .systemFont(ofSize: 14)
+        description.textColor = .secondaryLabelColor
+        description.translatesAutoresizingMaskIntoConstraints = false
+
+        let optionsTitle = NSTextField(labelWithString: "Navigation")
+        optionsTitle.font = .systemFont(ofSize: 13, weight: .semibold)
+        optionsTitle.textColor = .secondaryLabelColor
+        optionsTitle.translatesAutoresizingMaskIntoConstraints = false
+
+        let options = NSStackView()
+        options.orientation = .vertical
+        options.spacing = 0
+        options.wantsLayer = true
+        options.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.055).cgColor
+        options.layer?.cornerRadius = 16
+        options.layer?.cornerCurve = .continuous
+        options.translatesAutoresizingMaskIntoConstraints = false
+
+        for action in LauncherKeyAction.allCases {
+            let shortcut = ShortcutRecorderButton(
+                shortcut: { action.shortcut },
+                onChange: { shortcut in action.save(shortcut: shortcut) }
+            )
+            options.addArrangedSubview(settingRow(
+                title: action.title,
+                description: action == .moveDown
+                    ? "Move the selection to the next result"
+                    : "Move the selection to the previous result",
+                control: shortcut
+            ))
+        }
+
+        for view in [icon, title, description, optionsTitle, options] {
+            detailPane.addSubview(view)
+        }
+        NSLayoutConstraint.activate([
+            icon.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 76),
+            icon.centerXAnchor.constraint(equalTo: detailPane.centerXAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 64),
+            icon.heightAnchor.constraint(equalToConstant: 64),
+            title.topAnchor.constraint(equalTo: icon.bottomAnchor, constant: 14),
+            title.centerXAnchor.constraint(equalTo: detailPane.centerXAnchor),
+            description.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 8),
+            description.centerXAnchor.constraint(equalTo: detailPane.centerXAnchor),
+            optionsTitle.topAnchor.constraint(equalTo: description.bottomAnchor, constant: 64),
+            optionsTitle.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 30),
+            options.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
+            options.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -24),
+            options.topAnchor.constraint(equalTo: optionsTitle.bottomAnchor, constant: 10),
+        ])
+    }
+
     private func settingRow(title: String, description: String, control: NSView) -> NSView {
         let row = NSView()
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -319,13 +413,16 @@ final class SettingsWindowController: NSWindowController,
 }
 
 private final class ShortcutRecorderButton: NSButton {
-    private let hotKeyAction: GlobalHotKey.Action
-    private let onChange: () -> Void
+    private let shortcut: () -> PluginShortcut
+    private let onChange: (PluginShortcut) -> Void
     private var monitor: Any?
     private var isRecording = false
 
-    init(action: GlobalHotKey.Action, onChange: @escaping () -> Void) {
-        hotKeyAction = action
+    init(
+        shortcut: @escaping () -> PluginShortcut,
+        onChange: @escaping (PluginShortcut) -> Void
+    ) {
+        self.shortcut = shortcut
         self.onChange = onChange
         super.init(frame: .zero)
         bezelStyle = .rounded
@@ -350,24 +447,23 @@ private final class ShortcutRecorderButton: NSButton {
                 NSSound.beep()
                 return nil
             }
-            self.hotKeyAction.save(shortcut: shortcut)
-            self.finishRecording()
-            self.onChange()
+            self.finishRecording(displaying: shortcut)
+            self.onChange(shortcut)
             return nil
         }
     }
 
-    private func finishRecording() {
+    private func finishRecording(displaying newShortcut: PluginShortcut? = nil) {
         isRecording = false
         if let monitor {
             NSEvent.removeMonitor(monitor)
             self.monitor = nil
         }
-        updateTitle()
+        title = (newShortcut ?? shortcut()).displayName
     }
 
     private func updateTitle() {
-        title = hotKeyAction.shortcut.displayName
+        title = shortcut().displayName
     }
 
     deinit {
@@ -404,12 +500,12 @@ private final class PluginSettingsCell: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(_ plugin: PluginDescriptor, selected: Bool) {
+    func configure(_ pane: SettingsPaneItem, selected: Bool) {
         icon.image = NSImage(
-            systemSymbolName: plugin.id == "io.clipkeep.clipboard" ? "clipboard" : "square.grid.2x2",
-            accessibilityDescription: plugin.name
+            systemSymbolName: pane.symbolName,
+            accessibilityDescription: pane.name
         )
-        titleLabel.stringValue = plugin.name
+        titleLabel.stringValue = pane.name
         layer?.backgroundColor = selected
             ? NSColor.white.withAlphaComponent(0.11).cgColor
             : NSColor.clear.cgColor

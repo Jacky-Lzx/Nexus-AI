@@ -15,9 +15,15 @@ private enum Layout {
 
 final class LauncherPanel: NSPanel {
     var handleCommand: ((Selector) -> Bool)?
+    var handleKeyEvent: ((NSEvent) -> Bool)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .keyDown, handleKeyEvent?(event) == true { return }
+        super.sendEvent(event)
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command) {
@@ -119,6 +125,7 @@ final class LauncherPanelController: NSWindowController,
         buildInterface()
         bindCoordinator()
         panel.handleCommand = { [weak self] selector in self?.handle(selector) ?? false }
+        panel.handleKeyEvent = { [weak self] event in self?.handleKeyEvent(event) ?? false }
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(windowResignedKey),
@@ -475,6 +482,18 @@ final class LauncherPanelController: NSWindowController,
         let next = min(max(current + delta, 0), results.count - 1)
         tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
         tableView.scrollRowToVisible(next)
+    }
+
+    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        if LauncherKeyAction.moveDown.matches(event) {
+            moveSelection(1)
+            return true
+        }
+        if LauncherKeyAction.moveUp.matches(event) {
+            moveSelection(-1)
+            return true
+        }
+        return false
     }
 
     private func handle(_ selector: Selector) -> Bool {
