@@ -728,7 +728,7 @@ private final class ResultCellView: NSTableCellView {
         titleLabel.stringValue = result.title
         subtitleLabel.stringValue = result.subtitle
         layer?.backgroundColor = selected
-            ? NSColor.controlAccentColor.withAlphaComponent(0.28).cgColor
+            ? NSColor.white.withAlphaComponent(0.12).cgColor
             : NSColor.clear.cgColor
     }
 
