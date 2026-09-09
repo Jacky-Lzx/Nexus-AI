@@ -265,10 +265,9 @@ final class LauncherPanelController: NSWindowController,
         tableView.target = self
         tableView.doubleAction = #selector(openSelected)
         scrollView.documentView = tableView
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
+        scrollView.hasVerticalScroller = false
+        scrollView.autohidesScrollers = false
         scrollView.scrollerStyle = .overlay
-        scrollView.verticalScroller?.controlSize = .small
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         listPane.addSubview(scrollView)
@@ -369,6 +368,7 @@ final class LauncherPanelController: NSWindowController,
             guard let self else { return }
             self.results = results
             self.tableView.reloadData()
+            self.updateScrollerVisibility()
             if !results.isEmpty {
                 self.tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
             }
@@ -504,6 +504,19 @@ final class LauncherPanelController: NSWindowController,
         listWidthConstraint?.isActive = showsDetails
         scrollTrailingConstraint?.constant = showsDetails ? -8 : 0
         splitView.needsLayout = true
+        updateScrollerVisibility()
+    }
+
+    private func updateScrollerVisibility() {
+        scrollView.layoutSubtreeIfNeeded()
+        tableView.layoutSubtreeIfNeeded()
+        let contentHeight = results.indices.last
+            .map { tableView.rect(ofRow: $0).maxY } ?? 0
+        let needsScroller = contentHeight > scrollView.contentView.bounds.height + 0.5
+        guard scrollView.hasVerticalScroller != needsScroller else { return }
+        scrollView.hasVerticalScroller = needsScroller
+        scrollView.verticalScroller?.controlSize = .small
+        scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
     func splitView(
@@ -550,14 +563,17 @@ final class LauncherPanelController: NSWindowController,
             self.content.animator().alphaValue = shouldExpand ? 1 : 0
         }
         if animated {
-            NSAnimationContext.runAnimationGroup { context in
+            NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.24
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 changes()
-            }
+            }, completionHandler: { [weak self] in
+                self?.updateScrollerVisibility()
+            })
         } else {
             content.alphaValue = shouldExpand ? 1 : 0
             panel.setFrame(frame, display: true)
+            updateScrollerVisibility()
         }
     }
 
