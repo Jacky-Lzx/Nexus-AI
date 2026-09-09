@@ -81,6 +81,7 @@ final class LauncherPanelController: NSWindowController,
     private var previousApplication: NSRunningApplication?
     private var listWidthConstraint: NSLayoutConstraint?
     private var scrollTrailingConstraint: NSLayoutConstraint?
+    private var resetScrollOnNextResults = false
 
     var onPluginStateChanged: (() -> Void)?
 
@@ -133,7 +134,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         updateModeLayout()
-        coordinator.search(query, pluginId: mode.pluginId)
+        requestSearch(query)
         setExpanded(shouldExpand(for: query), animated: false)
         position(panel)
         panel.alphaValue = 0
@@ -372,6 +373,10 @@ final class LauncherPanelController: NSWindowController,
             if !results.isEmpty {
                 self.tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
             }
+            if self.resetScrollOnNextResults {
+                self.resetResultsScrollPosition()
+                self.resetScrollOnNextResults = false
+            }
             self.updateDetails()
         }
         coordinator.onStatusChanged = { [weak self] status in self?.statusLabel.stringValue = status }
@@ -380,7 +385,7 @@ final class LauncherPanelController: NSWindowController,
 
     func controlTextDidChange(_ obj: Notification) {
         let query = searchField.stringValue
-        coordinator.search(query, pluginId: searchMode.pluginId)
+        requestSearch(query)
         setExpanded(shouldExpand(for: query), animated: true)
     }
 
@@ -441,7 +446,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         updateModeLayout()
-        coordinator.search("", pluginId: mode.pluginId)
+        requestSearch("")
         setExpanded(shouldExpand(for: ""), animated: true)
         window?.makeFirstResponder(searchField)
     }
@@ -516,6 +521,17 @@ final class LauncherPanelController: NSWindowController,
         guard scrollView.hasVerticalScroller != needsScroller else { return }
         scrollView.hasVerticalScroller = needsScroller
         scrollView.verticalScroller?.controlSize = .small
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
+
+    private func requestSearch(_ query: String) {
+        resetScrollOnNextResults = true
+        resetResultsScrollPosition()
+        coordinator.search(query, pluginId: searchMode.pluginId)
+    }
+
+    private func resetResultsScrollPosition() {
+        scrollView.contentView.scroll(to: .zero)
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
