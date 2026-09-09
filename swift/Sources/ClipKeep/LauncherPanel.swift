@@ -332,11 +332,6 @@ final class LauncherPanelController: NSWindowController,
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(statusLabel)
-        let hint = NSTextField(labelWithString: "↵ Run     ↑↓ Navigate     ⌘⇧Space Apps     ⌘⇧C Clipboard")
-        hint.font = .systemFont(ofSize: 12, weight: .medium)
-        hint.textColor = .tertiaryLabelColor
-        hint.translatesAutoresizingMaskIntoConstraints = false
-        footer.addSubview(hint)
 
         scrollTrailingConstraint = scrollView.trailingAnchor.constraint(
             equalTo: listPane.trailingAnchor,
@@ -367,8 +362,6 @@ final class LauncherPanelController: NSWindowController,
             footer.heightAnchor.constraint(equalToConstant: 46),
             statusLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 12),
             statusLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
-            hint.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -12),
-            hint.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
         ])
         updateModeLayout()
     }
