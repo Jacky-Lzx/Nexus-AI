@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import QuartzCore
 
 private enum Layout {
@@ -112,7 +113,7 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    func hide(restorePreviousApplication: Bool = false) {
+    func hide(restorePreviousApplication: Bool = false, pasteAfterRestore: Bool = false) {
         guard let panel = window, panel.isVisible, !hiding else { return }
         hiding = true
         let applicationToRestore = restorePreviousApplication ? previousApplication : nil
@@ -125,6 +126,11 @@ final class LauncherPanelController: NSWindowController,
             panel?.alphaValue = 1
             self?.hiding = false
             applicationToRestore?.activate(options: [.activateIgnoringOtherApps])
+            if pasteAfterRestore, let applicationToRestore {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    Self.sendPaste(to: applicationToRestore)
+                }
+            }
         })
     }
 
@@ -343,8 +349,19 @@ final class LauncherPanelController: NSWindowController,
 
     @objc private func openSelected() {
         guard let result = selectedResult else { return }
-        coordinator.execute(result, actionId: result.kind == .application ? "open" : "copy")
-        hide()
+        if result.kind == .clipboardText {
+            let canPaste = ensureAccessibilityPermission()
+            coordinator.execute(result, actionId: "copy") { [weak self] success in
+                guard let self, success else { return }
+                self.hide(
+                    restorePreviousApplication: true,
+                    pasteAfterRestore: canPaste
+                )
+            }
+        } else {
+            coordinator.execute(result, actionId: "open")
+            hide()
+        }
     }
 
     private var selectedResult: SearchResult? {
@@ -434,6 +451,26 @@ final class LauncherPanelController: NSWindowController,
     private func shouldExpand(for query: String) -> Bool {
         searchMode == .clipboard
             || !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func ensureAccessibilityPermission() -> Bool {
+        guard !AXIsProcessTrusted() else { return true }
+        let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+        AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
+        statusLabel.stringValue = "Enable Accessibility to paste automatically"
+        return false
+    }
+
+    private static func sendPaste(to application: NSRunningApplication) {
+        guard AXIsProcessTrusted(),
+              let source = CGEventSource(stateID: .hidSystemState),
+              let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
+        else { return }
+        keyDown.flags = .maskCommand
+        keyUp.flags = .maskCommand
+        keyDown.postToPid(application.processIdentifier)
+        keyUp.postToPid(application.processIdentifier)
     }
 
     private func position(_ panel: NSPanel) {

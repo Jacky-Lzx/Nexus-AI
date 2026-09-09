@@ -21,6 +21,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - `Command-Shift-C` searches clipboard history only
 - Automatically hides when focus moves to another application
 - Escape hides the palette and restores focus to the previously active application
+- Choosing a clipboard entry restores the previous application and pastes it directly
 - Plugins keep running while the window is hidden
 - No network access or analytics
 
@@ -48,6 +49,11 @@ For UI testing or scripted launch, an initial search can be supplied with
 The generated bundle is unsigned. On another Mac, Gatekeeper may require the
 user to right-click the app and choose **Open**. Public distribution should add
 Developer ID signing and notarization.
+
+Direct paste requires macOS Accessibility permission so ClipKeep can send the
+`Command-V` keystroke to the previously focused application. The first direct
+paste attempt opens the system permission prompt; once enabled, choose the entry
+again to paste it.
 
 The AppKit host requires macOS 11 or later. Rust plugin executables can remain
 cross-platform even when another native frontend is added later.

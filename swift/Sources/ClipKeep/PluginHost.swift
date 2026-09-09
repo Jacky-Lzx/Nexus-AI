@@ -4,7 +4,7 @@ final class PluginProcess {
     enum Event {
         case searchResults(queryId: UInt64, items: [SearchResult])
         case catalogChanged
-        case actionFinished(success: Bool, message: String?)
+        case actionFinished(requestId: UInt64, success: Bool, message: String?)
         case error(String)
     }
 
@@ -93,8 +93,13 @@ final class PluginProcess {
         case "catalog_changed":
             onEvent?(.catalogChanged)
         case "action_finished":
+            let requestId = (json["request_id"] as? NSNumber)?.uint64Value ?? 0
             let success = json["success"] as? Bool ?? false
-            onEvent?(.actionFinished(success: success, message: json["message"] as? String))
+            onEvent?(.actionFinished(
+                requestId: requestId,
+                success: success,
+                message: json["message"] as? String
+            ))
         case "error":
             onEvent?(.error(json["message"] as? String ?? "Plugin error"))
         default:
@@ -114,6 +119,7 @@ final class SearchCoordinator {
     private var currentPluginId = "io.clipkeep.applications"
     private var queryId: UInt64 = 0
     private var requestId: UInt64 = 0
+    private var actionCompletions: [UInt64: (Bool) -> Void] = [:]
 
     init() {
         for plugin in builtInPlugins where isEnabled(plugin.id) {
@@ -151,8 +157,9 @@ final class SearchCoordinator {
         processes[pluginId]?.search(queryId: queryId, query: query)
     }
 
-    func execute(_ result: SearchResult, actionId: String) {
+    func execute(_ result: SearchResult, actionId: String, completion: ((Bool) -> Void)? = nil) {
         requestId += 1
+        if let completion { actionCompletions[requestId] = completion }
         processes[result.pluginId]?.execute(
             requestId: requestId,
             resultId: result.id,
@@ -185,8 +192,9 @@ final class SearchCoordinator {
             publishResults()
         case .catalogChanged:
             search(currentQuery, pluginId: currentPluginId)
-        case let .actionFinished(_, message):
+        case let .actionFinished(requestId, success, message):
             onStatusChanged?(message ?? "Done")
+            actionCompletions.removeValue(forKey: requestId)?(success)
             search(currentQuery, pluginId: currentPluginId)
         case let .error(message):
             onStatusChanged?(message)
