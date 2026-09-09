@@ -1,0 +1,8 @@
+id = "io.clipkeep.clipboard"
+name = "Clipboard History"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-clipboard"
+default_enabled = true
+capabilities = ["clipboard.read", "clipboard.write", "storage", "background"]
+

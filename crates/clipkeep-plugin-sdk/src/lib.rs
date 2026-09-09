@@ -1,0 +1,143 @@
+use clipkeep_protocol::{HostRequest, PROTOCOL_VERSION, PluginEvent, SearchResult};
+use std::{
+    io::{self, BufRead, BufReader, BufWriter, Write},
+    sync::mpsc::{self, Receiver},
+    thread,
+    time::Duration,
+};
+
+pub trait Plugin {
+    fn id(&self) -> &'static str;
+
+    fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String>;
+
+    fn execute(&mut self, result_id: &str, action_id: &str) -> Result<Option<String>, String>;
+
+    fn tick(&mut self) -> Result<bool, String> {
+        Ok(false)
+    }
+}
+
+pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
+    let requests = request_reader();
+    let stdout = io::stdout();
+    let mut output = BufWriter::new(stdout.lock());
+    let mut running = true;
+
+    while running {
+        while let Ok(message) = requests.try_recv() {
+            match message {
+                ReaderMessage::Request(request) => {
+                    running = handle_request(&mut plugin, request, &mut output)?;
+                    if !running {
+                        break;
+                    }
+                }
+                ReaderMessage::Invalid(message) => {
+                    send(&mut output, &PluginEvent::Error { message })?;
+                }
+                ReaderMessage::Closed => return Ok(()),
+            }
+        }
+
+        if running {
+            match plugin.tick() {
+                Ok(true) => send(&mut output, &PluginEvent::CatalogChanged)?,
+                Ok(false) => {}
+                Err(message) => send(&mut output, &PluginEvent::Error { message })?,
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+    Ok(())
+}
+
+fn handle_request(
+    plugin: &mut impl Plugin,
+    request: HostRequest,
+    output: &mut impl Write,
+) -> io::Result<bool> {
+    match request {
+        HostRequest::Initialize { protocol_version } => {
+            if protocol_version != PROTOCOL_VERSION {
+                send(
+                    output,
+                    &PluginEvent::Error {
+                        message: format!(
+                            "unsupported protocol version {protocol_version}; expected {PROTOCOL_VERSION}"
+                        ),
+                    },
+                )?;
+            } else {
+                send(
+                    output,
+                    &PluginEvent::Initialized {
+                        plugin_id: plugin.id().to_owned(),
+                        protocol_version: PROTOCOL_VERSION,
+                    },
+                )?;
+            }
+        }
+        HostRequest::Search {
+            query_id,
+            query,
+            limit,
+        } => match plugin.search(&query, limit) {
+            Ok(items) => send(output, &PluginEvent::SearchResults { query_id, items })?,
+            Err(message) => send(output, &PluginEvent::Error { message })?,
+        },
+        HostRequest::Execute {
+            request_id,
+            result_id,
+            action_id,
+        } => {
+            let (success, message) = match plugin.execute(&result_id, &action_id) {
+                Ok(message) => (true, message),
+                Err(message) => (false, Some(message)),
+            };
+            send(
+                output,
+                &PluginEvent::ActionFinished {
+                    request_id,
+                    success,
+                    message,
+                },
+            )?;
+        }
+        HostRequest::Shutdown => return Ok(false),
+    }
+    Ok(true)
+}
+
+fn send(output: &mut impl Write, event: &PluginEvent) -> io::Result<()> {
+    serde_json::to_writer(&mut *output, event).map_err(io::Error::other)?;
+    output.write_all(b"\n")?;
+    output.flush()
+}
+
+enum ReaderMessage {
+    Request(HostRequest),
+    Invalid(String),
+    Closed,
+}
+
+fn request_reader() -> Receiver<ReaderMessage> {
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || {
+        let stdin = io::stdin();
+        for line in BufReader::new(stdin.lock()).lines() {
+            let message = match line {
+                Ok(line) => match serde_json::from_str(&line) {
+                    Ok(request) => ReaderMessage::Request(request),
+                    Err(error) => ReaderMessage::Invalid(format!("invalid request: {error}")),
+                },
+                Err(error) => ReaderMessage::Invalid(format!("could not read request: {error}")),
+            };
+            if sender.send(message).is_err() {
+                return;
+            }
+        }
+        let _ = sender.send(ReaderMessage::Closed);
+    });
+    receiver
+}

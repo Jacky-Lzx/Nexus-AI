@@ -293,6 +293,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-core"
+version = "0.1.0"
+dependencies = [
+ "clipkeep-protocol",
+ "serde_json",
+]
+
+[[package]]
+name = "clipkeep-plugin-clipboard"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "directories",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "clipkeep-plugin-sdk"
+version = "0.1.0"
+dependencies = [
+ "clipkeep-protocol",
+ "serde_json",
+]
+
+[[package]]
+name = "clipkeep-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "codespan-reporting"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
