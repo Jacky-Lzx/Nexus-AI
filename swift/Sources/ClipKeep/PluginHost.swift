@@ -149,11 +149,14 @@ final class SearchCoordinator {
     }
 
     func search(_ query: String, pluginId: String) {
+        let pluginChanged = currentPluginId != pluginId
         currentQuery = query
         currentPluginId = pluginId
         queryId += 1
-        resultsByPlugin.removeAll()
-        publishResults()
+        if pluginChanged {
+            resultsByPlugin.removeAll()
+            publishResults()
+        }
         processes[pluginId]?.search(queryId: queryId, query: query)
     }
 
