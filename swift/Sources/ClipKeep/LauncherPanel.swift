@@ -68,7 +68,6 @@ final class LauncherPanelController: NSWindowController,
     private let detailPane = NSView()
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
-    private let detailTitle = NSTextField(labelWithString: "")
     private let detailText = NSTextField(wrappingLabelWithString: "")
     private let detailImage = NSImageView()
     private let detailInfo = NSStackView()
@@ -273,10 +272,6 @@ final class LauncherPanelController: NSWindowController,
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         listPane.addSubview(scrollView)
 
-        detailTitle.font = .systemFont(ofSize: 19, weight: .semibold)
-        detailTitle.textColor = .labelColor
-        detailTitle.lineBreakMode = .byTruncatingTail
-        detailTitle.translatesAutoresizingMaskIntoConstraints = false
         detailText.font = .systemFont(ofSize: 15)
         detailText.textColor = .secondaryLabelColor
         detailText.maximumNumberOfLines = 8
@@ -294,7 +289,6 @@ final class LauncherPanelController: NSWindowController,
         detailInfo.spacing = 6
         detailInfo.alignment = .leading
         detailInfo.translatesAutoresizingMaskIntoConstraints = false
-        detailPane.addSubview(detailTitle)
         detailPane.addSubview(detailText)
         detailPane.addSubview(detailImage)
         detailPane.addSubview(detailInfo)
@@ -328,18 +322,15 @@ final class LauncherPanelController: NSWindowController,
             scrollView.leadingAnchor.constraint(equalTo: listPane.leadingAnchor),
             scrollTrailingConstraint!,
             scrollView.bottomAnchor.constraint(equalTo: listPane.bottomAnchor),
-            detailTitle.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 12),
-            detailTitle.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
-            detailTitle.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -18),
-            detailText.topAnchor.constraint(equalTo: detailTitle.bottomAnchor, constant: 16),
-            detailText.leadingAnchor.constraint(equalTo: detailTitle.leadingAnchor),
-            detailText.trailingAnchor.constraint(equalTo: detailTitle.trailingAnchor),
-            detailImage.topAnchor.constraint(equalTo: detailTitle.bottomAnchor, constant: 16),
-            detailImage.leadingAnchor.constraint(equalTo: detailTitle.leadingAnchor),
-            detailImage.trailingAnchor.constraint(equalTo: detailTitle.trailingAnchor),
+            detailText.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 16),
+            detailText.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
+            detailText.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -18),
+            detailImage.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 16),
+            detailImage.leadingAnchor.constraint(equalTo: detailText.leadingAnchor),
+            detailImage.trailingAnchor.constraint(equalTo: detailText.trailingAnchor),
             detailImage.heightAnchor.constraint(equalToConstant: 170),
-            detailInfo.leadingAnchor.constraint(equalTo: detailTitle.leadingAnchor),
-            detailInfo.trailingAnchor.constraint(equalTo: detailTitle.trailingAnchor),
+            detailInfo.leadingAnchor.constraint(equalTo: detailText.leadingAnchor),
+            detailInfo.trailingAnchor.constraint(equalTo: detailText.trailingAnchor),
             detailInfo.bottomAnchor.constraint(equalTo: detailPane.bottomAnchor, constant: -18),
             footer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             footer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -481,14 +472,12 @@ final class LauncherPanelController: NSWindowController,
         guard searchMode == .clipboard else { return }
         detailInfo.arrangedSubviews.forEach { detailInfo.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard let result = selectedResult else {
-            detailTitle.stringValue = results.isEmpty ? "No results" : "Select a result"
-            detailText.stringValue = ""
+            detailText.stringValue = results.isEmpty ? "No results" : "Select a result"
             detailImage.image = nil
             detailImage.isHidden = true
             detailText.isHidden = false
             return
         }
-        detailTitle.stringValue = result.title
         detailText.stringValue = result.preview
         detailImage.image = thumbnailImage(from: result)
         detailImage.isHidden = detailImage.image == nil
