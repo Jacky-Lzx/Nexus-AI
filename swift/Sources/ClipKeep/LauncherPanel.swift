@@ -889,7 +889,7 @@ private final class ResultCellView: NSTableCellView {
         let styled = NSMutableAttributedString(string: title, attributes: attributes)
         guard title.hasSuffix(" ↩") else { return styled }
         let indicatorRange = NSRange(location: styled.length - 1, length: 1)
-        styled.addAttribute(.baselineOffset, value: -2.0, range: indicatorRange)
+        styled.addAttribute(.baselineOffset, value: -3.0, range: indicatorRange)
         return styled
     }
 
