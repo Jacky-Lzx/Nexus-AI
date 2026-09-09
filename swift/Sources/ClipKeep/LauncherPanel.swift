@@ -517,8 +517,10 @@ final class LauncherPanelController: NSWindowController,
 }
 
 private final class ResultCellView: NSTableCellView {
+    private static let applicationIconCache = NSCache<NSString, NSImage>()
+
     private let symbol = NSTextField(labelWithString: "")
-    private let thumbnail = NSImageView()
+    private let artwork = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
 
@@ -532,12 +534,12 @@ private final class ResultCellView: NSTableCellView {
         symbol.wantsLayer = true
         symbol.layer?.cornerRadius = 8
         symbol.translatesAutoresizingMaskIntoConstraints = false
-        thumbnail.imageScaling = .scaleProportionallyUpOrDown
-        thumbnail.wantsLayer = true
-        thumbnail.layer?.cornerRadius = 8
-        thumbnail.layer?.cornerCurve = .continuous
-        thumbnail.layer?.masksToBounds = true
-        thumbnail.translatesAutoresizingMaskIntoConstraints = false
+        artwork.imageScaling = .scaleProportionallyUpOrDown
+        artwork.wantsLayer = true
+        artwork.layer?.cornerRadius = 8
+        artwork.layer?.cornerCurve = .continuous
+        artwork.layer?.masksToBounds = true
+        artwork.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -546,7 +548,7 @@ private final class ResultCellView: NSTableCellView {
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbol)
-        addSubview(thumbnail)
+        addSubview(artwork)
         addSubview(titleLabel)
         addSubview(subtitleLabel)
         NSLayoutConstraint.activate([
@@ -554,10 +556,10 @@ private final class ResultCellView: NSTableCellView {
             symbol.centerYAnchor.constraint(equalTo: centerYAnchor),
             symbol.widthAnchor.constraint(equalToConstant: 36),
             symbol.heightAnchor.constraint(equalToConstant: 36),
-            thumbnail.leadingAnchor.constraint(equalTo: symbol.leadingAnchor),
-            thumbnail.centerYAnchor.constraint(equalTo: symbol.centerYAnchor),
-            thumbnail.widthAnchor.constraint(equalTo: symbol.widthAnchor),
-            thumbnail.heightAnchor.constraint(equalTo: symbol.heightAnchor),
+            artwork.leadingAnchor.constraint(equalTo: symbol.leadingAnchor),
+            artwork.centerYAnchor.constraint(equalTo: symbol.centerYAnchor),
+            artwork.widthAnchor.constraint(equalTo: symbol.widthAnchor),
+            artwork.heightAnchor.constraint(equalTo: symbol.heightAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 10),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 9),
@@ -570,11 +572,9 @@ private final class ResultCellView: NSTableCellView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func configure(_ result: SearchResult, selected: Bool) {
-        let image = result.metadata["thumbnail_png"]
-            .flatMap { Data(base64Encoded: $0) }
-            .flatMap { NSImage(data: $0) }
-        thumbnail.image = image
-        thumbnail.isHidden = image == nil
+        let image = Self.artworkImage(for: result)
+        artwork.image = image
+        artwork.isHidden = image == nil
         symbol.isHidden = image != nil
         switch result.kind {
         case .application: symbol.stringValue = "A"
@@ -590,5 +590,22 @@ private final class ResultCellView: NSTableCellView {
         layer?.backgroundColor = selected
             ? NSColor.controlAccentColor.withAlphaComponent(0.28).cgColor
             : NSColor.clear.cgColor
+    }
+
+    private static func artworkImage(for result: SearchResult) -> NSImage? {
+        if let encoded = result.metadata["thumbnail_png"],
+           let data = Data(base64Encoded: encoded),
+           let image = NSImage(data: data) {
+            return image
+        }
+        guard result.kind == .application,
+              let path = result.metadata["path"] else { return nil }
+        let cacheKey = path as NSString
+        if let image = applicationIconCache.object(forKey: cacheKey) {
+            return image
+        }
+        let image = NSWorkspace.shared.icon(forFile: path)
+        applicationIconCache.setObject(image, forKey: cacheKey)
+        return image
     }
 }
