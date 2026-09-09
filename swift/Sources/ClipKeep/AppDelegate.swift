@@ -4,6 +4,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var coordinator: SearchCoordinator!
     private var launcher: LauncherPanelController!
     private var statusItem: NSStatusItem!
+    private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -47,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.items[0].target = self
         menu.items[1].target = self
         menu.addItem(.separator())
+        let settings = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+        menu.addItem(.separator())
 
         let plugins = NSMenu()
         for descriptor in builtInPlugins {
@@ -59,22 +64,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pluginsItem = NSMenuItem(title: "Plugins", action: nil, keyEquivalent: "")
         pluginsItem.submenu = plugins
         menu.addItem(pluginsItem)
-
-        let previewQuality = NSMenu()
-        for quality in ImagePreviewQuality.allCases {
-            let item = NSMenuItem(
-                title: quality.title,
-                action: #selector(setImagePreviewQuality(_:)),
-                keyEquivalent: ""
-            )
-            item.target = self
-            item.representedObject = quality.rawValue
-            item.state = launcher.imagePreviewQuality == quality ? .on : .off
-            previewQuality.addItem(item)
-        }
-        let previewQualityItem = NSMenuItem(title: "Image Preview Quality", action: nil, keyEquivalent: "")
-        previewQualityItem.submenu = previewQuality
-        menu.addItem(previewQualityItem)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit ClipKeep", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
@@ -85,17 +74,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showApplications() { launcher.show(mode: .applications) }
     @objc private func showClipboard() { launcher.show(mode: .clipboard) }
 
+    @objc private func showSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindowController(coordinator: coordinator, launcher: launcher)
+        }
+        settingsWindow?.showWindow(nil)
+        settingsWindow?.refresh()
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.window?.makeKeyAndOrderFront(nil)
+    }
+
     @objc private func togglePlugin(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
               let descriptor = builtInPlugins.first(where: { $0.id == id }) else { return }
         coordinator.setEnabled(!coordinator.isEnabled(id), descriptor: descriptor)
-    }
-
-    @objc private func setImagePreviewQuality(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let quality = ImagePreviewQuality(rawValue: rawValue) else { return }
-        launcher.imagePreviewQuality = quality
-        rebuildMenu()
+        settingsWindow?.refresh()
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
