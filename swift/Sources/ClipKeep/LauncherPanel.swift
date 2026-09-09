@@ -867,7 +867,7 @@ private final class ResultCellView: NSTableCellView {
         }
         symbol.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
         setInlineSubtitle(result.kind == .application)
-        titleLabel.stringValue = result.title
+        titleLabel.attributedStringValue = styledTitle(result.title)
         subtitleLabel.stringValue = result.subtitle
         layer?.backgroundColor = selected
             ? NSColor.white.withAlphaComponent(0.12).cgColor
@@ -879,6 +879,18 @@ private final class ResultCellView: NSTableCellView {
         usesInlineSubtitle = inline
         NSLayoutConstraint.deactivate(inline ? stackedTextConstraints : inlineTextConstraints)
         NSLayoutConstraint.activate(inline ? inlineTextConstraints : stackedTextConstraints)
+    }
+
+    private func styledTitle(_ title: String) -> NSAttributedString {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: titleLabel.font ?? NSFont.systemFont(ofSize: 15, weight: .semibold),
+            .foregroundColor: NSColor.labelColor,
+        ]
+        let styled = NSMutableAttributedString(string: title, attributes: attributes)
+        guard title.hasSuffix(" ↩") else { return styled }
+        let indicatorRange = NSRange(location: styled.length - 1, length: 1)
+        styled.addAttribute(.baselineOffset, value: -2.0, range: indicatorRange)
+        return styled
     }
 
     private static func artworkImage(for result: SearchResult) -> NSImage? {
