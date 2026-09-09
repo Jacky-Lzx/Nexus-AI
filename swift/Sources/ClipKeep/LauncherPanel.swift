@@ -51,6 +51,12 @@ private final class ResultsSplitView: NSSplitView {
 
 }
 
+private final class PreviewImageView: NSImageView {
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+    }
+}
+
 final class LauncherPanelController: NSWindowController,
     NSSearchFieldDelegate,
     NSSplitViewDelegate,
@@ -69,7 +75,7 @@ final class LauncherPanelController: NSWindowController,
     private let tableView = NSTableView()
     private let scrollView = NSScrollView()
     private let detailText = NSTextField(wrappingLabelWithString: "")
-    private let detailImage = NSImageView()
+    private let detailImage = PreviewImageView()
     private let detailInfo = NSStackView()
     private let statusLabel = NSTextField(labelWithString: "ClipKeep")
     private var results: [SearchResult] = []
@@ -513,6 +519,7 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func updateModeLayout() {
+        enforcePanelWidth()
         let showsDetails = searchMode == .clipboard
         splitView.showsDivider = showsDetails
         detailPane.isHidden = !showsDetails
@@ -520,6 +527,14 @@ final class LauncherPanelController: NSWindowController,
         scrollTrailingConstraint?.constant = showsDetails ? -8 : 0
         splitView.needsLayout = true
         updateScrollerVisibility()
+    }
+
+    private func enforcePanelWidth() {
+        guard let panel = window, abs(panel.frame.width - Layout.width) > 0.5 else { return }
+        var frame = panel.frame
+        frame.origin.x += (frame.width - Layout.width) / 2
+        frame.size.width = Layout.width
+        panel.setFrame(frame, display: panel.isVisible)
     }
 
     private func updateScrollerVisibility() {
