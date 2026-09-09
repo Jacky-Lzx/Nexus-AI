@@ -140,7 +140,7 @@ final class LauncherPanelController: NSWindowController,
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.isMovableByWindowBackground = true
         panel.animationBehavior = .none
     }
