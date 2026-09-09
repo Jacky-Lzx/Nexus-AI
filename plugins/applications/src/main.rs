@@ -246,7 +246,10 @@ fn scan_macos_directory(directory: &Path, depth: usize, output: &mut Vec<Applica
 fn localized_application_name(path: &Path, bundle_name: &str) -> Option<String> {
     use objc2_foundation::{NSBundle, NSFileManager, NSString};
 
-    if let Some(name) = localized_name_from_loctable(path) {
+    let locale = preferred_locale();
+    if let Some(name) = localized_name_from_loctable(path, &locale)
+        .or_else(|| localized_name_from_strings(path, &locale))
+    {
         return Some(name);
     }
 
@@ -282,7 +285,7 @@ fn localized_application_name(path: &Path, bundle_name: &str) -> Option<String> 
 
 #[cfg(target_os = "macos")]
 #[allow(deprecated)]
-fn localized_name_from_loctable(path: &Path) -> Option<String> {
+fn localized_name_from_loctable(path: &Path, locale: &str) -> Option<String> {
     use objc2_foundation::{NSDictionary, NSString};
 
     let table_path = path.join("Contents/Resources/InfoPlist.loctable");
@@ -293,13 +296,40 @@ fn localized_name_from_loctable(path: &Path) -> Option<String> {
     let table_path = NSString::from_str(table_path.to_string_lossy().as_ref());
     let table: objc2::rc::Retained<NSDictionary<NSString, NSDictionary<NSString, NSString>>> =
         unsafe { NSDictionary::dictionaryWithContentsOfFile(&table_path) }?;
-    let locale = preferred_locale();
-
-    for locale in locale_candidates(&locale) {
+    for locale in locale_candidates(locale) {
         let locale = NSString::from_str(&locale);
         let Some(values) = table.objectForKey(&locale) else {
             continue;
         };
+        for key in ["CFBundleDisplayName", "CFBundleName"] {
+            let key = NSString::from_str(key);
+            if let Some(value) = values.objectForKey(&key)
+                && let Some(value) = clean_application_name(value.to_string())
+            {
+                return Some(value);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "macos")]
+#[allow(deprecated)]
+fn localized_name_from_strings(path: &Path, locale: &str) -> Option<String> {
+    use objc2_foundation::{NSDictionary, NSString};
+
+    let resources = path.join("Contents/Resources");
+    for localization in localization_directory_candidates(locale) {
+        let strings_path = resources
+            .join(format!("{localization}.lproj"))
+            .join("InfoPlist.strings");
+        if !strings_path.is_file() {
+            continue;
+        }
+
+        let strings_path = NSString::from_str(strings_path.to_string_lossy().as_ref());
+        let values: objc2::rc::Retained<NSDictionary<NSString, NSString>> =
+            unsafe { NSDictionary::dictionaryWithContentsOfFile(&strings_path) }?;
         for key in ["CFBundleDisplayName", "CFBundleName"] {
             let key = NSString::from_str(key);
             if let Some(value) = values.objectForKey(&key)
@@ -339,6 +369,34 @@ fn locale_candidates(locale: &str) -> Vec<String> {
     }
     candidates.dedup();
     candidates
+}
+
+fn localization_directory_candidates(locale: &str) -> Vec<String> {
+    let normalized = locale.replace('_', "-");
+    let mut candidates = vec![normalized.clone()];
+
+    let mut shortened = normalized.as_str();
+    while let Some((parent, _)) = shortened.rsplit_once('-') {
+        candidates.push(parent.to_owned());
+        shortened = parent;
+    }
+
+    if normalized == "zh-CN" || normalized.starts_with("zh-Hans") {
+        push_unique(&mut candidates, "zh-Hans");
+    } else if normalized == "zh-HK" || normalized == "zh-MO" {
+        push_unique(&mut candidates, "zh-Hant-HK");
+        push_unique(&mut candidates, "zh-Hant");
+    } else if normalized == "zh-TW" || normalized.starts_with("zh-Hant") {
+        push_unique(&mut candidates, "zh-Hant");
+    }
+
+    candidates
+}
+
+fn push_unique(values: &mut Vec<String>, value: &str) {
+    if !values.iter().any(|existing| existing == value) {
+        values.push(value.to_owned());
+    }
 }
 
 fn clean_application_name(name: String) -> Option<String> {
@@ -420,5 +478,14 @@ mod tests {
             locale_candidates("zh-Hant-HK"),
             ["zh_Hant_HK", "zh_HK", "zh"]
         );
+    }
+
+    #[test]
+    fn localization_directories_fall_back_from_region_to_script() {
+        assert_eq!(
+            localization_directory_candidates("zh-Hans-CN"),
+            ["zh-Hans-CN", "zh-Hans", "zh"]
+        );
+        assert_eq!(localization_directory_candidates("en_US"), ["en-US", "en"]);
     }
 }
