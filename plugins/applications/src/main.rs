@@ -283,7 +283,7 @@ fn localized_application_name(path: &Path, bundle_name: &str) -> Option<String> 
 #[cfg(target_os = "macos")]
 #[allow(deprecated)]
 fn localized_name_from_loctable(path: &Path) -> Option<String> {
-    use objc2_foundation::{NSDictionary, NSLocale, NSString};
+    use objc2_foundation::{NSDictionary, NSString};
 
     let table_path = path.join("Contents/Resources/InfoPlist.loctable");
     if !table_path.is_file() {
@@ -293,7 +293,7 @@ fn localized_name_from_loctable(path: &Path) -> Option<String> {
     let table_path = NSString::from_str(table_path.to_string_lossy().as_ref());
     let table: objc2::rc::Retained<NSDictionary<NSString, NSDictionary<NSString, NSString>>> =
         unsafe { NSDictionary::dictionaryWithContentsOfFile(&table_path) }?;
-    let locale = NSLocale::currentLocale().localeIdentifier().to_string();
+    let locale = preferred_locale();
 
     for locale in locale_candidates(&locale) {
         let locale = NSString::from_str(&locale);
@@ -310,6 +310,18 @@ fn localized_name_from_loctable(path: &Path) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(target_os = "macos")]
+fn preferred_locale() -> String {
+    use objc2_foundation::{NSLocale, NSString, NSUserDefaults};
+
+    let languages_key = NSString::from_str("AppleLanguages");
+    NSUserDefaults::standardUserDefaults()
+        .stringArrayForKey(&languages_key)
+        .and_then(|languages| languages.firstObject())
+        .map(|language| language.to_string())
+        .unwrap_or_else(|| NSLocale::currentLocale().localeIdentifier().to_string())
 }
 
 fn locale_candidates(locale: &str) -> Vec<String> {
