@@ -781,9 +781,11 @@ private final class ResultCellView: NSTableCellView {
     private let symbol = NSTextField(labelWithString: "")
     private let artwork = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
+    private let multilineIndicator = NSTextField(labelWithString: "↩")
     private let subtitleLabel = NSTextField(labelWithString: "")
     private var stackedTextConstraints: [NSLayoutConstraint] = []
     private var inlineTextConstraints: [NSLayoutConstraint] = []
+    private var multilineIndicatorSpacingConstraint: NSLayoutConstraint?
     private var usesInlineSubtitle = false
 
     override init(frame frameRect: NSRect) {
@@ -809,6 +811,12 @@ private final class ResultCellView: NSTableCellView {
         titleLabel.usesSingleLineMode = true
         titleLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        multilineIndicator.font = .systemFont(ofSize: 15, weight: .semibold)
+        multilineIndicator.textColor = .labelColor
+        multilineIndicator.isHidden = true
+        multilineIndicator.setContentHuggingPriority(.required, for: .horizontal)
+        multilineIndicator.setContentCompressionResistancePriority(.required, for: .horizontal)
+        multilineIndicator.translatesAutoresizingMaskIntoConstraints = false
         subtitleLabel.font = .systemFont(ofSize: 11)
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.lineBreakMode = .byTruncatingMiddle
@@ -819,7 +827,12 @@ private final class ResultCellView: NSTableCellView {
         addSubview(symbol)
         addSubview(artwork)
         addSubview(titleLabel)
+        addSubview(multilineIndicator)
         addSubview(subtitleLabel)
+        multilineIndicatorSpacingConstraint = multilineIndicator.leadingAnchor.constraint(
+            equalTo: titleLabel.trailingAnchor,
+            constant: 0
+        )
         NSLayoutConstraint.activate([
             symbol.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             symbol.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -830,10 +843,16 @@ private final class ResultCellView: NSTableCellView {
             artwork.widthAnchor.constraint(equalTo: symbol.widthAnchor),
             artwork.heightAnchor.constraint(equalTo: symbol.heightAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 10),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
+            multilineIndicatorSpacingConstraint!,
+            multilineIndicator.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
+            multilineIndicator.firstBaselineAnchor.constraint(
+                equalTo: titleLabel.firstBaselineAnchor,
+                constant: 3
+            ),
             subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
         ])
         stackedTextConstraints = [
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 9),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 3),
@@ -867,7 +886,11 @@ private final class ResultCellView: NSTableCellView {
         }
         symbol.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
         setInlineSubtitle(result.kind == .application)
-        titleLabel.attributedStringValue = styledTitle(result.title)
+        let hasMultipleLines = result.title.hasSuffix(" ↩")
+        titleLabel.stringValue = hasMultipleLines ? String(result.title.dropLast(2)) : result.title
+        multilineIndicator.stringValue = hasMultipleLines ? "↩" : ""
+        multilineIndicator.isHidden = !hasMultipleLines
+        multilineIndicatorSpacingConstraint?.constant = hasMultipleLines ? 4 : 0
         subtitleLabel.stringValue = result.subtitle
         layer?.backgroundColor = selected
             ? NSColor.white.withAlphaComponent(0.12).cgColor
@@ -879,18 +902,6 @@ private final class ResultCellView: NSTableCellView {
         usesInlineSubtitle = inline
         NSLayoutConstraint.deactivate(inline ? stackedTextConstraints : inlineTextConstraints)
         NSLayoutConstraint.activate(inline ? inlineTextConstraints : stackedTextConstraints)
-    }
-
-    private func styledTitle(_ title: String) -> NSAttributedString {
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: titleLabel.font ?? NSFont.systemFont(ofSize: 15, weight: .semibold),
-            .foregroundColor: NSColor.labelColor,
-        ]
-        let styled = NSMutableAttributedString(string: title, attributes: attributes)
-        guard title.hasSuffix(" ↩") else { return styled }
-        let indicatorRange = NSRange(location: styled.length - 1, length: 1)
-        styled.addAttribute(.baselineOffset, value: -3.0, range: indicatorRange)
-        return styled
     }
 
     private static func artworkImage(for result: SearchResult) -> NSImage? {
