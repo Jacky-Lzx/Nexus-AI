@@ -14,10 +14,27 @@ final class PluginProcess {
     private let process = Process()
     private let input = Pipe()
     private let output = Pipe()
+    private let decodeQueue: DispatchQueue
     private var buffer = Data()
+
+    private struct EventEnvelope: Decodable {
+        let type: String
+        let queryId: UInt64?
+        let items: [SearchResult]?
+        let requestId: UInt64?
+        let success: Bool?
+        let message: String?
+
+        enum CodingKeys: String, CodingKey {
+            case type, items, success, message
+            case queryId = "query_id"
+            case requestId = "request_id"
+        }
+    }
 
     init(descriptor: PluginDescriptor, executableURL: URL) throws {
         self.descriptor = descriptor
+        decodeQueue = DispatchQueue(label: "io.clipkeep.plugin.decode.\(descriptor.id)")
         process.executableURL = executableURL
         process.standardInput = input
         process.standardOutput = output
@@ -26,7 +43,7 @@ final class PluginProcess {
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard !data.isEmpty else { return }
-            DispatchQueue.main.async { self?.consume(data) }
+            self?.decodeQueue.async { [weak self] in self?.consume(data) }
         }
         try process.run()
         send(["type": "initialize", "protocol_version": 1])
@@ -80,30 +97,27 @@ final class PluginProcess {
     }
 
     private func decode(_ data: Data) {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let type = json["type"] as? String else { return }
-        switch type {
+        guard let envelope = try? JSONDecoder().decode(EventEnvelope.self, from: data) else { return }
+        let event: Event?
+        switch envelope.type {
         case "search_results":
-            guard let queryId = (json["query_id"] as? NSNumber)?.uint64Value,
-                  let rawItems = json["items"],
-                  let itemData = try? JSONSerialization.data(withJSONObject: rawItems),
-                  let items = try? JSONDecoder().decode([SearchResult].self, from: itemData)
-            else { return }
-            onEvent?(.searchResults(queryId: queryId, items: items))
+            guard let queryId = envelope.queryId, let items = envelope.items else { return }
+            event = .searchResults(queryId: queryId, items: items)
         case "catalog_changed":
-            onEvent?(.catalogChanged)
+            event = .catalogChanged
         case "action_finished":
-            let requestId = (json["request_id"] as? NSNumber)?.uint64Value ?? 0
-            let success = json["success"] as? Bool ?? false
-            onEvent?(.actionFinished(
-                requestId: requestId,
-                success: success,
-                message: json["message"] as? String
-            ))
+            event = .actionFinished(
+                requestId: envelope.requestId ?? 0,
+                success: envelope.success ?? false,
+                message: envelope.message
+            )
         case "error":
-            onEvent?(.error(json["message"] as? String ?? "Plugin error"))
+            event = .error(envelope.message ?? "Plugin error")
         default:
-            break
+            event = nil
+        }
+        if let event {
+            DispatchQueue.main.async { [weak self] in self?.onEvent?(event) }
         }
     }
 }

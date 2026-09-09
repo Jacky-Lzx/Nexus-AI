@@ -283,12 +283,15 @@ impl ClipItem {
             metadata.insert("items".into(), count.to_string());
         }
         if self.kind == ClipKind::Image
-            && let Some(thumbnail) = self.thumbnail_data()
+            && let Some(thumbnail) = self.thumbnail_path(preview_cache_dir)
         {
-            metadata.insert("thumbnail_png".into(), thumbnail);
+            metadata.insert(
+                "thumbnail_image_path".into(),
+                thumbnail.to_string_lossy().into_owned(),
+            );
         }
         if self.kind == ClipKind::Image
-            && let Some((preview, original)) = self.image_preview_paths(preview_cache_dir)
+            && let Some((preview, original)) = self.image_paths(preview_cache_dir)
         {
             metadata.insert(
                 "preview_image_path".into(),
@@ -352,13 +355,20 @@ impl ClipItem {
         }
     }
 
-    fn thumbnail_data(&self) -> Option<String> {
-        self.thumbnail
-            .clone()
-            .or_else(|| make_thumbnail(&self.representations))
+    fn thumbnail_path(&self, cache_dir: &Path) -> Option<PathBuf> {
+        fs::create_dir_all(cache_dir).ok()?;
+        let path = cache_dir.join(format!("{}-thumbnail.png", self.preview_cache_stem()));
+        if path.is_file() { return Some(path) }
+        let bytes = if let Some(encoded) = self.thumbnail.as_deref() {
+            BASE64.decode(encoded).ok()?
+        } else {
+            BASE64.decode(make_thumbnail(&self.representations)?).ok()?
+        };
+        fs::write(&path, bytes).ok()?;
+        Some(path)
     }
 
-    fn image_preview_paths(&self, cache_dir: &Path) -> Option<(PathBuf, PathBuf)> {
+    fn image_paths(&self, cache_dir: &Path) -> Option<(PathBuf, PathBuf)> {
         let source = self
             .representations
             .iter()
@@ -381,16 +391,6 @@ impl ClipItem {
         }
 
         let preview = cache_dir.join(format!("{stem}-preview.png"));
-        if !preview.is_file() {
-            use std::io::BufWriter;
-
-            let image = image::load_from_memory(&source.data).ok()?;
-            let image = image.thumbnail(1280, 960);
-            let file = fs::File::create(&preview).ok()?;
-            image
-                .write_to(&mut BufWriter::new(file), image::ImageFormat::Png)
-                .ok()?;
-        }
         Some((preview, original))
     }
 
@@ -400,7 +400,7 @@ impl ClipItem {
 
     fn remove_image_preview_files(&self, cache_dir: &Path) {
         let stem = self.preview_cache_stem();
-        for suffix in ["preview.png", "original.png", "original.tiff"] {
+        for suffix in ["thumbnail.png", "preview.png", "original.png", "original.tiff"] {
             let _ = fs::remove_file(cache_dir.join(format!("{stem}-{suffix}")));
         }
     }

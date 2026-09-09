@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import ImageIO
 import QuartzCore
 
 private enum Layout {
@@ -87,6 +88,10 @@ final class LauncherPanelController: NSWindowController,
     private var listWidthConstraint: NSLayoutConstraint?
     private var scrollTrailingConstraint: NSLayoutConstraint?
     private var resetScrollOnNextResults = false
+    private var detailImageGeneration: UInt64 = 0
+
+    private static let detailImageCache = NSCache<NSString, NSImage>()
+    private static let thumbnailImageCache = NSCache<NSString, NSImage>()
 
     var onPluginStateChanged: (() -> Void)?
 
@@ -487,6 +492,8 @@ final class LauncherPanelController: NSWindowController,
 
     private func updateDetails() {
         guard searchMode == .clipboard else { return }
+        detailImageGeneration += 1
+        let generation = detailImageGeneration
         guard let result = selectedResult else {
             updateDetailInfo([])
             detailText.stringValue = results.isEmpty ? "No results" : "Select a result"
@@ -496,9 +503,10 @@ final class LauncherPanelController: NSWindowController,
             return
         }
         detailText.stringValue = result.preview
-        detailImage.image = previewImage(from: result)
+        detailImage.image = thumbnailImage(from: result)
         detailImage.isHidden = detailImage.image == nil
         detailText.isHidden = detailImage.image != nil
+        loadDetailImage(for: result, generation: generation)
         var info = [
             ("Plugin", result.pluginId),
             ("Type", result.kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized),
@@ -508,6 +516,7 @@ final class LauncherPanelController: NSWindowController,
                 ![
                     "route",
                     "thumbnail_png",
+                    "thumbnail_image_path",
                     "preview_image_path",
                     "original_image_path",
                 ].contains($0.key)
@@ -666,17 +675,71 @@ final class LauncherPanelController: NSWindowController,
         keyUp.postToPid(application.processIdentifier)
     }
 
-    private func previewImage(from result: SearchResult) -> NSImage? {
-        let pathKey = imagePreviewQuality == .original
-            ? "original_image_path"
-            : "preview_image_path"
-        if let path = result.metadata[pathKey],
-           let image = NSImage(contentsOfFile: path) {
-            return image
+    private func thumbnailImage(from result: SearchResult) -> NSImage? {
+        guard let path = result.metadata["thumbnail_image_path"] else { return nil }
+        let key = path as NSString
+        if let image = Self.thumbnailImageCache.object(forKey: key) { return image }
+        guard let image = NSImage(contentsOfFile: path) else { return nil }
+        Self.thumbnailImageCache.setObject(image, forKey: key)
+        return image
+    }
+
+    private func loadDetailImage(for result: SearchResult, generation: UInt64) {
+        guard result.kind == .clipboardImage,
+              let originalPath = result.metadata["original_image_path"] else { return }
+        let quality = imagePreviewQuality
+        let preferredPath = quality == .highDefinition
+            ? result.metadata["preview_image_path"] ?? originalPath
+            : originalPath
+        let sourcePath = FileManager.default.fileExists(atPath: preferredPath)
+            ? preferredPath
+            : originalPath
+        let cacheKey = "\(quality.rawValue):\(sourcePath)" as NSString
+        if let image = Self.detailImageCache.object(forKey: cacheKey) {
+            detailImage.image = image
+            detailImage.isHidden = false
+            detailText.isHidden = true
+            return
         }
-        guard let encoded = result.metadata["thumbnail_png"],
-              let data = Data(base64Encoded: encoded) else { return nil }
-        return NSImage(data: data)
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let image = Self.decodeImage(at: sourcePath, quality: quality) else { return }
+            Self.detailImageCache.setObject(image, forKey: cacheKey)
+            DispatchQueue.main.async {
+                guard let self,
+                      self.detailImageGeneration == generation,
+                      self.selectedResult?.id == result.id,
+                      self.imagePreviewQuality == quality
+                else { return }
+                self.detailImage.image = image
+                self.detailImage.isHidden = false
+                self.detailText.isHidden = true
+            }
+        }
+    }
+
+    private static func decodeImage(at path: String, quality: ImagePreviewQuality) -> NSImage? {
+        guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil)
+        else { return nil }
+        let cgImage: CGImage?
+        switch quality {
+        case .highDefinition:
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 1280,
+                kCGImageSourceShouldCacheImmediately: true,
+            ]
+            cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        case .original:
+            cgImage = CGImageSourceCreateImageAtIndex(
+                source,
+                0,
+                [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+            )
+        }
+        guard let cgImage else { return nil }
+        return NSImage(cgImage: cgImage, size: .zero)
     }
 
     private func position(_ panel: NSPanel) {
@@ -795,9 +858,11 @@ private final class ResultCellView: NSTableCellView {
     }
 
     private static func artworkImage(for result: SearchResult) -> NSImage? {
-        if let encoded = result.metadata["thumbnail_png"],
-           let data = Data(base64Encoded: encoded),
-           let image = NSImage(data: data) {
+        if let path = result.metadata["thumbnail_image_path"] {
+            let cacheKey = path as NSString
+            if let image = applicationIconCache.object(forKey: cacheKey) { return image }
+            guard let image = NSImage(contentsOfFile: path) else { return nil }
+            applicationIconCache.setObject(image, forKey: cacheKey)
             return image
         }
         guard result.kind == .application,
