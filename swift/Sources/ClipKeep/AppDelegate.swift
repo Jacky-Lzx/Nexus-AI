@@ -10,18 +10,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         coordinator = SearchCoordinator()
         launcher = LauncherPanelController(coordinator: coordinator)
-        launcher.onPluginStateChanged = { [weak self] in self?.rebuildMenu() }
+        launcher.onPluginStateChanged = { [weak self] in
+            self?.refreshHotKeys()
+            self?.settingsWindow?.refresh()
+        }
         configureStatusItem()
 
         GlobalHotKey.shared.handler = { [weak self] action in
+            guard let self, self.coordinator.isEnabled(action.pluginId) else { return }
             switch action {
-            case .applications: self?.launcher.toggle(mode: .applications)
-            case .clipboard: self?.launcher.toggle(mode: .clipboard)
+            case .applications: self.launcher.toggle(mode: .applications)
+            case .clipboard: self.launcher.toggle(mode: .clipboard)
             }
         }
-        if !GlobalHotKey.shared.register() {
-            coordinator.onStatusChanged?("Could not register global shortcuts")
-        }
+        refreshHotKeys()
         launcher.show(mode: initialMode(), query: initialQuery())
     }
 
@@ -43,10 +45,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu() {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Search Applications  ⌘⇧Space", action: #selector(showApplications), keyEquivalent: "")
-        menu.addItem(withTitle: "Search Clipboard  ⌘⇧C", action: #selector(showClipboard), keyEquivalent: "")
-        menu.items[0].target = self
-        menu.items[1].target = self
+        let applications = menu.addItem(
+            withTitle: "Search Applications  \(GlobalHotKey.Action.applications.shortcut.displayName)",
+            action: #selector(showApplications),
+            keyEquivalent: ""
+        )
+        applications.target = self
+        applications.isEnabled = coordinator.isEnabled(GlobalHotKey.Action.applications.pluginId)
+        let clipboard = menu.addItem(
+            withTitle: "Search Clipboard  \(GlobalHotKey.Action.clipboard.shortcut.displayName)",
+            action: #selector(showClipboard),
+            keyEquivalent: ""
+        )
+        clipboard.target = self
+        clipboard.isEnabled = coordinator.isEnabled(GlobalHotKey.Action.clipboard.pluginId)
         menu.addItem(.separator())
         let settings = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
         settings.target = self
@@ -71,12 +83,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    @objc private func showApplications() { launcher.show(mode: .applications) }
-    @objc private func showClipboard() { launcher.show(mode: .clipboard) }
+    @objc private func showApplications() {
+        guard coordinator.isEnabled(GlobalHotKey.Action.applications.pluginId) else { return }
+        launcher.show(mode: .applications)
+    }
+
+    @objc private func showClipboard() {
+        guard coordinator.isEnabled(GlobalHotKey.Action.clipboard.pluginId) else { return }
+        launcher.show(mode: .clipboard)
+    }
 
     @objc private func showSettings() {
         if settingsWindow == nil {
-            settingsWindow = SettingsWindowController(coordinator: coordinator, launcher: launcher)
+            settingsWindow = SettingsWindowController(
+                coordinator: coordinator,
+                launcher: launcher,
+                onShortcutChanged: { [weak self] in self?.refreshHotKeys() }
+            )
         }
         settingsWindow?.showWindow(nil)
         settingsWindow?.refresh()
@@ -92,6 +115,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    private func refreshHotKeys() {
+        let enabledActions = Set(GlobalHotKey.Action.allCases.filter {
+            coordinator.isEnabled($0.pluginId)
+        })
+        let failures = GlobalHotKey.shared.configure(enabledActions: enabledActions)
+        if !failures.isEmpty {
+            coordinator.onStatusChanged?(
+                "Could not register: \(failures.map { $0.shortcut.displayName }.joined(separator: ", "))"
+            )
+        }
+        rebuildMenu()
+    }
 
     private func initialQuery() -> String {
         let arguments = ProcessInfo.processInfo.arguments

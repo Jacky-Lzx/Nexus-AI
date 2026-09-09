@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 
 private enum SettingsLayout {
     static let windowSize = NSSize(width: 900, height: 600)
@@ -12,6 +13,7 @@ final class SettingsWindowController: NSWindowController,
 
     private let coordinator: SearchCoordinator
     private unowned let launcher: LauncherPanelController
+    private let onShortcutChanged: () -> Void
     private let root = NSView()
     private let sidebar = NSView()
     private let searchField = NSSearchField()
@@ -19,9 +21,14 @@ final class SettingsWindowController: NSWindowController,
     private let detailPane = NSView()
     private var visiblePlugins = builtInPlugins
 
-    init(coordinator: SearchCoordinator, launcher: LauncherPanelController) {
+    init(
+        coordinator: SearchCoordinator,
+        launcher: LauncherPanelController,
+        onShortcutChanged: @escaping () -> Void
+    ) {
         self.coordinator = coordinator
         self.launcher = launcher
+        self.onShortcutChanged = onShortcutChanged
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: SettingsLayout.windowSize),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -213,6 +220,17 @@ final class SettingsWindowController: NSWindowController,
         options.layer?.cornerCurve = .continuous
         options.translatesAutoresizingMaskIntoConstraints = false
 
+        if let action = GlobalHotKey.Action(pluginId: plugin.id) {
+            let shortcut = ShortcutRecorderButton(action: action) { [weak self] in
+                self?.onShortcutChanged()
+            }
+            options.addArrangedSubview(settingRow(
+                title: "Keyboard Shortcut",
+                description: "Click and press a shortcut to open this plugin",
+                control: shortcut
+            ))
+        }
+
         if plugin.id == "io.clipkeep.clipboard" {
             let quality = NSPopUpButton()
             quality.addItems(withTitles: ImagePreviewQuality.allCases.map(\.title))
@@ -297,6 +315,63 @@ final class SettingsWindowController: NSWindowController,
         guard let title = sender.selectedItem?.title,
               let quality = ImagePreviewQuality.allCases.first(where: { $0.title == title }) else { return }
         launcher.imagePreviewQuality = quality
+    }
+}
+
+private final class ShortcutRecorderButton: NSButton {
+    private let hotKeyAction: GlobalHotKey.Action
+    private let onChange: () -> Void
+    private var monitor: Any?
+    private var isRecording = false
+
+    init(action: GlobalHotKey.Action, onChange: @escaping () -> Void) {
+        hotKeyAction = action
+        self.onChange = onChange
+        super.init(frame: .zero)
+        bezelStyle = .rounded
+        target = self
+        self.action = #selector(beginRecording)
+        updateTitle()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    @objc private func beginRecording() {
+        guard !isRecording else { return }
+        isRecording = true
+        title = "Type shortcut…"
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.isRecording else { return event }
+            if event.keyCode == UInt16(kVK_Escape) {
+                self.finishRecording()
+                return nil
+            }
+            guard let shortcut = PluginShortcut(event: event) else {
+                NSSound.beep()
+                return nil
+            }
+            self.hotKeyAction.save(shortcut: shortcut)
+            self.finishRecording()
+            self.onChange()
+            return nil
+        }
+    }
+
+    private func finishRecording() {
+        isRecording = false
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+            self.monitor = nil
+        }
+        updateTitle()
+    }
+
+    private func updateTitle() {
+        title = hotKeyAction.shortcut.displayName
+    }
+
+    deinit {
+        if let monitor { NSEvent.removeMonitor(monitor) }
     }
 }
 
