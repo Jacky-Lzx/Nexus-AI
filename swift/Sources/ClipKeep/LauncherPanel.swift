@@ -6,7 +6,7 @@ private enum Layout {
     static let width: CGFloat = 780
     static let collapsedHeight: CGFloat = 84
     static let expandedHeight: CGFloat = 520
-    static let cornerRadius: CGFloat = 22
+    static let cornerRadius: CGFloat = 28
 }
 
 final class LauncherPanel: NSPanel {
@@ -34,7 +34,7 @@ final class LauncherPanelController: NSWindowController,
     NSTableViewDelegate {
 
     private let coordinator: SearchCoordinator
-    private let root = NSVisualEffectView()
+    private let root = NSView()
     private let searchContainer = NSView()
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
@@ -149,20 +149,16 @@ final class LauncherPanelController: NSWindowController,
         guard let panel = window else { return }
         root.frame = panel.contentView?.bounds ?? .zero
         root.autoresizingMask = [.width, .height]
-        root.material = .hudWindow
-        root.blendingMode = .behindWindow
-        root.state = .active
         root.wantsLayer = true
         root.layer?.cornerRadius = Layout.cornerRadius
         root.layer?.cornerCurve = .continuous
         root.layer?.masksToBounds = true
-        root.layer?.borderWidth = 1
-        root.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
-        panel.contentView = root
+        installGlassSurface(in: panel)
 
         searchContainer.wantsLayer = true
-        searchContainer.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.07).cgColor
-        searchContainer.layer?.cornerRadius = 15
+        searchContainer.layer?.backgroundColor = NSColor.controlBackgroundColor
+            .withAlphaComponent(0.22).cgColor
+        searchContainer.layer?.cornerRadius = 18
         searchContainer.layer?.cornerCurve = .continuous
         searchContainer.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(searchContainer)
@@ -266,7 +262,8 @@ final class LauncherPanelController: NSWindowController,
         let footer = NSView()
         footer.translatesAutoresizingMaskIntoConstraints = false
         footer.wantsLayer = true
-        footer.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.13).cgColor
+        footer.layer?.backgroundColor = NSColor.controlBackgroundColor
+            .withAlphaComponent(0.14).cgColor
         content.addSubview(footer)
         statusLabel.font = .systemFont(ofSize: 13, weight: .medium)
         statusLabel.textColor = .secondaryLabelColor
@@ -309,6 +306,33 @@ final class LauncherPanelController: NSWindowController,
             hint.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: -12),
             hint.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
         ])
+    }
+
+    private func installGlassSurface(in panel: NSWindow) {
+        let frame = panel.contentView?.bounds ?? .zero
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView(frame: frame)
+            glass.autoresizingMask = [.width, .height]
+            glass.contentView = root
+            glass.cornerRadius = Layout.cornerRadius
+            glass.style = .regular
+            glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.08)
+            panel.contentView = glass
+        } else {
+            let fallback = NSVisualEffectView(frame: frame)
+            fallback.autoresizingMask = [.width, .height]
+            fallback.material = .hudWindow
+            fallback.blendingMode = .behindWindow
+            fallback.state = .active
+            fallback.wantsLayer = true
+            fallback.layer?.cornerRadius = Layout.cornerRadius
+            fallback.layer?.cornerCurve = .continuous
+            fallback.layer?.masksToBounds = true
+            fallback.layer?.borderWidth = 1
+            fallback.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
+            fallback.addSubview(root)
+            panel.contentView = fallback
+        }
     }
 
     private func bindCoordinator() {
@@ -456,7 +480,7 @@ final class LauncherPanelController: NSWindowController,
         frame.origin.y += frame.height - newHeight
         frame.size.height = newHeight
         let changes = {
-            panel.setFrame(frame, display: true)
+            panel.animator().setFrame(frame, display: true)
             self.content.animator().alphaValue = shouldExpand ? 1 : 0
         }
         if animated {
