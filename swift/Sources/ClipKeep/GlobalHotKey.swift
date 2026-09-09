@@ -2,10 +2,15 @@ import Carbon
 import Foundation
 
 final class GlobalHotKey {
-    static let shared = GlobalHotKey()
-    var handler: (() -> Void)?
+    enum Action: UInt32 {
+        case applications = 1
+        case clipboard = 2
+    }
 
-    private var hotKey: EventHotKeyRef?
+    static let shared = GlobalHotKey()
+    var handler: ((Action) -> Void)?
+
+    private var hotKeys: [EventHotKeyRef] = []
     private var eventHandler: EventHandlerRef?
 
     func register() -> Bool {
@@ -15,8 +20,22 @@ final class GlobalHotKey {
         )
         let status = InstallEventHandler(
             GetApplicationEventTarget(),
-            { _, _, _ in
-                DispatchQueue.main.async { GlobalHotKey.shared.handler?() }
+            { _, event, _ in
+                guard let event else { return OSStatus(eventNotHandledErr) }
+                var identifier = EventHotKeyID()
+                let status = GetEventParameter(
+                    event,
+                    EventParamName(kEventParamDirectObject),
+                    EventParamType(typeEventHotKeyID),
+                    nil,
+                    MemoryLayout<EventHotKeyID>.size,
+                    nil,
+                    &identifier
+                )
+                guard status == noErr, let action = Action(rawValue: identifier.id) else {
+                    return OSStatus(eventNotHandledErr)
+                }
+                DispatchQueue.main.async { GlobalHotKey.shared.handler?(action) }
                 return noErr
             },
             1,
@@ -25,20 +44,24 @@ final class GlobalHotKey {
             &eventHandler
         )
         guard status == noErr else { return false }
+        return register(keyCode: UInt32(kVK_Space), action: .applications)
+            && register(keyCode: UInt32(kVK_ANSI_C), action: .clipboard)
+    }
+
+    private func register(keyCode: UInt32, action: Action) -> Bool {
         let signature = OSType(0x434B4559) // CKEY
-        let identifier = EventHotKeyID(signature: signature, id: 1)
-        return RegisterEventHotKey(
-            UInt32(kVK_Space),
-            UInt32(cmdKey | shiftKey),
-            identifier,
-            GetApplicationEventTarget(),
-            0,
-            &hotKey
-        ) == noErr
+        let identifier = EventHotKeyID(signature: signature, id: action.rawValue)
+        var reference: EventHotKeyRef?
+        let status = RegisterEventHotKey(
+            keyCode, UInt32(cmdKey | shiftKey), identifier,
+            GetApplicationEventTarget(), 0, &reference
+        )
+        if let reference { hotKeys.append(reference) }
+        return status == noErr
     }
 
     deinit {
-        if let hotKey { UnregisterEventHotKey(hotKey) }
+        hotKeys.forEach { UnregisterEventHotKey($0) }
         if let eventHandler { RemoveEventHandler(eventHandler) }
     }
 }

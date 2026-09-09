@@ -111,6 +111,7 @@ final class SearchCoordinator {
     private var processes: [String: PluginProcess] = [:]
     private var resultsByPlugin: [String: [SearchResult]] = [:]
     private var currentQuery = ""
+    private var currentPluginId = "io.clipkeep.applications"
     private var queryId: UInt64 = 0
     private var requestId: UInt64 = 0
 
@@ -118,7 +119,7 @@ final class SearchCoordinator {
         for plugin in builtInPlugins where isEnabled(plugin.id) {
             start(plugin)
         }
-        search("")
+        search("", pluginId: currentPluginId)
     }
 
     func isEnabled(_ id: String) -> Bool {
@@ -137,18 +138,17 @@ final class SearchCoordinator {
             resultsByPlugin[descriptor.id] = nil
             publishResults()
         }
-        search(currentQuery)
+        search(currentQuery, pluginId: currentPluginId)
         onPluginStateChanged?()
     }
 
-    func search(_ query: String) {
+    func search(_ query: String, pluginId: String) {
         currentQuery = query
+        currentPluginId = pluginId
         queryId += 1
         resultsByPlugin.removeAll()
         publishResults()
-        for process in processes.values {
-            process.search(queryId: queryId, query: query)
-        }
+        processes[pluginId]?.search(queryId: queryId, query: query)
     }
 
     func execute(_ result: SearchResult, actionId: String) {
@@ -184,10 +184,10 @@ final class SearchCoordinator {
             resultsByPlugin[pluginId] = items
             publishResults()
         case .catalogChanged:
-            search(currentQuery)
+            search(currentQuery, pluginId: currentPluginId)
         case let .actionFinished(_, message):
             onStatusChanged?(message ?? "Done")
-            search(currentQuery)
+            search(currentQuery, pluginId: currentPluginId)
         case let .error(message):
             onStatusChanged?(message)
         default:

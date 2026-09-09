@@ -46,6 +46,7 @@ final class LauncherPanelController: NSWindowController,
     private let statusLabel = NSTextField(labelWithString: "ClipKeep")
     private var results: [SearchResult] = []
     private var expanded = false
+    private var searchMode = SearchMode.applications
     private var hiding = false
     private var ignoreNextResign = false
 
@@ -76,15 +77,22 @@ final class LauncherPanelController: NSWindowController,
 
     var isPresented: Bool { window?.isVisible == true && !hiding }
 
-    func toggle() {
-        isPresented ? hide() : show()
+    func toggle(mode: SearchMode) {
+        if isPresented, searchMode == mode {
+            hide()
+        } else {
+            show(mode: mode)
+        }
     }
 
-    func show(query: String = "") {
+    func show(mode: SearchMode = .applications, query: String = "") {
         guard let panel = window as? LauncherPanel else { return }
+        searchMode = mode
         hiding = false
         searchField.stringValue = query
-        coordinator.search(query)
+        searchField.placeholderString = mode.placeholder
+        statusLabel.stringValue = mode.title
+        coordinator.search(query, pluginId: mode.pluginId)
         setExpanded(!query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, animated: false)
         position(panel)
         panel.alphaValue = 0
@@ -151,7 +159,7 @@ final class LauncherPanelController: NSWindowController,
         searchIcon.contentTintColor = .secondaryLabelColor
         searchIcon.translatesAutoresizingMaskIntoConstraints = false
         searchContainer.addSubview(searchIcon)
-        searchField.placeholderString = "Search applications and clipboard…"
+        searchField.placeholderString = SearchMode.applications.placeholder
         searchField.font = .systemFont(ofSize: 24, weight: .regular)
         searchField.textColor = .labelColor
         searchField.focusRingType = .none
@@ -240,7 +248,7 @@ final class LauncherPanelController: NSWindowController,
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         footer.addSubview(statusLabel)
-        let hint = NSTextField(labelWithString: "↵ Open or Copy     ↑↓ Navigate     ⌘⇧Space Toggle")
+        let hint = NSTextField(labelWithString: "↵ Run     ↑↓ Navigate     ⌘⇧Space Apps     ⌘⇧C Clipboard")
         hint.font = .systemFont(ofSize: 12, weight: .medium)
         hint.textColor = .tertiaryLabelColor
         hint.translatesAutoresizingMaskIntoConstraints = false
@@ -291,7 +299,7 @@ final class LauncherPanelController: NSWindowController,
 
     func controlTextDidChange(_ obj: Notification) {
         let query = searchField.stringValue
-        coordinator.search(query)
+        coordinator.search(query, pluginId: searchMode.pluginId)
         setExpanded(!query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, animated: true)
     }
 

@@ -16,7 +16,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Starts as a compact search bar and smoothly expands only while searching
 - Animated fade-in and fade-out when showing or hiding
 - Keyboard navigation: arrows, Enter, `Command-S`, and `Command-Backspace`
-- Global `Command-Shift-Space` shortcut to show or hide the palette
+- `Command-Shift-Space` searches applications only
+- `Command-Shift-C` searches clipboard history only
 - Automatically hides when focus moves to another application
 - Plugins keep running while the window is hidden
 - No network access or analytics
@@ -49,8 +50,9 @@ Developer ID signing and notarization.
 The AppKit host requires macOS 11 or later. Rust plugin executables can remain
 cross-platform even when another native frontend is added later.
 
-Press `Command-Shift-Space` from any application to toggle ClipKeep. Escape and
-the back button hide the panel without stopping its plugin processes. Use
+Press `Command-Shift-Space` to search applications or `Command-Shift-C` to
+search clipboard history. Escape and focus loss hide the panel without stopping
+its plugin processes. Use
 **Quit** in the bottom action bar to stop ClipKeep completely.
 
 History is stored in the platform application-data directory:

@@ -12,17 +12,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launcher.onPluginStateChanged = { [weak self] in self?.rebuildMenu() }
         configureStatusItem()
 
-        GlobalHotKey.shared.handler = { [weak self] in self?.launcher.toggle() }
-        if !GlobalHotKey.shared.register() {
-            coordinator.onStatusChanged?("Could not register ⌘⇧Space")
+        GlobalHotKey.shared.handler = { [weak self] action in
+            switch action {
+            case .applications: self?.launcher.toggle(mode: .applications)
+            case .clipboard: self?.launcher.toggle(mode: .clipboard)
+            }
         }
-        launcher.show(query: initialQuery())
+        if !GlobalHotKey.shared.register() {
+            coordinator.onStatusChanged?("Could not register global shortcuts")
+        }
+        launcher.show(mode: initialMode(), query: initialQuery())
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        launcher.show()
+        launcher.show(mode: .applications)
         return true
     }
 
@@ -37,7 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu() {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Show ClipKeep", action: #selector(showLauncher), keyEquivalent: "")
+        menu.addItem(withTitle: "Search Applications  ⌘⇧Space", action: #selector(showApplications), keyEquivalent: "")
+        menu.addItem(withTitle: "Search Clipboard  ⌘⇧C", action: #selector(showClipboard), keyEquivalent: "")
+        menu.items[0].target = self
+        menu.items[1].target = self
         menu.addItem(.separator())
 
         let plugins = NSMenu()
@@ -55,11 +63,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quit = NSMenuItem(title: "Quit ClipKeep", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
-        menu.items.first?.target = self
         statusItem.menu = menu
     }
 
-    @objc private func showLauncher() { launcher.show() }
+    @objc private func showApplications() { launcher.show(mode: .applications) }
+    @objc private func showClipboard() { launcher.show(mode: .clipboard) }
 
     @objc private func togglePlugin(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String,
@@ -75,5 +83,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return ""
         }
         return arguments[index + 1]
+    }
+
+    private func initialMode() -> SearchMode {
+        ProcessInfo.processInfo.arguments.contains("--clipboard") ? .clipboard : .applications
     }
 }

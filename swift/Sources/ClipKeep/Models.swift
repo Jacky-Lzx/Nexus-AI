@@ -1,5 +1,31 @@
 import Foundation
 
+enum SearchMode {
+    case applications
+    case clipboard
+
+    var pluginId: String {
+        switch self {
+        case .applications: "io.clipkeep.applications"
+        case .clipboard: "io.clipkeep.clipboard"
+        }
+    }
+
+    var placeholder: String {
+        switch self {
+        case .applications: "Search applications…"
+        case .clipboard: "Search clipboard history…"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .applications: "Applications"
+        case .clipboard: "Clipboard History"
+        }
+    }
+}
+
 enum ResultKind: String, Codable {
     case application
     case clipboardText = "clipboard_text"
