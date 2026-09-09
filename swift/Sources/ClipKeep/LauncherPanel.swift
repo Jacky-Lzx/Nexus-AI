@@ -328,7 +328,7 @@ final class LauncherPanelController: NSWindowController,
             detailImage.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 16),
             detailImage.leadingAnchor.constraint(equalTo: detailText.leadingAnchor),
             detailImage.trailingAnchor.constraint(equalTo: detailText.trailingAnchor),
-            detailImage.heightAnchor.constraint(equalToConstant: 170),
+            detailImage.heightAnchor.constraint(equalToConstant: 250),
             detailInfo.leadingAnchor.constraint(equalTo: detailText.leadingAnchor),
             detailInfo.trailingAnchor.constraint(equalTo: detailText.trailingAnchor),
             detailInfo.bottomAnchor.constraint(equalTo: detailPane.bottomAnchor, constant: -18),
@@ -470,8 +470,8 @@ final class LauncherPanelController: NSWindowController,
 
     private func updateDetails() {
         guard searchMode == .clipboard else { return }
-        detailInfo.arrangedSubviews.forEach { detailInfo.removeArrangedSubview($0); $0.removeFromSuperview() }
         guard let result = selectedResult else {
+            updateDetailInfo([])
             detailText.stringValue = results.isEmpty ? "No results" : "Select a result"
             detailImage.image = nil
             detailImage.isHidden = true
@@ -482,13 +482,16 @@ final class LauncherPanelController: NSWindowController,
         detailImage.image = thumbnailImage(from: result)
         detailImage.isHidden = detailImage.image == nil
         detailText.isHidden = detailImage.image != nil
-        addInfo("Plugin", result.pluginId)
-        addInfo("Type", result.kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+        var info = [
+            ("Plugin", result.pluginId),
+            ("Type", result.kind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized),
+        ]
         for (key, value) in result.metadata
             .filter({ !["route", "thumbnail_png"].contains($0.key) })
             .sorted(by: { $0.key < $1.key }) {
-            addInfo(key.capitalized, value)
+            info.append((key.capitalized, value))
         }
+        updateDetailInfo(info)
     }
 
     private func updateModeLayout() {
@@ -537,10 +540,33 @@ final class LauncherPanelController: NSWindowController,
         searchMode == .applications
     }
 
-    private func addInfo(_ key: String, _ value: String) {
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.distribution = .fill
+    private func updateDetailInfo(_ items: [(String, String)]) {
+        detailInfo.arrangedSubviews.forEach {
+            detailInfo.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        for index in stride(from: 0, to: items.count, by: 2) {
+            let row = NSStackView()
+            row.orientation = .horizontal
+            row.distribution = .fillEqually
+            row.spacing = 18
+            row.addArrangedSubview(makeInfoItem(items[index]))
+            if items.indices.contains(index + 1) {
+                row.addArrangedSubview(makeInfoItem(items[index + 1]))
+            } else {
+                row.addArrangedSubview(NSView())
+            }
+            detailInfo.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: detailInfo.widthAnchor).isActive = true
+        }
+    }
+
+    private func makeInfoItem(_ item: (String, String)) -> NSView {
+        let (key, value) = item
+        let container = NSStackView()
+        container.orientation = .horizontal
+        container.distribution = .fill
+        container.spacing = 8
         let label = NSTextField(labelWithString: key)
         label.textColor = .secondaryLabelColor
         label.font = .systemFont(ofSize: 13)
@@ -548,11 +574,11 @@ final class LauncherPanelController: NSWindowController,
         field.textColor = .labelColor
         field.font = .systemFont(ofSize: 13, weight: .medium)
         field.lineBreakMode = .byTruncatingMiddle
-        row.addArrangedSubview(label)
-        row.addArrangedSubview(field)
+        container.addArrangedSubview(label)
+        container.addArrangedSubview(field)
         field.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        detailInfo.addArrangedSubview(row)
-        row.widthAnchor.constraint(equalTo: detailInfo.widthAnchor).isActive = true
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        return container
     }
 
     private func setExpanded(_ shouldExpand: Bool, animated: Bool) {
