@@ -82,7 +82,7 @@ final class LauncherPanelController: NSWindowController,
 
     func toggle(mode: SearchMode) {
         if isPresented, searchMode == mode {
-            hide()
+            hide(restorePreviousApplication: true)
         } else {
             show(mode: mode)
         }
