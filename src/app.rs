@@ -1,3 +1,4 @@
+use crate::hotkey::{HotkeyController, SHORTCUT_LABEL};
 use clipkeep_core::SearchCore;
 use clipkeep_protocol::{ResultKind, SearchResult};
 use eframe::egui::{
@@ -20,15 +21,26 @@ pub struct LauncherApp {
     status: Option<String>,
     focus_search: bool,
     place_window: bool,
+    hotkey: Option<HotkeyController>,
+    visible: bool,
+    had_focus: bool,
+    hide_after_action: bool,
 }
 
 impl LauncherApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         configure_fonts(&cc.egui_ctx);
         configure_style(&cc.egui_ctx);
-        let (core, status) = match SearchCore::with_builtin_plugins() {
+        let (core, mut status) = match SearchCore::with_builtin_plugins() {
             Ok(core) => (Some(core), None),
             Err(error) => (None, Some(format!("Could not start plugins: {error}"))),
+        };
+        let hotkey = match HotkeyController::register(cc.egui_ctx.clone()) {
+            Ok(hotkey) => Some(hotkey),
+            Err(error) => {
+                status = Some(format!("Could not register {SHORTCUT_LABEL}: {error}"));
+                None
+            }
         };
         Self {
             core,
@@ -38,6 +50,10 @@ impl LauncherApp {
             status,
             focus_search: true,
             place_window: true,
+            hotkey,
+            visible: true,
+            had_focus: false,
+            hide_after_action: false,
         }
     }
 
@@ -96,6 +112,32 @@ impl LauncherApp {
             _ => return,
         };
         self.execute_selected(action);
+        self.hide_after_action = true;
+    }
+
+    fn hide(&mut self, ctx: &egui::Context) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        self.visible = false;
+        self.had_focus = false;
+        self.hide_after_action = false;
+    }
+
+    fn show(&mut self, ctx: &egui::Context) {
+        self.visible = true;
+        self.had_focus = false;
+        self.focus_search = true;
+        self.place_window = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        ctx.request_repaint();
+    }
+
+    fn toggle_visibility(&mut self, ctx: &egui::Context) {
+        if self.visible {
+            self.hide(ctx);
+        } else {
+            self.show(ctx);
+        }
     }
 
     fn header(&mut self, ui: &mut egui::Ui) -> bool {
@@ -112,7 +154,7 @@ impl LauncherApp {
                 .on_hover_text("Close")
                 .clicked()
             {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                self.hide(ui.ctx());
             }
             ui.add_space(8.0);
             let search_width = (ui.available_width() - 170.0).max(200.0);
@@ -291,6 +333,9 @@ impl LauncherApp {
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(12.0);
+                if ui.small_button("Quit").clicked() {
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                }
                 if selected
                     .as_ref()
                     .is_some_and(|result| result.kind == ResultKind::ClipboardText)
@@ -312,6 +357,7 @@ impl LauncherApp {
                 {
                     self.primary_action();
                 }
+                ui.label(RichText::new(SHORTCUT_LABEL).size(12.0).color(MUTED));
             });
         });
         ui.add_space(9.0);
@@ -319,10 +365,32 @@ impl LauncherApp {
 }
 
 impl eframe::App for LauncherApp {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_core();
+        if self
+            .hotkey
+            .as_ref()
+            .is_some_and(HotkeyController::take_triggered)
+        {
+            self.toggle_visibility(ctx);
+        }
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         ctx.request_repaint_after(Duration::from_millis(50));
+
+        if !self.visible {
+            return;
+        }
+
+        let focused = ctx.input(|input| input.viewport().focused.unwrap_or(false));
+        if focused {
+            self.had_focus = true;
+        } else if self.had_focus {
+            self.hide(&ctx);
+            return;
+        }
 
         if self.place_window
             && let Some(monitor) = ctx.input(|input| input.viewport().monitor_size)
@@ -359,7 +427,8 @@ impl eframe::App for LauncherApp {
             self.execute_selected("delete");
         }
         if ctx.input_mut(|input| input.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.hide(&ctx);
+            return;
         }
 
         egui::Frame::new()
@@ -408,6 +477,10 @@ impl eframe::App for LauncherApp {
                 ui.separator();
                 self.footer(ui);
             });
+
+        if self.hide_after_action {
+            self.hide(&ctx);
+        }
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {

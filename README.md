@@ -14,6 +14,9 @@ Windows and Linux frontends later.
 - Deduplicates repeated clipboard contents
 - Floating, borderless, always-on-top command palette
 - Keyboard navigation: arrows, Enter, `Command-S`, and `Command-Backspace`
+- Global `Command-Shift-Space` shortcut to show or hide the palette
+- Automatically hides when focus moves to another application
+- Plugins keep running while the window is hidden
 - No network access or analytics
 
 ## Run
@@ -40,6 +43,10 @@ Developer ID signing and notarization.
 
 On Linux, the system may also need the development packages required by `winit`
 and X11/Wayland. macOS needs no additional runtime dependencies.
+
+Press `Command-Shift-Space` from any application to toggle ClipKeep. Escape and
+the back button hide the panel without stopping its plugin processes. Use
+**Quit** in the bottom action bar to stop ClipKeep completely.
 
 History is stored in the platform application-data directory:
 

@@ -1,4 +1,5 @@
 mod app;
+mod hotkey;
 
 use eframe::egui;
 
