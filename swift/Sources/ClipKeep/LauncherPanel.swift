@@ -267,7 +267,7 @@ final class LauncherPanelController: NSWindowController,
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = false
         scrollView.autohidesScrollers = false
-        scrollView.scrollerStyle = .overlay
+        scrollView.scrollerStyle = .legacy
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         listPane.addSubview(scrollView)
