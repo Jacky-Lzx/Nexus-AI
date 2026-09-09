@@ -1,9 +1,9 @@
 # ClipKeep
 
 ClipKeep is a local-first application launcher and clipboard history palette.
-The UI talks to process-isolated Rust plugins through a versioned JSON protocol.
-It works on macOS today, with the core and plugin architecture designed for
-Windows and Linux frontends later.
+Its native Swift/AppKit interface talks to process-isolated Rust plugins through
+a versioned JSON protocol. The current GUI is optimized for macOS; the Rust
+plugin protocol remains portable to future Windows and Linux frontends.
 
 ## Features
 
@@ -12,7 +12,9 @@ Windows and Linux frontends later.
 - Persists up to 500 entries locally between launches
 - Search, favorite, restore, and delete history entries
 - Deduplicates repeated clipboard contents
-- Floating, borderless, always-on-top command palette
+- Translucent, rounded, borderless, always-on-top command palette
+- Starts as a compact search bar and smoothly expands only while searching
+- Animated fade-in and fade-out when showing or hiding
 - Keyboard navigation: arrows, Enter, `Command-S`, and `Command-Backspace`
 - Global `Command-Shift-Space` shortcut to show or hide the palette
 - Automatically hides when focus moves to another application
@@ -21,11 +23,11 @@ Windows and Linux frontends later.
 
 ## Run
 
-Install a current stable Rust toolchain, then:
+Install a current stable Rust toolchain and the macOS Swift toolchain, then:
 
 ```sh
 cargo build --workspace
-cargo run
+./scripts/build-swift.sh
 ```
 
 To create a normal macOS application bundle that can be moved into
@@ -37,12 +39,15 @@ chmod +x scripts/package-macos.sh
 open dist/ClipKeep.app
 ```
 
+For UI testing or scripted launch, an initial search can be supplied with
+`open -n dist/ClipKeep.app --args --query Safari`.
+
 The generated bundle is unsigned. On another Mac, Gatekeeper may require the
 user to right-click the app and choose **Open**. Public distribution should add
 Developer ID signing and notarization.
 
-On Linux, the system may also need the development packages required by `winit`
-and X11/Wayland. macOS needs no additional runtime dependencies.
+The AppKit host requires macOS 11 or later. Rust plugin executables can remain
+cross-platform even when another native frontend is added later.
 
 Press `Command-Shift-Space` from any application to toggle ClipKeep. Escape and
 the back button hide the panel without stopping its plugin processes. Use
@@ -64,8 +69,10 @@ Individual clipboard entries can be removed from the result action bar.
 
 - `crates/clipkeep-protocol`: stable, versioned host/plugin message types
 - `crates/clipkeep-plugin-sdk`: Rust plugin runtime over newline-delimited JSON
-- `crates/clipkeep-core`: plugin process lifecycle, concurrent result aggregation,
-  ranking, stale-query rejection, and action routing
+- `swift/Sources/ClipKeep`: native AppKit panel, animations, status item, global
+  shortcut, plugin process lifecycle, result aggregation, and action routing
+- `crates/clipkeep-core`: reusable Rust host implementation retained for future
+  non-macOS frontends and protocol tests
 - `plugins/applications`: installed application index and launcher
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 

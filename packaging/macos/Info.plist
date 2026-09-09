@@ -7,7 +7,7 @@
     <key>CFBundleDisplayName</key>
     <string>ClipKeep</string>
     <key>CFBundleExecutable</key>
-    <string>clipkeep</string>
+    <string>ClipKeep</string>
     <key>CFBundleIdentifier</key>
     <string>io.clipkeep.ClipKeep</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -22,6 +22,8 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>11.0</string>
+    <key>LSUIElement</key>
+    <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>
