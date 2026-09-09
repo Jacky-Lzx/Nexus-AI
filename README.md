@@ -16,7 +16,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
   storage limits for large binary content
 - Search, favorite, restore, and delete history entries
 - Deduplicates repeated clipboard contents
-- Translucent, rounded, borderless, always-on-top command palette
+- Native Liquid Glass, rounded, borderless, always-on-top command palette
 - Starts as a compact search bar and smoothly expands only while searching
 - Clipboard mode opens expanded and immediately shows the existing history
 - Animated fade-in and fade-out when showing or hiding
@@ -59,7 +59,7 @@ Direct paste requires macOS Accessibility permission so ClipKeep can send the
 paste attempt opens the system permission prompt; once enabled, choose the entry
 again to paste it.
 
-The AppKit host requires macOS 11 or later. Rust plugin executables can remain
+ClipKeep requires macOS 26 or later. Rust plugin executables can remain
 cross-platform even when another native frontend is added later.
 
 Press `Command-Shift-Space` to search applications or `Command-Shift-C` to

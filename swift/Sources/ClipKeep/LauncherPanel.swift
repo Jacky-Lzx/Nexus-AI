@@ -126,7 +126,7 @@ final class LauncherPanelController: NSWindowController,
             panel?.orderOut(nil)
             panel?.alphaValue = 1
             self?.hiding = false
-            applicationToRestore?.activate(options: [.activateIgnoringOtherApps])
+            applicationToRestore?.activate()
             if pasteAfterRestore, let applicationToRestore {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
                     Self.sendPaste(to: applicationToRestore)
@@ -310,29 +310,13 @@ final class LauncherPanelController: NSWindowController,
 
     private func installGlassSurface(in panel: NSWindow) {
         let frame = panel.contentView?.bounds ?? .zero
-        if #available(macOS 26.0, *) {
-            let glass = NSGlassEffectView(frame: frame)
-            glass.autoresizingMask = [.width, .height]
-            glass.contentView = root
-            glass.cornerRadius = Layout.cornerRadius
-            glass.style = .regular
-            glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.08)
-            panel.contentView = glass
-        } else {
-            let fallback = NSVisualEffectView(frame: frame)
-            fallback.autoresizingMask = [.width, .height]
-            fallback.material = .hudWindow
-            fallback.blendingMode = .behindWindow
-            fallback.state = .active
-            fallback.wantsLayer = true
-            fallback.layer?.cornerRadius = Layout.cornerRadius
-            fallback.layer?.cornerCurve = .continuous
-            fallback.layer?.masksToBounds = true
-            fallback.layer?.borderWidth = 1
-            fallback.layer?.borderColor = NSColor.white.withAlphaComponent(0.16).cgColor
-            fallback.addSubview(root)
-            panel.contentView = fallback
-        }
+        let glass = NSGlassEffectView(frame: frame)
+        glass.autoresizingMask = [.width, .height]
+        glass.contentView = root
+        glass.cornerRadius = Layout.cornerRadius
+        glass.style = .regular
+        glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.08)
+        panel.contentView = glass
     }
 
     private func bindCoordinator() {

@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "ClipKeep",
-    platforms: [.macOS(.v11)],
+    platforms: [.macOS("26.0")],
     products: [
         .executable(name: "ClipKeep", targets: ["ClipKeep"]),
     ],

@@ -5,7 +5,7 @@ project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 bundle_dir="$project_dir/dist/ClipKeep.app"
 
 cd "$project_dir"
-cargo build --workspace --release
+MACOSX_DEPLOYMENT_TARGET=26.0 cargo build --workspace --release
 "$project_dir/scripts/build-swift.sh"
 install -d "$bundle_dir/Contents/MacOS"
 install -d "$bundle_dir/Contents/Resources"

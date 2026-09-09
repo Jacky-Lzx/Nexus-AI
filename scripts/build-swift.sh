@@ -7,8 +7,8 @@ module_cache="$output_dir/module-cache"
 sdk_path=$(xcrun --sdk macosx --show-sdk-path)
 
 case "$(uname -m)" in
-    arm64) target="arm64-apple-macosx11.0"; interface_arch="arm64e" ;;
-    x86_64) target="x86_64-apple-macosx11.0"; interface_arch="x86_64" ;;
+    arm64) target="arm64-apple-macosx26.0"; interface_arch="arm64e" ;;
+    x86_64) target="x86_64-apple-macosx26.0"; interface_arch="x86_64" ;;
     *) echo "Unsupported macOS architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
