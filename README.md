@@ -59,6 +59,24 @@ Direct paste requires macOS Accessibility permission so ClipKeep can send the
 paste attempt opens the system permission prompt; once enabled, choose the entry
 again to paste it.
 
+### Keep Accessibility permission across local builds
+
+macOS cannot preserve privacy permissions for ad-hoc signed builds because their
+code identity changes whenever the executable changes. Create a development
+code-signing identity in Xcode or Keychain Access, then package the app normally:
+
+```sh
+./scripts/package-macos.sh
+```
+
+The private key remains in the login keychain. The packaging script automatically
+uses the identity named `ClipKeep Local Development` to sign the app and its Rust
+plugin executables. Grant Accessibility permission once more after switching from
+the old ad-hoc build; subsequent signed builds retain the same designated requirement.
+
+To use an Apple Development or Developer ID identity instead, set
+`CLIPKEEP_CODESIGN_IDENTITY` to its certificate name when packaging.
+
 ClipKeep requires macOS 26 or later. Rust plugin executables can remain
 cross-platform even when another native frontend is added later.
 
