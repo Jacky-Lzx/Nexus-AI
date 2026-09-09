@@ -102,7 +102,7 @@ final class LauncherPanelController: NSWindowController,
     private let statusLabel = NSTextField(labelWithString: "ClipKeep")
     private var results: [SearchResult] = []
     private var expanded = false
-    private var searchMode = SearchMode.applications
+    private var searchMode = SearchMode.global
     private var hiding = false
     private var ignoreNextResign = false
     private var previousApplication: NSRunningApplication?
@@ -165,7 +165,7 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    func show(mode: SearchMode = .applications, query: String = "") {
+    func show(mode: SearchMode = .global, query: String = "") {
         guard let panel = window as? LauncherPanel else { return }
         if let frontmost = NSWorkspace.shared.frontmostApplication,
            frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier {
@@ -247,7 +247,7 @@ final class LauncherPanelController: NSWindowController,
         searchIcon.contentTintColor = .secondaryLabelColor
         searchIcon.translatesAutoresizingMaskIntoConstraints = false
         searchContainer.addSubview(searchIcon)
-        searchField.placeholderString = SearchMode.applications.placeholder
+        searchField.placeholderString = SearchMode.global.placeholder
         searchField.font = .systemFont(ofSize: 24, weight: .regular)
         searchField.textColor = .labelColor
         searchField.focusRingType = .none
@@ -644,7 +644,14 @@ final class LauncherPanelController: NSWindowController,
     private func requestSearch(_ query: String) {
         resetScrollOnNextResults = true
         resetResultsScrollPosition()
-        coordinator.search(query, pluginId: searchMode.pluginId)
+        switch searchMode {
+        case .global:
+            coordinator.searchGlobal(query)
+        case .clipboard:
+            coordinator.search(query, pluginId: "io.clipkeep.clipboard")
+        case let .plugin(plugin):
+            coordinator.search(query, pluginId: plugin.id)
+        }
     }
 
     private func resetResultsScrollPosition() {

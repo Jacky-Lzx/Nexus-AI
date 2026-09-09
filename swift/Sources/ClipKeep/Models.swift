@@ -13,21 +13,13 @@ enum ImagePreviewQuality: String, CaseIterable {
 }
 
 enum SearchMode: Equatable {
-    case applications
+    case global
     case clipboard
     case plugin(PluginDescriptor)
 
-    var pluginId: String {
-        switch self {
-        case .applications: "io.clipkeep.applications"
-        case .clipboard: "io.clipkeep.clipboard"
-        case let .plugin(plugin): plugin.id
-        }
-    }
-
     var placeholder: String {
         switch self {
-        case .applications: "Search applications…"
+        case .global: "Search ClipKeep…"
         case .clipboard: "Search clipboard history…"
         case let .plugin(plugin): "Search \(plugin.name)…"
         }
@@ -35,7 +27,7 @@ enum SearchMode: Equatable {
 
     var title: String {
         switch self {
-        case .applications: "Applications"
+        case .global: "ClipKeep"
         case .clipboard: "Clipboard History"
         case let .plugin(plugin): plugin.name
         }
@@ -44,7 +36,7 @@ enum SearchMode: Equatable {
     var showsDetails: Bool { self == .clipboard }
     var expandsWhenEmpty: Bool {
         switch self {
-        case .applications: false
+        case .global: false
         case .clipboard, .plugin: true
         }
     }
@@ -155,6 +147,7 @@ struct PluginDescriptor: Equatable {
     let executable: String
     let executableURL: URL
     let defaultEnabled: Bool
+    let defaultIncludedInGlobalSearch: Bool
     let capabilities: [String]
 
     var symbolName: String {
@@ -178,6 +171,7 @@ private let fallbackBuiltInPlugins = [
         executable: "clipkeep-plugin-applications",
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-applications"),
         defaultEnabled: true,
+        defaultIncludedInGlobalSearch: true,
         capabilities: ["applications.read", "applications.open", "background"]
     ),
     PluginDescriptor(
@@ -188,25 +182,29 @@ private let fallbackBuiltInPlugins = [
         executable: "clipkeep-plugin-clipboard",
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-clipboard"),
         defaultEnabled: true,
+        defaultIncludedInGlobalSearch: false,
         capabilities: ["clipboard.read", "clipboard.write", "storage", "background"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.calculator", name: "Calculator", version: "0.1.0", protocolVersion: 1,
         executable: "clipkeep-plugin-calculator",
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-calculator"),
-        defaultEnabled: true, capabilities: ["calculate", "clipboard.write"]
+        defaultEnabled: true, defaultIncludedInGlobalSearch: true,
+        capabilities: ["calculate", "clipboard.write"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.calendar", name: "Upcoming Events", version: "0.1.0", protocolVersion: 1,
         executable: "clipkeep-plugin-calendar",
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-calendar"),
-        defaultEnabled: true, capabilities: ["calendar.read", "applications.open"]
+        defaultEnabled: true, defaultIncludedInGlobalSearch: false,
+        capabilities: ["calendar.read", "applications.open"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.system-commands", name: "System Commands", version: "0.1.0", protocolVersion: 1,
         executable: "clipkeep-plugin-system-commands",
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-system-commands"),
-        defaultEnabled: true, capabilities: ["system.control", "applications.open"]
+        defaultEnabled: true, defaultIncludedInGlobalSearch: true,
+        capabilities: ["system.control", "applications.open"]
     ),
 ]
 
@@ -277,6 +275,7 @@ enum PluginRegistry {
             executable: entrypoint,
             executableURL: directory.appendingPathComponent(entrypoint),
             defaultEnabled: values["default_enabled"] != "false",
+            defaultIncludedInGlobalSearch: values["include_in_global_search"] == "true",
             capabilities: strings("capabilities")
         )
     }

@@ -118,13 +118,28 @@ enum LauncherKeyAction: String, CaseIterable {
 }
 
 final class GlobalHotKey {
+    static let globalSearchId = "io.clipkeep.global-search"
+
+    static func migrateLegacyApplicationShortcut() {
+        let defaults = UserDefaults.standard
+        let migrationKey = "shortcut.globalSearchMigration.v1"
+        guard !defaults.bool(forKey: migrationKey) else { return }
+        let legacyKey = "plugin.shortcut.io.clipkeep.applications"
+        let globalKey = "plugin.shortcut.\(globalSearchId)"
+        if defaults.data(forKey: globalKey) == nil, let legacy = defaults.data(forKey: legacyKey) {
+            defaults.set(legacy, forKey: globalKey)
+            defaults.removeObject(forKey: legacyKey)
+        }
+        defaults.set(true, forKey: migrationKey)
+    }
+
     static func shortcut(for pluginId: String) -> PluginShortcut? {
         if let data = UserDefaults.standard.data(forKey: "plugin.shortcut.\(pluginId)"),
            let shortcut = try? JSONDecoder().decode(PluginShortcut.self, from: data) {
             return shortcut
         }
         switch pluginId {
-        case "io.clipkeep.applications":
+        case globalSearchId:
             return PluginShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey | shiftKey), keyLabel: "Space")
         case "io.clipkeep.clipboard":
             return PluginShortcut(keyCode: UInt32(kVK_ANSI_C), modifiers: UInt32(cmdKey | shiftKey), keyLabel: "C")

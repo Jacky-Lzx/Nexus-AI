@@ -29,7 +29,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Keyboard navigation: arrows, Enter, `Command-S`, and `Command-Backspace`
 - Plugin-defined action menus on right-click or `Command-K`; action behavior such
   as closing the palette and pasting into the previous app is protocol-driven
-- `Command-Shift-Space` searches applications only
+- `Command-Shift-Space` opens a combined search across opted-in plugins
 - `Command-Shift-C` searches clipboard history only
 - Automatically hides when focus moves to another application
 - Escape hides the palette and restores focus to the previously active application
@@ -93,8 +93,11 @@ To use an Apple Development or Developer ID identity instead, set
 ClipKeep requires macOS 26 or later. Rust plugin executables can remain
 cross-platform even when another native frontend is added later.
 
-Press `Command-Shift-Space` to search applications or `Command-Shift-C` to
-search clipboard history. Escape and focus loss hide the panel without stopping
+Press `Command-Shift-Space` to search applications, calculator results, and
+system commands together, or `Command-Shift-C` to search clipboard history.
+Calendar results can be added to the combined search in Settings; Clipboard is
+kept out of it and remains available through its shortcut or the existing
+"Clipboard History" result. Escape and focus loss hide the panel without stopping
 its plugin processes. Use
 **Quit** in the bottom action bar to stop ClipKeep completely.
 
@@ -149,10 +152,13 @@ version = "0.1.0"
 protocol_version = 1
 entrypoint = "clipkeep-plugin-example"
 default_enabled = true
+include_in_global_search = true
 capabilities = ["search"]
 ```
 
 Discovered plugins automatically receive a settings pane, enable switch,
-configurable global shortcut, status-menu entry, and isolated process lifecycle.
+configurable shortcut, global-search inclusion switch, status-menu entry, and
+isolated process lifecycle. Clipboard History is deliberately excluded from the
+combined search regardless of its manifest and is only opened explicitly.
 Run `ClipKeep --list-plugins` against a built app to validate discovery. Plugin
 stderr logs are written under the app-support `Logs` directory.

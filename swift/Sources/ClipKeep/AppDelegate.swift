@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         plugins = PluginRegistry.discover()
         coordinator = SearchCoordinator(descriptors: plugins)
         launcher = LauncherPanelController(coordinator: coordinator)
+        GlobalHotKey.migrateLegacyApplicationShortcut()
         launcher.onPluginStateChanged = { [weak self] in
             self?.refreshHotKeys()
             self?.settingsWindow?.refresh()
@@ -19,10 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItem()
 
         GlobalHotKey.shared.handler = { [weak self] pluginId in
-            guard let self, self.coordinator.isEnabled(pluginId),
+            guard let self else { return }
+            if pluginId == GlobalHotKey.globalSearchId {
+                self.launcher.toggle(mode: .global)
+                return
+            }
+            guard self.coordinator.isEnabled(pluginId),
                   let descriptor = self.plugins.first(where: { $0.id == pluginId }) else { return }
             switch pluginId {
-            case "io.clipkeep.applications": self.launcher.toggle(mode: .applications)
             case "io.clipkeep.clipboard": self.launcher.toggle(mode: .clipboard)
             default: self.launcher.toggle(mode: .plugin(descriptor))
             }
@@ -34,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        launcher.show(mode: .applications)
+        launcher.show(mode: .global)
         return true
     }
 
@@ -49,13 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func rebuildMenu() {
         let menu = NSMenu()
-        let applications = menu.addItem(
-            withTitle: "Search Applications  \(GlobalHotKey.shortcut(for: "io.clipkeep.applications")?.displayName ?? "")",
-            action: #selector(showApplications),
+        let globalSearch = menu.addItem(
+            withTitle: "Search ClipKeep  \(GlobalHotKey.shortcut(for: GlobalHotKey.globalSearchId)?.displayName ?? "")",
+            action: #selector(showGlobalSearch),
             keyEquivalent: ""
         )
-        applications.target = self
-        applications.isEnabled = coordinator.isEnabled("io.clipkeep.applications")
+        globalSearch.target = self
         let clipboard = menu.addItem(
             withTitle: "Search Clipboard  \(GlobalHotKey.shortcut(for: "io.clipkeep.clipboard")?.displayName ?? "")",
             action: #selector(showClipboard),
@@ -96,9 +100,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
     }
 
-    @objc private func showApplications() {
-        guard coordinator.isEnabled("io.clipkeep.applications") else { return }
-        launcher.show(mode: .applications)
+    @objc private func showGlobalSearch() {
+        launcher.show(mode: .global)
     }
 
     @objc private func showClipboard() {
@@ -132,7 +135,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               coordinator.isEnabled(id),
               let descriptor = plugins.first(where: { $0.id == id }) else { return }
         switch id {
-        case "io.clipkeep.applications": launcher.show(mode: .applications)
         case "io.clipkeep.clipboard": launcher.show(mode: .clipboard)
         default: launcher.show(mode: .plugin(descriptor))
         }
@@ -141,7 +143,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func quit() { NSApp.terminate(nil) }
 
     private func refreshHotKeys() {
-        let enabledPluginIds = plugins.map(\.id).filter { coordinator.isEnabled($0) }
+        let enabledPluginIds = [GlobalHotKey.globalSearchId]
+            + plugins.map(\.id).filter { coordinator.isEnabled($0) }
         let failures = GlobalHotKey.shared.configure(enabledPluginIds: enabledPluginIds)
         if !failures.isEmpty {
             coordinator.onStatusChanged?(
@@ -160,6 +163,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func initialMode() -> SearchMode {
-        ProcessInfo.processInfo.arguments.contains("--clipboard") ? .clipboard : .applications
+        ProcessInfo.processInfo.arguments.contains("--clipboard") ? .clipboard : .global
     }
 }

@@ -274,6 +274,19 @@ final class SettingsWindowController: NSWindowController,
             control: shortcut
         ))
 
+        if plugin.id != "io.clipkeep.clipboard" {
+            let includeInGlobalSearch = NSSwitch()
+            includeInGlobalSearch.state = coordinator.isIncludedInGlobalSearch(plugin.id) ? .on : .off
+            includeInGlobalSearch.identifier = NSUserInterfaceItemIdentifier(plugin.id)
+            includeInGlobalSearch.target = self
+            includeInGlobalSearch.action = #selector(changeGlobalSearchInclusion(_:))
+            options.addArrangedSubview(settingRow(
+                title: "Include in Global Search",
+                description: "Mix this plugin's results into the main ClipKeep search",
+                control: includeInGlobalSearch
+            ))
+        }
+
         if plugin.id == "io.clipkeep.clipboard" {
             let quality = NSPopUpButton()
             quality.addItems(withTitles: ImagePreviewQuality.allCases.map(\.title))
@@ -419,6 +432,19 @@ final class SettingsWindowController: NSWindowController,
         options.layer?.cornerCurve = .continuous
         options.translatesAutoresizingMaskIntoConstraints = false
 
+        let globalShortcut = ShortcutRecorderButton(
+            shortcut: { GlobalHotKey.shortcut(for: GlobalHotKey.globalSearchId) },
+            onChange: { [weak self] shortcut in
+                GlobalHotKey.save(shortcut, for: GlobalHotKey.globalSearchId)
+                self?.onShortcutChanged()
+            }
+        )
+        options.addArrangedSubview(settingRow(
+            title: "Global Search",
+            description: "Open the combined search across participating plugins",
+            control: globalShortcut
+        ))
+
         for action in LauncherKeyAction.allCases {
             let shortcut = ShortcutRecorderButton(
                 shortcut: { action.shortcut },
@@ -486,6 +512,12 @@ final class SettingsWindowController: NSWindowController,
         guard let plugin = selectedPlugin else { return }
         coordinator.setEnabled(sender.state == .on, descriptor: plugin)
         tableView.reloadData()
+    }
+
+    @objc private func changeGlobalSearchInclusion(_ sender: NSSwitch) {
+        guard let id = sender.identifier?.rawValue,
+              let plugin = coordinator.descriptors.first(where: { $0.id == id }) else { return }
+        coordinator.setIncludedInGlobalSearch(sender.state == .on, descriptor: plugin)
     }
 
     @objc private func changePreviewQuality(_ sender: NSPopUpButton) {

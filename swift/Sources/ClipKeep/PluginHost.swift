@@ -166,8 +166,10 @@ final class SearchCoordinator {
 
     private var processes: [String: PluginProcess] = [:]
     private var resultsByPlugin: [String: [SearchResult]] = [:]
+    private var stagedResultsByPlugin: [String: [SearchResult]] = [:]
     private var currentQuery = ""
-    private var currentPluginId = "io.clipkeep.applications"
+    private var currentPluginIds: Set<String> = []
+    private var currentSearchIsGlobal = true
     private var queryId: UInt64 = 0
     private var requestId: UInt64 = 0
     private var actionCompletions: [UInt64: (pluginId: String, completion: (Bool) -> Void)] = [:]
@@ -181,7 +183,7 @@ final class SearchCoordinator {
         for plugin in descriptors where isEnabled(plugin.id) {
             start(plugin)
         }
-        search("", pluginId: currentPluginId)
+        searchGlobal("")
     }
 
     func isEnabled(_ id: String) -> Bool {
@@ -199,31 +201,74 @@ final class SearchCoordinator {
         } else {
             processes[descriptor.id] = nil
             resultsByPlugin[descriptor.id] = nil
-            publishResults()
+            stagedResultsByPlugin[descriptor.id] = nil
         }
-        search(currentQuery, pluginId: currentPluginId)
+        repeatCurrentSearch()
         onPluginStateChanged?()
     }
 
+    func isIncludedInGlobalSearch(_ id: String) -> Bool {
+        guard id != "io.clipkeep.clipboard" else { return false }
+        let key = "plugin.globalSearch.\(id)"
+        let defaultValue = descriptors.first(where: { $0.id == id })?.defaultIncludedInGlobalSearch ?? false
+        return UserDefaults.standard.object(forKey: key) == nil
+            ? defaultValue
+            : UserDefaults.standard.bool(forKey: key)
+    }
+
+    func setIncludedInGlobalSearch(_ included: Bool, descriptor: PluginDescriptor) {
+        guard descriptor.id != "io.clipkeep.clipboard" else { return }
+        UserDefaults.standard.set(included, forKey: "plugin.globalSearch.\(descriptor.id)")
+        if currentSearchIsGlobal { searchGlobal(currentQuery) }
+        onPluginStateChanged?()
+    }
+
+    func searchGlobal(_ query: String) {
+        let pluginIds = descriptors
+            .filter { isEnabled($0.id) && isIncludedInGlobalSearch($0.id) }
+            .map(\.id)
+        search(query, pluginIds: pluginIds, isGlobal: true)
+    }
+
     func search(_ query: String, pluginId: String) {
-        let pluginChanged = currentPluginId != pluginId
+        search(query, pluginIds: [pluginId], isGlobal: false)
+    }
+
+    private func search(_ query: String, pluginIds: [String], isGlobal: Bool) {
+        let requestedPluginIds = Set(pluginIds)
+        let availablePluginIds = requestedPluginIds.filter { processes[$0] != nil }
+        let targetChanged = currentPluginIds != requestedPluginIds || currentSearchIsGlobal != isGlobal
         currentQuery = query
-        currentPluginId = pluginId
+        currentPluginIds = requestedPluginIds
+        currentSearchIsGlobal = isGlobal
         queryId += 1
-        if pluginChanged {
+        pendingSearches.removeAll()
+        stagedResultsByPlugin.removeAll()
+        if targetChanged {
             resultsByPlugin.removeAll()
             publishResults()
         }
-        guard let process = processes[pluginId] else { return }
-        pendingSearches[pluginId] = queryId
-        process.search(queryId: queryId, query: query)
+        guard !availablePluginIds.isEmpty else {
+            resultsByPlugin.removeAll()
+            publishResults()
+            return
+        }
         let sentQueryId = queryId
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self, weak process] in
-            guard let self, let process,
-                  self.processes[pluginId] === process,
-                  self.pendingSearches[pluginId] == sentQueryId else { return }
-            let name = self.descriptors.first(where: { $0.id == pluginId })?.name ?? pluginId
-            self.onStatusChanged?("\(name) is taking longer than expected…")
+        for pluginId in availablePluginIds {
+            guard let process = processes[pluginId] else { continue }
+            pendingSearches[pluginId] = sentQueryId
+            process.search(queryId: sentQueryId, query: query)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self, weak process] in
+                guard let self, let process,
+                      self.processes[pluginId] === process,
+                      self.pendingSearches[pluginId] == sentQueryId else { return }
+                let name = self.descriptors.first(where: { $0.id == pluginId })?.name ?? pluginId
+                self.onStatusChanged?("\(name) is taking longer than expected…")
+            }
+        }
+        // Publish fast plugins together instead of flashing an intermediate empty state.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            self?.commitStagedResults(queryId: sentQueryId)
         }
     }
 
@@ -304,16 +349,19 @@ final class SearchCoordinator {
                 guard let self, let process, self.processes[pluginId] === process else { return }
                 self.restartAttempts[pluginId] = 0
             }
-        case let .searchResults(eventQueryId, items) where eventQueryId == queryId:
+        case let .searchResults(eventQueryId, items)
+            where eventQueryId == queryId && currentPluginIds.contains(pluginId):
             pendingSearches[pluginId] = nil
-            resultsByPlugin[pluginId] = items
-            publishResults()
-        case .catalogChanged:
-            search(currentQuery, pluginId: currentPluginId)
+            stagedResultsByPlugin[pluginId] = items
+            if pendingSearches.isEmpty {
+                commitStagedResults(queryId: eventQueryId)
+            }
+        case .catalogChanged where currentPluginIds.contains(pluginId):
+            repeatCurrentSearch()
         case let .actionFinished(requestId, success, message):
             onStatusChanged?(message ?? "Done")
             actionCompletions.removeValue(forKey: requestId)?.completion(success)
-            search(currentQuery, pluginId: currentPluginId)
+            repeatCurrentSearch()
         case let .error(message):
             onStatusChanged?(message)
         case .terminated:
@@ -323,6 +371,7 @@ final class SearchCoordinator {
             failedActions.values.forEach { $0.completion(false) }
             processes[pluginId] = nil
             resultsByPlugin[pluginId] = nil
+            stagedResultsByPlugin[pluginId] = nil
             publishResults()
             scheduleRestart(pluginId: pluginId)
         default:
@@ -342,10 +391,31 @@ final class SearchCoordinator {
         DispatchQueue.main.asyncAfter(deadline: .now() + Double(attempt)) { [weak self] in
             guard let self, self.isEnabled(pluginId), self.processes[pluginId] == nil else { return }
             self.start(descriptor)
-            if pluginId == self.currentPluginId {
+            if self.currentSearchIsGlobal && self.isIncludedInGlobalSearch(pluginId) {
+                self.searchGlobal(self.currentQuery)
+            } else if self.currentPluginIds.contains(pluginId) {
                 self.search(self.currentQuery, pluginId: pluginId)
             }
         }
+    }
+
+    private func repeatCurrentSearch() {
+        if currentSearchIsGlobal {
+            searchGlobal(currentQuery)
+        } else if let pluginId = currentPluginIds.first {
+            search(currentQuery, pluginId: pluginId)
+        } else {
+            resultsByPlugin.removeAll()
+            publishResults()
+        }
+    }
+
+    private func commitStagedResults(queryId expectedQueryId: UInt64) {
+        guard expectedQueryId == queryId, !stagedResultsByPlugin.isEmpty else { return }
+        let hasAnyResult = stagedResultsByPlugin.values.contains { !$0.isEmpty }
+        if !pendingSearches.isEmpty, !hasAnyResult, !resultsByPlugin.isEmpty { return }
+        resultsByPlugin = stagedResultsByPlugin
+        publishResults()
     }
 
     private func publishResults() {
