@@ -31,8 +31,29 @@ final class LauncherPanel: NSPanel {
     }
 }
 
+private final class ResultsSplitView: NSSplitView {
+    var showsDivider = true {
+        didSet {
+            guard showsDivider != oldValue else { return }
+            adjustSubviews()
+            needsDisplay = true
+        }
+    }
+
+    override var dividerThickness: CGFloat {
+        showsDivider ? super.dividerThickness : 0
+    }
+
+    override func drawDivider(in rect: NSRect) {
+        guard showsDivider else { return }
+        super.drawDivider(in: rect)
+    }
+
+}
+
 final class LauncherPanelController: NSWindowController,
     NSSearchFieldDelegate,
+    NSSplitViewDelegate,
     NSTableViewDataSource,
     NSTableViewDelegate {
 
@@ -42,7 +63,7 @@ final class LauncherPanelController: NSWindowController,
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
     private let content = NSView()
-    private let splitView = NSSplitView()
+    private let splitView = ResultsSplitView()
     private let listPane = NSView()
     private let detailPane = NSView()
     private let tableView = NSTableView()
@@ -224,6 +245,7 @@ final class LauncherPanelController: NSWindowController,
         splitView.translatesAutoresizingMaskIntoConstraints = false
         splitView.isVertical = true
         splitView.dividerStyle = .thin
+        splitView.delegate = self
         content.addSubview(splitView)
 
         splitView.addArrangedSubview(listPane)
@@ -244,6 +266,9 @@ final class LauncherPanelController: NSWindowController,
         tableView.doubleAction = #selector(openSelected)
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
+        scrollView.verticalScroller?.controlSize = .small
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         listPane.addSubview(scrollView)
@@ -474,10 +499,24 @@ final class LauncherPanelController: NSWindowController,
 
     private func updateModeLayout() {
         let showsDetails = searchMode == .clipboard
+        splitView.showsDivider = showsDetails
         detailPane.isHidden = !showsDetails
         listWidthConstraint?.isActive = showsDetails
         scrollTrailingConstraint?.constant = showsDetails ? -8 : 0
         splitView.needsLayout = true
+    }
+
+    func splitView(
+        _ splitView: NSSplitView,
+        effectiveRect proposedEffectiveRect: NSRect,
+        forDrawnRect drawnRect: NSRect,
+        ofDividerAt dividerIndex: Int
+    ) -> NSRect {
+        searchMode == .clipboard ? proposedEffectiveRect : .zero
+    }
+
+    func splitView(_ splitView: NSSplitView, shouldHideDividerAt dividerIndex: Int) -> Bool {
+        searchMode == .applications
     }
 
     private func addInfo(_ key: String, _ value: String) {
