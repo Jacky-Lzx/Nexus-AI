@@ -95,13 +95,15 @@ impl Plugin for ClipboardPlugin {
         let id = Self::item_id(result_id)?;
         match action_id {
             "copy" => {
-                let item = self
+                let position = self
                     .items
                     .iter()
-                    .find(|item| item.id == id)
-                    .cloned()
+                    .position(|item| item.id == id)
                     .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
+                let item = self.items[position].clone();
                 self.clipboard.restore(&item)?;
+                promote_item(&mut self.items, position, now_secs());
+                self.save()?;
                 Ok(Some(format!("{} ready to paste", item.kind.label())))
             }
             "favorite" => {
@@ -140,9 +142,7 @@ impl Plugin for ClipboardPlugin {
             .iter()
             .position(|item| item.fingerprint == content.fingerprint)
         {
-            let mut item = self.items.remove(position);
-            item.created_at = now_secs();
-            self.items.insert(0, item);
+            promote_item(&mut self.items, position, now_secs());
         } else {
             self.items.insert(0, ClipItem::new(self.next_id, content));
             self.next_id += 1;
@@ -203,7 +203,10 @@ struct CapturedContent {
 
 impl CapturedContent {
     fn byte_len(&self) -> usize {
-        self.representations.iter().map(|value| value.data.len()).sum()
+        self.representations
+            .iter()
+            .map(|value| value.data.len())
+            .sum()
     }
 }
 
@@ -240,7 +243,10 @@ impl ClipItem {
     }
 
     fn byte_len(&self) -> usize {
-        self.representations.iter().map(|value| value.data.len()).sum()
+        self.representations
+            .iter()
+            .map(|value| value.data.len())
+            .sum()
     }
 
     fn search_text(&self) -> String {
@@ -285,12 +291,12 @@ impl ClipItem {
             ClipKind::Files => "Files".to_owned(),
             _ => self.kind.label().to_owned(),
         };
-        let match_bonus = if !query.is_empty() && self.search_text().to_lowercase().starts_with(query)
-        {
-            50.0
-        } else {
-            0.0
-        };
+        let match_bonus =
+            if !query.is_empty() && self.search_text().to_lowercase().starts_with(query) {
+                50.0
+            } else {
+                0.0
+            };
         SearchResult {
             plugin_id: PLUGIN_ID.into(),
             id: format!("clipboard:{}", self.id),
@@ -422,7 +428,10 @@ impl PlatformClipboard {
 
         let mut grouped = BTreeMap::<usize, Vec<&Representation>>::new();
         for representation in &item.representations {
-            grouped.entry(representation.item).or_default().push(representation);
+            grouped
+                .entry(representation.item)
+                .or_default()
+                .push(representation);
         }
         let mut pasteboard_items = Vec::new();
         for representations in grouped.values() {
@@ -431,7 +440,10 @@ impl PlatformClipboard {
                 let pasteboard_type = NSString::from_str(&representation.uti);
                 let data = NSData::with_bytes(&representation.data);
                 if !pasteboard_item.setData_forType(&data, &pasteboard_type) {
-                    return Err(format!("could not restore {} clipboard data", representation.uti));
+                    return Err(format!(
+                        "could not restore {} clipboard data",
+                        representation.uti
+                    ));
                 }
             }
             pasteboard_items.push(ProtocolObject::<dyn NSPasteboardWriting>::from_retained(
@@ -464,7 +476,10 @@ impl PlatformClipboard {
     }
 
     fn capture(&mut self) -> Result<Option<CapturedContent>, String> {
-        let text = self.clipboard.get_text().map_err(|error| error.to_string())?;
+        let text = self
+            .clipboard
+            .get_text()
+            .map_err(|error| error.to_string())?;
         if text.trim().is_empty() || self.last_text.as_ref() == Some(&text) {
             return Ok(None);
         }
@@ -552,6 +567,12 @@ fn trim_history(items: &mut Vec<ClipItem>) {
     }
 }
 
+fn promote_item(items: &mut Vec<ClipItem>, position: usize, created_at: u64) {
+    let mut item = items.remove(position);
+    item.created_at = created_at;
+    items.insert(0, item);
+}
+
 fn preview(text: &str, max_chars: usize) -> String {
     let cleaned = text.replace('\r', "").trim().to_owned();
     let mut chars = cleaned.chars();
@@ -627,5 +648,28 @@ mod tests {
         let decoded: Representation = serde_json::from_str(&json).unwrap();
         assert_eq!(decoded.data, representation.data);
         assert!(json.contains("AAEC/w=="));
+    }
+
+    #[test]
+    fn promoting_an_existing_item_moves_it_to_the_front() {
+        let item = |id, created_at| ClipItem {
+            id,
+            text: format!("item {id}"),
+            created_at,
+            favorite: false,
+            kind: ClipKind::Text,
+            representations: Vec::new(),
+            fingerprint: id,
+            thumbnail: None,
+        };
+        let mut items = vec![item(1, 10), item(2, 20), item(3, 30)];
+
+        promote_item(&mut items, 2, 40);
+
+        assert_eq!(
+            items.iter().map(|item| item.id).collect::<Vec<_>>(),
+            [3, 1, 2]
+        );
+        assert_eq!(items[0].created_at, 40);
     }
 }
