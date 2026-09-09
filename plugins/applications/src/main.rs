@@ -40,7 +40,9 @@ impl Plugin for ApplicationsPlugin {
             .applications
             .iter()
             .filter_map(|application| {
-                fuzzy_score(&application.name, &query).map(|score| (score, application))
+                application
+                    .search_score(&query)
+                    .map(|score| (score, application))
             })
             .collect();
         matches.sort_by(|(left_score, left), (right_score, right)| {
@@ -116,10 +118,23 @@ fn clipboard_history_command(query: &str) -> Option<SearchResult> {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Application {
     name: String,
+    bundle_name: String,
     path: PathBuf,
 }
 
 impl Application {
+    fn search_score(&self, query: &str) -> Option<f32> {
+        let display_score = fuzzy_score(&self.name, query);
+        let bundle_score = (self.bundle_name != self.name)
+            .then(|| fuzzy_score(&self.bundle_name, query).map(|score| score - 25.0))
+            .flatten();
+        match (display_score, bundle_score) {
+            (Some(display), Some(bundle)) => Some(display.max(bundle)),
+            (Some(score), None) | (None, Some(score)) => Some(score),
+            (None, None) => None,
+        }
+    }
+
     fn as_result(&self, score: f32) -> SearchResult {
         let path = self.path.to_string_lossy().into_owned();
         let mut metadata = BTreeMap::new();
@@ -208,17 +223,116 @@ fn scan_macos_directory(directory: &Path, depth: usize, output: &mut Vec<Applica
     for entry in entries.flatten() {
         let path = entry.path();
         if path.extension().is_some_and(|extension| extension == "app") {
-            let name = path
+            let bundle_name = path
                 .file_stem()
                 .map(|name| name.to_string_lossy().into_owned())
                 .unwrap_or_default();
-            if !name.is_empty() {
-                output.push(Application { name, path });
+            if !bundle_name.is_empty() {
+                let name = localized_application_name(&path, &bundle_name)
+                    .unwrap_or_else(|| bundle_name.clone());
+                output.push(Application {
+                    name,
+                    bundle_name,
+                    path,
+                });
             }
         } else if depth > 0 && path.is_dir() {
             scan_macos_directory(&path, depth - 1, output);
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+fn localized_application_name(path: &Path, bundle_name: &str) -> Option<String> {
+    use objc2_foundation::{NSBundle, NSFileManager, NSString};
+
+    if let Some(name) = localized_name_from_loctable(path) {
+        return Some(name);
+    }
+
+    let bundle_path = NSString::from_str(path.to_string_lossy().as_ref());
+    let file_manager_name = clean_application_name(
+        NSFileManager::defaultManager()
+            .displayNameAtPath(&bundle_path)
+            .to_string(),
+    );
+
+    // Finder's display-name lookup is what localizes system applications (for
+    // example, "System Settings.app" becomes "系统设置" on a Chinese Mac).
+    if file_manager_name.as_deref() != Some(bundle_name) {
+        return file_manager_name;
+    }
+
+    // Third-party bundles commonly provide their localized name directly in
+    // InfoPlist.strings, even when Finder keeps showing the bundle directory name.
+    if let Some(bundle) = NSBundle::bundleWithPath(&bundle_path) {
+        for key in ["CFBundleDisplayName", "CFBundleName"] {
+            let key = NSString::from_str(key);
+            if let Some(value) = bundle.objectForInfoDictionaryKey(&key)
+                && let Ok(value) = value.downcast::<NSString>()
+                && let Some(value) = clean_application_name(value.to_string())
+            {
+                return Some(value);
+            }
+        }
+    }
+
+    file_manager_name
+}
+
+#[cfg(target_os = "macos")]
+#[allow(deprecated)]
+fn localized_name_from_loctable(path: &Path) -> Option<String> {
+    use objc2_foundation::{NSDictionary, NSLocale, NSString};
+
+    let table_path = path.join("Contents/Resources/InfoPlist.loctable");
+    if !table_path.is_file() {
+        return None;
+    }
+
+    let table_path = NSString::from_str(table_path.to_string_lossy().as_ref());
+    let table: objc2::rc::Retained<NSDictionary<NSString, NSDictionary<NSString, NSString>>> =
+        unsafe { NSDictionary::dictionaryWithContentsOfFile(&table_path) }?;
+    let locale = NSLocale::currentLocale().localeIdentifier().to_string();
+
+    for locale in locale_candidates(&locale) {
+        let locale = NSString::from_str(&locale);
+        let Some(values) = table.objectForKey(&locale) else {
+            continue;
+        };
+        for key in ["CFBundleDisplayName", "CFBundleName"] {
+            let key = NSString::from_str(key);
+            if let Some(value) = values.objectForKey(&key)
+                && let Some(value) = clean_application_name(value.to_string())
+            {
+                return Some(value);
+            }
+        }
+    }
+    None
+}
+
+fn locale_candidates(locale: &str) -> Vec<String> {
+    let normalized = locale.replace('-', "_");
+    let mut candidates = vec![normalized.clone()];
+    if normalized.starts_with("zh_Hans") {
+        candidates.push("zh_CN".into());
+    } else if normalized.starts_with("zh_Hant_HK") {
+        candidates.push("zh_HK".into());
+    } else if normalized.starts_with("zh_Hant") {
+        candidates.push("zh_TW".into());
+    }
+    if let Some((language, _)) = normalized.split_once('_') {
+        candidates.push(language.into());
+    }
+    candidates.dedup();
+    candidates
+}
+
+fn clean_application_name(name: String) -> Option<String> {
+    let name = name.trim();
+    let name = name.strip_suffix(".app").unwrap_or(name).trim();
+    (!name.is_empty()).then(|| name.to_owned())
 }
 
 fn open_application(path: &Path) -> Result<(), String> {
@@ -261,5 +375,38 @@ mod tests {
         assert_eq!(command.metadata["route"], "clipboard_history");
         assert!(clipboard_history_command("clip hist").is_some());
         assert!(clipboard_history_command("").is_none());
+    }
+
+    #[test]
+    fn localized_app_names_keep_the_bundle_name_as_an_alias() {
+        let application = Application {
+            name: "微信".into(),
+            bundle_name: "WeChat".into(),
+            path: PathBuf::from("/Applications/WeChat.app"),
+        };
+        assert!(application.search_score("微信").is_some());
+        assert!(application.search_score("wechat").is_some());
+        assert!(application.search_score("telegram").is_none());
+    }
+
+    #[test]
+    fn application_extension_is_removed_from_display_names() {
+        assert_eq!(
+            clean_application_name("  系统设置.app  ".into()).as_deref(),
+            Some("系统设置")
+        );
+        assert_eq!(clean_application_name("  ".into()), None);
+    }
+
+    #[test]
+    fn locale_candidates_cover_modern_chinese_identifiers() {
+        assert_eq!(
+            locale_candidates("zh-Hans-CN"),
+            ["zh_Hans_CN", "zh_CN", "zh"]
+        );
+        assert_eq!(
+            locale_candidates("zh-Hant-HK"),
+            ["zh_Hant_HK", "zh_HK", "zh"]
+        );
     }
 }

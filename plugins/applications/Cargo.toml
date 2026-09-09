@@ -8,3 +8,13 @@ license.workspace = true
 clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
 clipkeep-protocol.workspace = true
 directories = "6.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+    "NSBundle",
+    "NSDictionary",
+    "NSFileManager",
+    "NSLocale",
+    "NSString",
+] }
