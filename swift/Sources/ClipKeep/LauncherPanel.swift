@@ -93,7 +93,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         coordinator.search(query, pluginId: mode.pluginId)
-        setExpanded(!query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, animated: false)
+        setExpanded(shouldExpand(for: query), animated: false)
         position(panel)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
@@ -300,7 +300,7 @@ final class LauncherPanelController: NSWindowController,
     func controlTextDidChange(_ obj: Notification) {
         let query = searchField.stringValue
         coordinator.search(query, pluginId: searchMode.pluginId)
-        setExpanded(!query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, animated: true)
+        setExpanded(shouldExpand(for: query), animated: true)
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -422,6 +422,11 @@ final class LauncherPanelController: NSWindowController,
             content.alphaValue = shouldExpand ? 1 : 0
             panel.setFrame(frame, display: true)
         }
+    }
+
+    private func shouldExpand(for query: String) -> Bool {
+        searchMode == .clipboard
+            || !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func position(_ panel: NSPanel) {

@@ -14,6 +14,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Deduplicates repeated clipboard contents
 - Translucent, rounded, borderless, always-on-top command palette
 - Starts as a compact search bar and smoothly expands only while searching
+- Clipboard mode opens expanded and immediately shows the existing history
 - Animated fade-in and fade-out when showing or hiding
 - Keyboard navigation: arrows, Enter, `Command-S`, and `Command-Backspace`
 - `Command-Shift-Space` searches applications only
