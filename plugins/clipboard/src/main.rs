@@ -319,9 +319,11 @@ impl ClipItem {
             );
         }
         let title = match self.kind {
-            ClipKind::Text | ClipKind::RichText if !self.text.is_empty() => preview(&self.text, 60),
+            ClipKind::Text | ClipKind::RichText if !self.text.is_empty() => {
+                single_line_preview(&self.text, 60)
+            }
             ClipKind::Image => "Image".to_owned(),
-            ClipKind::Files if !self.text.is_empty() => preview(&self.text, 60),
+            ClipKind::Files if !self.text.is_empty() => single_line_preview(&self.text, 60),
             ClipKind::Files => "Files".to_owned(),
             _ => self.kind.label().to_owned(),
         };
@@ -675,6 +677,13 @@ fn preview(text: &str, max_chars: usize) -> String {
     }
 }
 
+fn single_line_preview(text: &str, max_chars: usize) -> String {
+    preview(
+        &text.split_whitespace().collect::<Vec<_>>().join(" "),
+        max_chars,
+    )
+}
+
 fn byte_size(bytes: usize) -> String {
     match bytes {
         0..=1023 => format!("{bytes} B"),
@@ -726,6 +735,14 @@ mod tests {
     #[test]
     fn preview_is_unicode_safe() {
         assert_eq!(preview("你好，剪贴板历史", 4), "你好，剪…");
+    }
+
+    #[test]
+    fn list_preview_collapses_line_breaks_and_repeated_whitespace() {
+        assert_eq!(
+            single_line_preview("first line\nsecond\t\tline", 60),
+            "first line second line"
+        );
     }
 
     #[test]
