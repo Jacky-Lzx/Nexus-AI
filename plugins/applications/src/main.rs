@@ -119,20 +119,29 @@ fn clipboard_history_command(query: &str) -> Option<SearchResult> {
 struct Application {
     name: String,
     bundle_name: String,
+    pinyin: String,
+    pinyin_initials: String,
+    pinyin_variants: Vec<String>,
     path: PathBuf,
 }
 
 impl Application {
     fn search_score(&self, query: &str) -> Option<f32> {
-        let display_score = fuzzy_score(&self.name, query);
-        let bundle_score = (self.bundle_name != self.name)
-            .then(|| fuzzy_score(&self.bundle_name, query).map(|score| score - 25.0))
-            .flatten();
-        match (display_score, bundle_score) {
-            (Some(display), Some(bundle)) => Some(display.max(bundle)),
-            (Some(score), None) | (None, Some(score)) => Some(score),
-            (None, None) => None,
-        }
+        let base_score = [
+            (&self.name, 0.0),
+            (&self.bundle_name, -25.0),
+            (&self.pinyin, -50.0),
+            (&self.pinyin_initials, -75.0),
+        ]
+        .into_iter()
+        .filter(|(alias, _)| !alias.is_empty())
+        .filter_map(|(alias, adjustment)| fuzzy_score(alias, query).map(|score| score + adjustment))
+        .max_by(f32::total_cmp);
+        self.pinyin_variants
+            .iter()
+            .filter_map(|alias| fuzzy_score(alias, query).map(|score| score - 50.0))
+            .chain(base_score)
+            .max_by(f32::total_cmp)
     }
 
     fn as_result(&self, score: f32) -> SearchResult {
@@ -230,9 +239,14 @@ fn scan_macos_directory(directory: &Path, depth: usize, output: &mut Vec<Applica
             if !bundle_name.is_empty() {
                 let name = localized_application_name(&path, &bundle_name)
                     .unwrap_or_else(|| bundle_name.clone());
+                let (pinyin, pinyin_initials, pinyin_variants) =
+                    pinyin_aliases(&name).unwrap_or_default();
                 output.push(Application {
                     name,
                     bundle_name,
+                    pinyin,
+                    pinyin_initials,
+                    pinyin_variants,
                     path,
                 });
             }
@@ -405,6 +419,56 @@ fn clean_application_name(name: String) -> Option<String> {
     (!name.is_empty()).then(|| name.to_owned())
 }
 
+#[cfg(target_os = "macos")]
+fn pinyin_aliases(name: &str) -> Option<(String, String, Vec<String>)> {
+    use objc2_foundation::{
+        NSString, NSStringTransformMandarinToLatin, NSStringTransformStripDiacritics,
+    };
+
+    if !name
+        .chars()
+        .any(|character| ('\u{3400}'..='\u{9fff}').contains(&character))
+    {
+        return None;
+    }
+
+    let source_name = name;
+    let name = NSString::from_str(source_name);
+    let mandarin_to_latin = unsafe { NSStringTransformMandarinToLatin };
+    let strip_diacritics = unsafe { NSStringTransformStripDiacritics };
+    let latin = name.stringByApplyingTransform_reverse(mandarin_to_latin, false)?;
+    let plain = latin
+        .stringByApplyingTransform_reverse(strip_diacritics, false)?
+        .to_string()
+        .to_lowercase();
+    let syllables: Vec<_> = plain
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|syllable| !syllable.is_empty())
+        .collect();
+    let full = syllables.concat();
+    let initials = syllables
+        .iter()
+        .filter_map(|syllable| syllable.chars().next())
+        .collect();
+    let mut variants = Vec::new();
+    for (phrase, system_reading, contextual_reading) in [
+        ("音乐", "yinle", "yinyue"),
+        ("音樂", "yinle", "yinyue"),
+        ("银行", "yinxing", "yinhang"),
+        ("銀行", "yinxing", "yinhang"),
+        ("重庆", "zhongqing", "chongqing"),
+        ("重慶", "zhongqing", "chongqing"),
+    ] {
+        if source_name.contains(phrase) && full.contains(system_reading) {
+            push_unique(
+                &mut variants,
+                &full.replacen(system_reading, contextual_reading, 1),
+            );
+        }
+    }
+    (!full.is_empty()).then_some((full, initials, variants))
+}
+
 fn open_application(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let mut command = Command::new("open");
@@ -452,11 +516,25 @@ mod tests {
         let application = Application {
             name: "微信".into(),
             bundle_name: "WeChat".into(),
+            pinyin: "weixin".into(),
+            pinyin_initials: "wx".into(),
+            pinyin_variants: Vec::new(),
             path: PathBuf::from("/Applications/WeChat.app"),
         };
         assert!(application.search_score("微信").is_some());
         assert!(application.search_score("wechat").is_some());
+        assert!(application.search_score("weixin").is_some());
+        assert!(application.search_score("wx").is_some());
         assert!(application.search_score("telegram").is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn pinyin_aliases_include_initials_and_contextual_pronunciations() {
+        let (full, initials, variants) = pinyin_aliases("网易云音乐").unwrap();
+        assert_eq!(full, "wangyiyunyinle");
+        assert_eq!(initials, "wyyyl");
+        assert!(variants.iter().any(|alias| alias == "wangyiyunyinyue"));
     }
 
     #[test]
