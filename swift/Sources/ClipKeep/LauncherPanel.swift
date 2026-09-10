@@ -985,6 +985,7 @@ private final class ResultCellView: NSTableCellView {
         symbol.translatesAutoresizingMaskIntoConstraints = false
         artwork.imageScaling = .scaleProportionallyUpOrDown
         artwork.contentTintColor = .labelColor
+        artwork.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 20, weight: .regular)
         artwork.wantsLayer = true
         artwork.layer?.cornerRadius = 8
         artwork.layer?.cornerCurve = .continuous
@@ -1123,6 +1124,19 @@ private final class ResultCellView: NSTableCellView {
             guard let image = NSImage(contentsOfFile: path) else { return nil }
             applicationIconCache.setObject(image, forKey: cacheKey)
             return image
+        }
+        let clipboardSymbol: String? = switch result.kind {
+        case .clipboardText: "doc.plaintext"
+        case .clipboardRichText: "doc.richtext"
+        case .clipboardImage: "photo"
+        case .clipboardFiles: "doc.on.doc"
+        default: nil
+        }
+        if let clipboardSymbol {
+            return NSImage(
+                systemSymbolName: clipboardSymbol,
+                accessibilityDescription: result.kind.rawValue
+            )
         }
         guard result.kind == .application,
               let path = result.metadata["path"] else { return nil }
