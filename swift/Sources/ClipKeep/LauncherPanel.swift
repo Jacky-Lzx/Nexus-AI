@@ -53,6 +53,54 @@ private final class ResultsTableView: NSTableView {
     }
 }
 
+private final class ReminderFormView: NSView {
+    private let contentField = NSTextField()
+    private let datePicker = NSDatePicker()
+
+    var content: String { contentField.stringValue }
+    var date: Date { datePicker.dateValue }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 360, height: 92))
+
+        let contentLabel = NSTextField(labelWithString: "Reminder")
+        let timeLabel = NSTextField(labelWithString: "Time")
+        for label in [contentLabel, timeLabel] {
+            label.font = .systemFont(ofSize: 13, weight: .medium)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(label)
+        }
+
+        contentField.placeholderString = "What do you want to remember?"
+        contentField.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentField)
+
+        datePicker.datePickerStyle = .textFieldAndStepper
+        datePicker.datePickerElements = [.yearMonthDay, .hourMinute]
+        datePicker.minDate = Date(timeIntervalSinceNow: 60)
+        datePicker.dateValue = Date(timeIntervalSinceNow: 3_600)
+        datePicker.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(datePicker)
+
+        NSLayoutConstraint.activate([
+            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            contentLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+            contentLabel.widthAnchor.constraint(equalToConstant: 72),
+            contentField.centerYAnchor.constraint(equalTo: contentLabel.centerYAnchor),
+            contentField.leadingAnchor.constraint(equalTo: contentLabel.trailingAnchor, constant: 8),
+            contentField.trailingAnchor.constraint(equalTo: trailingAnchor),
+            timeLabel.topAnchor.constraint(equalTo: contentLabel.bottomAnchor, constant: 20),
+            timeLabel.leadingAnchor.constraint(equalTo: contentLabel.leadingAnchor),
+            timeLabel.widthAnchor.constraint(equalTo: contentLabel.widthAnchor),
+            datePicker.centerYAnchor.constraint(equalTo: timeLabel.centerYAnchor),
+            datePicker.leadingAnchor.constraint(equalTo: contentField.leadingAnchor),
+            datePicker.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
 private final class ResultsSplitView: NSSplitView {
     var showsDivider = true {
         didSet {
@@ -495,6 +543,10 @@ final class LauncherPanelController: NSWindowController,
             performClipboardEdit(on: result)
             return
         }
+        if result.pluginId == "io.clipkeep.reminders", action.id == "create" {
+            performReminderCreation(on: result)
+            return
+        }
         if action.destructive {
             let alert = NSAlert()
             alert.messageText = result.metadata["confirmation_title"] ?? "\(action.title)?"
@@ -519,6 +571,50 @@ final class LauncherPanelController: NSWindowController,
         }
         if action.closesWindow && !action.pasteToPrevious {
             hide()
+        }
+    }
+
+    private func performReminderCreation(on result: SearchResult) {
+        let form = ReminderFormView()
+        let alert = NSAlert()
+        alert.messageText = "Add Reminder"
+        alert.informativeText = "Enter what you want to remember and when Nexus should notify you."
+        alert.alertStyle = .informational
+        alert.accessoryView = form
+        alert.addButton(withTitle: "Add Reminder")
+        alert.addButton(withTitle: "Cancel")
+        ignoreNextResign = true
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            window?.makeKey()
+            window?.makeFirstResponder(searchField)
+            return
+        }
+        let content = form.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty, form.date.timeIntervalSinceNow > 0 else {
+            coordinator.onStatusChanged?("Enter reminder content and a future time")
+            window?.makeKey()
+            window?.makeFirstResponder(searchField)
+            return
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: [
+            "content": content,
+            "due_at": Int(form.date.timeIntervalSince1970),
+        ]), let input = String(data: data, encoding: .utf8) else { return }
+
+        NotificationPresenter.shared.requestAuthorization(willPrompt: { [weak self] in
+            self?.ignoreNextResign = true
+        }) { [weak self] authorized in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.ignoreNextResign = false
+                self.window?.makeKey()
+                self.window?.makeFirstResponder(self.searchField)
+                guard authorized else {
+                    self.coordinator.onStatusChanged?("Allow notifications in System Settings to create reminders")
+                    return
+                }
+                self.coordinator.execute(result, actionId: "create", input: input)
+            }
         }
     }
 

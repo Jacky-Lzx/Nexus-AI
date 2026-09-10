@@ -190,6 +190,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-reminders"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "directories",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "clipkeep-plugin-sdk"
 version = "0.1.0"
 dependencies = [

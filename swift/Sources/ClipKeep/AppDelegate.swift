@@ -11,6 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         plugins = PluginRegistry.discover()
         coordinator = SearchCoordinator(descriptors: plugins)
+        coordinator.onNotification = { notification in
+            NotificationPresenter.shared.deliver(notification)
+        }
         launcher = LauncherPanelController(coordinator: coordinator)
         GlobalHotKey.migrateLegacyApplicationShortcut()
         launcher.onPluginStateChanged = { [weak self] in

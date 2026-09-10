@@ -39,6 +39,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Escape hides the palette and restores focus to the previously active application
 - Choosing a clipboard entry restores the previous application and pastes it directly
 - Plugins keep running while the window is hidden
+- Persistent reminders with a native content/time form and macOS notifications
 - Discovers versioned plugin bundles from the app bundle and the user plugin
   directory, with manifest validation, per-plugin logs, search timeouts, and
   bounded automatic restart after a crash
@@ -105,6 +106,11 @@ kept out of it and remains available through its shortcut or the existing
 its plugin processes. Use
 **Quit** in the bottom action bar to stop Nexus completely.
 
+Open the `Reminders` item from the main search, choose `Add Reminder`, then enter
+the content and a future date and time. Nexus requests notification permission on
+the first reminder and continues checking reminders while it runs in the background.
+Reminder data is stored locally alongside the other Nexus application data.
+
 Encrypted history is stored in the platform application-data directory:
 
 - macOS: `~/Library/Application Support/io.clipkeep.ClipKeep/history.ckh`
@@ -131,6 +137,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
+- `plugins/reminders`: persistent reminders and background notification delivery
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
 

@@ -1,5 +1,5 @@
 use clipkeep_protocol::{
-    ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent, SearchResult,
+    ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent, PluginNotification, SearchResult,
 };
 use std::{
     collections::BTreeMap,
@@ -33,6 +33,10 @@ pub trait Plugin {
         Vec::new()
     }
 
+    fn notifications(&mut self) -> Result<Vec<PluginNotification>, String> {
+        Ok(Vec::new())
+    }
+
     fn tick(&mut self) -> Result<bool, String> {
         Ok(false)
     }
@@ -64,6 +68,14 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
             match plugin.tick() {
                 Ok(true) => send(&mut output, &PluginEvent::CatalogChanged)?,
                 Ok(false) => {}
+                Err(message) => send(&mut output, &PluginEvent::Error { message })?,
+            }
+            match plugin.notifications() {
+                Ok(notifications) => {
+                    for notification in notifications {
+                        send(&mut output, &PluginEvent::Notification { notification })?;
+                    }
+                }
                 Err(message) => send(&mut output, &PluginEvent::Error { message })?,
             }
             thread::sleep(Duration::from_millis(100));

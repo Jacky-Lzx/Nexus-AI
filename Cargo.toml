@@ -8,6 +8,7 @@ members = [
     "plugins/calendar",
     "plugins/clipboard",
     "plugins/kill-process",
+    "plugins/reminders",
     "plugins/system-commands",
 ]
 resolver = "3"

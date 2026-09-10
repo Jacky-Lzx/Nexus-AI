@@ -46,6 +46,9 @@ pub enum PluginEvent {
         request_id: u64,
         configuration_items: Vec<ConfigurationItem>,
     },
+    Notification {
+        notification: PluginNotification,
+    },
     CatalogChanged,
     ActionFinished {
         request_id: u64,
@@ -65,6 +68,13 @@ pub struct ConfigurationItem {
     pub subtitle: String,
     #[serde(default)]
     pub metadata: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PluginNotification {
+    pub id: String,
+    pub title: String,
+    pub body: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -165,6 +175,20 @@ mod tests {
         assert_eq!(json["type"], "configuration_items");
         assert_eq!(json["request_id"], 11);
         assert_eq!(json["configuration_items"][0]["id"], "lock");
+    }
+
+    #[test]
+    fn plugin_notifications_have_a_stable_wire_shape() {
+        let event = PluginEvent::Notification {
+            notification: PluginNotification {
+                id: "reminder:1".into(),
+                title: "Reminder".into(),
+                body: "Call Alice".into(),
+            },
+        };
+        let json = serde_json::to_value(event).unwrap();
+        assert_eq!(json["type"], "notification");
+        assert_eq!(json["notification"]["body"], "Call Alice");
     }
 
     #[test]

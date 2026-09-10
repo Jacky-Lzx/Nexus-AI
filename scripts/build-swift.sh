@@ -29,6 +29,7 @@ CLANG_MODULE_CACHE_PATH="$module_cache" swiftc \
     -framework AppKit \
     -framework Carbon \
     -framework QuartzCore \
+    -framework UserNotifications \
     -o "$output_dir/Nexus"
 
 echo "Created $output_dir/Nexus"

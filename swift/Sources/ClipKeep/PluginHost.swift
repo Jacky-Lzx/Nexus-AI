@@ -5,6 +5,7 @@ final class PluginProcess {
         case initialized(pluginId: String, protocolVersion: Int)
         case searchResults(queryId: UInt64, items: [SearchResult])
         case configurationItems(requestId: UInt64, items: [PluginConfigurationItem])
+        case notification(PluginNotification)
         case catalogChanged
         case actionFinished(requestId: UInt64, success: Bool, message: String?)
         case error(String)
@@ -26,6 +27,7 @@ final class PluginProcess {
         let queryId: UInt64?
         let items: [SearchResult]?
         let configurationItems: [PluginConfigurationItem]?
+        let notification: PluginNotification?
         let requestId: UInt64?
         let success: Bool?
         let message: String?
@@ -33,7 +35,7 @@ final class PluginProcess {
         let protocolVersion: Int?
 
         enum CodingKeys: String, CodingKey {
-            case type, items, success, message
+            case type, items, notification, success, message
             case queryId = "query_id"
             case requestId = "request_id"
             case pluginId = "plugin_id"
@@ -155,6 +157,9 @@ final class PluginProcess {
             guard let requestId = envelope.requestId,
                   let items = envelope.configurationItems else { return }
             event = .configurationItems(requestId: requestId, items: items)
+        case "notification":
+            guard let notification = envelope.notification else { return }
+            event = .notification(notification)
         case "catalog_changed":
             event = .catalogChanged
         case "action_finished":
@@ -178,6 +183,7 @@ final class SearchCoordinator {
     var onResultsChanged: (([SearchResult]) -> Void)?
     var onStatusChanged: ((String) -> Void)?
     var onPluginStateChanged: (() -> Void)?
+    var onNotification: ((PluginNotification) -> Void)?
     let descriptors: [PluginDescriptor]
 
     private var processes: [String: PluginProcess] = [:]
@@ -460,6 +466,11 @@ final class SearchCoordinator {
                   pending.pluginId == pluginId else { break }
             configurationCompletions[requestId] = nil
             pending.completion(items)
+        case let .notification(notification):
+            onNotification?(notification)
+            if currentPluginIds.contains(pluginId) {
+                repeatCurrentSearch()
+            }
         case .catalogChanged where currentPluginIds.contains(pluginId):
             repeatCurrentSearch()
         case let .actionFinished(requestId, success, message):

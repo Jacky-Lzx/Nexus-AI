@@ -158,6 +158,12 @@ struct PluginConfigurationItem: Codable {
     let metadata: [String: String]
 }
 
+struct PluginNotification: Codable {
+    let id: String
+    let title: String
+    let body: String
+}
+
 enum PluginItemPreference {
     static func hiddenItemIds(for pluginId: String) -> Set<String> {
         Set(UserDefaults.standard.stringArray(forKey: key(for: pluginId)) ?? [])
@@ -203,6 +209,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.calculator": "function"
         case "io.clipkeep.calendar": "calendar"
         case "io.clipkeep.kill-process": "xmark.circle"
+        case "io.clipkeep.reminders": "bell.badge"
         case "io.clipkeep.system-commands": "power"
         default: "puzzlepiece.extension"
         }
@@ -252,6 +259,13 @@ private let fallbackBuiltInPlugins = [
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-kill-process"),
         defaultEnabled: true, defaultIncludedInGlobalSearch: false,
         capabilities: ["processes.read", "processes.terminate"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.reminders", name: "Reminders", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-reminders",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-reminders"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: false,
+        capabilities: ["notifications", "storage", "background"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.system-commands", name: "System Commands", version: "0.1.0", protocolVersion: 1,
