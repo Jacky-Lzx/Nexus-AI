@@ -7,6 +7,7 @@ members = [
     "plugins/caffeinate",
     "plugins/calculator",
     "plugins/calendar",
+    "plugins/clash",
     "plugins/clipboard",
     "plugins/kill-process",
     "plugins/menu-bar",

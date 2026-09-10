@@ -15,6 +15,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
   system sleep, Settings, Force Quit, log out, restart, and shut down
+- Reads and switches Clash/Mihomo Rule, Global, and Direct modes through the
+  configured External Controller API
 - Searches running processes by name and sends SIGTERM only
   after an explicit confirmation containing the process name and PID
 - Preserves native pasteboard representations such as UTF-8, RTF, HTML,
@@ -43,7 +45,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Discovers versioned plugin bundles from the app bundle and the user plugin
   directory, with manifest validation, per-plugin logs, search timeouts, and
   bounded automatic restart after a crash
-- No network access or analytics
+- No analytics or cloud service; network access is limited to plugin-requested
+  integrations such as the configured Clash controller
 - Configurable history retention, sensitive-content filtering, ignored source
   applications, and time-range clearing (favorites are preserved)
 
@@ -116,6 +119,10 @@ Reminder data is stored locally alongside the other Nexus application data.
 Open `Caffeinate`, choose an end time, and Nexus will keep both the display and Mac
 awake until then. Run `Decaffeinate` from the same plugin to end the session early.
 
+Open `Clash` to inspect and switch between Rule, Global, and Direct modes. Configure
+the HTTP `external-controller` address and optional `secret` in the Clash settings
+pane. The default controller is `http://127.0.0.1:9090`.
+
 Open the `Menu Bar` item to search commands from every submenu of the application
 that was focused before Nexus opened. Results include their complete menu path, such
 as `File › New Window`; selecting one restores the application and performs that
@@ -147,6 +154,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
+- `plugins/clash`: Clash/Mihomo External Controller mode status and switching
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/reminders`: persistent reminders and background notification delivery

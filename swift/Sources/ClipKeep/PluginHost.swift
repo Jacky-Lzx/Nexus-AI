@@ -217,6 +217,7 @@ final class SearchCoordinator {
         self.descriptors = descriptors
         ClipboardPreference.registerDefaults()
         CalendarPreference.registerDefaults()
+        ClashPreference.registerDefaults()
         for plugin in descriptors where isEnabled(plugin.id) {
             start(plugin)
         }
@@ -471,6 +472,7 @@ final class SearchCoordinator {
         switch pluginId {
         case "io.clipkeep.clipboard": ClipboardPreference.pluginSettings
         case "io.clipkeep.calendar": CalendarPreference.pluginSettings
+        case "io.clipkeep.clash": ClashPreference.pluginSettings
         case "io.clipkeep.applications", "io.clipkeep.system-commands":
             PluginItemPreference.pluginSettings(for: pluginId)
         default: [:]

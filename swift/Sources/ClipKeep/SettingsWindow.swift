@@ -187,6 +187,8 @@ final class SettingsWindowController: NSWindowController,
               let identifier = field.identifier?.rawValue else { return }
         if identifier.hasPrefix("pluginMainItemName:") {
             changePluginMainItemName(field)
+        } else if [ClashPreference.controllerURL, ClashPreference.secret].contains(identifier) {
+            changeClashSetting(field)
         } else if [ClipboardPreference.terminalExecutable, ClipboardPreference.editorExecutable]
             .contains(identifier) {
             changeExternalEditorPath(field)
@@ -245,6 +247,8 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Evaluate expressions and paste the result"
         case "io.clipkeep.calendar":
             pluginDescription = "Read-only access to your upcoming calendar events"
+        case "io.clipkeep.clash":
+            pluginDescription = "View and switch the routing mode of a local Clash or Mihomo controller"
         case "io.clipkeep.kill-process":
             pluginDescription = "Find running processes and terminate them after confirmation"
         case "io.clipkeep.menu-bar":
@@ -427,6 +431,36 @@ final class SettingsWindowController: NSWindowController,
                 title: "Event Range",
                 description: "How far ahead to include events",
                 control: days
+            ))
+        } else if plugin.id == "io.clipkeep.clash" {
+            let controller = NSTextField(
+                string: UserDefaults.standard.string(forKey: ClashPreference.controllerURL)
+                    ?? "http://127.0.0.1:9090"
+            )
+            controller.placeholderString = "http://127.0.0.1:9090"
+            controller.identifier = NSUserInterfaceItemIdentifier(ClashPreference.controllerURL)
+            controller.target = self
+            controller.action = #selector(changeClashSetting(_:))
+            controller.delegate = self
+            controller.widthAnchor.constraint(equalToConstant: 210).isActive = true
+            options.addArrangedSubview(settingRow(
+                title: "External Controller",
+                description: "HTTP address configured by external-controller",
+                control: controller
+            ))
+
+            let secret = NSSecureTextField()
+            secret.stringValue = UserDefaults.standard.string(forKey: ClashPreference.secret) ?? ""
+            secret.placeholderString = "Optional"
+            secret.identifier = NSUserInterfaceItemIdentifier(ClashPreference.secret)
+            secret.target = self
+            secret.action = #selector(changeClashSetting(_:))
+            secret.delegate = self
+            secret.widthAnchor.constraint(equalToConstant: 210).isActive = true
+            options.addArrangedSubview(settingRow(
+                title: "Secret",
+                description: "Bearer secret configured by Clash or Mihomo",
+                control: secret
             ))
         } else {
             let capabilities = NSTextField(labelWithString: plugin.capabilities.joined(separator: ", "))
@@ -679,6 +713,15 @@ final class SettingsWindowController: NSWindowController,
         guard choices.indices.contains(sender.indexOfSelectedItem) else { return }
         UserDefaults.standard.set(choices[sender.indexOfSelectedItem], forKey: CalendarPreference.futureDays)
         coordinator.reloadSettings(for: "io.clipkeep.calendar")
+    }
+
+    @objc private func changeClashSetting(_ sender: NSTextField) {
+        guard let key = sender.identifier?.rawValue else { return }
+        let value = key == ClashPreference.controllerURL
+            ? sender.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            : sender.stringValue
+        UserDefaults.standard.set(value, forKey: key)
+        coordinator.reloadSettings(for: "io.clipkeep.clash")
     }
 }
 

@@ -166,6 +166,26 @@ enum CalendarPreference {
     }
 }
 
+enum ClashPreference {
+    static let controllerURL = "clash.controllerURL"
+    static let secret = "clash.secret"
+
+    static func registerDefaults() {
+        UserDefaults.standard.register(defaults: [
+            controllerURL: "http://127.0.0.1:9090",
+            secret: "",
+        ])
+    }
+
+    static var pluginSettings: [String: String] {
+        [
+            "controller_url": UserDefaults.standard.string(forKey: controllerURL)
+                ?? "http://127.0.0.1:9090",
+            "secret": UserDefaults.standard.string(forKey: secret) ?? "",
+        ]
+    }
+}
+
 struct SearchResult: Codable {
     let pluginId: String
     let id: String
@@ -268,6 +288,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.caffeinate": "cup.and.saucer.fill"
         case "io.clipkeep.calculator": "function"
         case "io.clipkeep.calendar": "calendar"
+        case "io.clipkeep.clash": "network"
         case "io.clipkeep.kill-process": "xmark.circle"
         case "io.clipkeep.menu-bar": "menubar.rectangle"
         case "io.clipkeep.reminders": "bell.badge"
@@ -320,6 +341,13 @@ private let fallbackBuiltInPlugins = [
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-calendar"),
         defaultEnabled: true, defaultIncludedInGlobalSearch: false,
         capabilities: ["calendar.read", "applications.open"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.clash", name: "Clash", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-clash",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-clash"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: false,
+        capabilities: ["network.local", "proxy.mode.read", "proxy.mode.write"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.kill-process", name: "Kill Process", version: "0.1.0", protocolVersion: 1,
