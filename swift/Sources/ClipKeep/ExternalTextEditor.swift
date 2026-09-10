@@ -57,15 +57,15 @@ final class ExternalTextEditor {
                 editor.path,
             ]
             if text.hasSuffix("\n") {
-                editorArguments += ["-c", "setlocal nofixeol"]
-            } else {
-                // Run after user BufWritePre hooks so Vim cannot synthesize an EOL.
-                // A user-added empty final line is still serialized as a real newline.
-                editorArguments += [
-                    "-c", "setlocal noendofline nofixeol",
-                    "-c", "autocmd BufWritePre <buffer> setlocal noendofline nofixeol",
-                ]
+                // Turn Vim's implicit EOF newline into an editable final empty line.
+                editorArguments += ["-c", "call append(line('$'), '')"]
             }
+            // Run after user BufWritePre hooks so Vim cannot synthesize an EOL.
+            // With no implicit EOF newline, empty final lines map exactly to \n bytes.
+            editorArguments += [
+                "-c", "setlocal noendofline nofixeol nomodified",
+                "-c", "autocmd BufWritePre <buffer> setlocal noendofline nofixeol",
+            ]
             editorArguments.append(file.path)
             process.arguments = editorArguments
             process.terminationHandler = { [weak self] process in
