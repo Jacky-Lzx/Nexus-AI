@@ -192,6 +192,7 @@ final class SearchCoordinator {
     private var currentQuery = ""
     private var currentPluginIds: Set<String> = []
     private var currentSearchIsGlobal = true
+    private var currentShowsAllPluginItems = false
     private var queryId: UInt64 = 0
     private var requestId: UInt64 = 0
     private var actionCompletions: [UInt64: (pluginId: String, completion: (Bool) -> Void)] = [:]
@@ -287,18 +288,32 @@ final class SearchCoordinator {
         )
     }
 
+    func searchPluginEntries(_ query: String, preservingPublishedResults: Bool = false) {
+        search(
+            query,
+            pluginIds: [],
+            isGlobal: false,
+            preservingPublishedResults: preservingPublishedResults,
+            showsAllPluginItems: true
+        )
+    }
+
     private func search(
         _ query: String,
         pluginIds: [String],
         isGlobal: Bool,
-        preservingPublishedResults: Bool
+        preservingPublishedResults: Bool,
+        showsAllPluginItems: Bool = false
     ) {
         let requestedPluginIds = Set(pluginIds)
         let availablePluginIds = requestedPluginIds.filter { processes[$0] != nil }
-        let targetChanged = currentPluginIds != requestedPluginIds || currentSearchIsGlobal != isGlobal
+        let targetChanged = currentPluginIds != requestedPluginIds
+            || currentSearchIsGlobal != isGlobal
+            || currentShowsAllPluginItems != showsAllPluginItems
         currentQuery = query
         currentPluginIds = requestedPluginIds
         currentSearchIsGlobal = isGlobal
+        currentShowsAllPluginItems = showsAllPluginItems
         queryId += 1
         pendingSearches.removeAll()
         stagedResultsByPlugin.removeAll()
@@ -522,7 +537,9 @@ final class SearchCoordinator {
     }
 
     private func repeatCurrentSearch() {
-        if currentSearchIsGlobal {
+        if currentShowsAllPluginItems {
+            searchPluginEntries(currentQuery)
+        } else if currentSearchIsGlobal {
             searchGlobal(currentQuery)
         } else if let pluginId = currentPluginIds.first {
             search(currentQuery, pluginId: pluginId)
@@ -550,6 +567,11 @@ final class SearchCoordinator {
 
         if currentSearchIsGlobal {
             results.append(contentsOf: mainItemResults())
+            if let pluginsResult = pluginsRouteResult() {
+                results.append(pluginsResult)
+            }
+        } else if currentShowsAllPluginItems {
+            results.append(contentsOf: pluginEntryResults(includeGlobalSearchPlugins: true))
         }
 
         results.sort {
@@ -560,8 +582,14 @@ final class SearchCoordinator {
     }
 
     private func mainItemResults() -> [SearchResult] {
+        pluginEntryResults(includeGlobalSearchPlugins: false)
+    }
+
+    private func pluginEntryResults(includeGlobalSearchPlugins: Bool) -> [SearchResult] {
         descriptors.compactMap { descriptor in
-            guard isEnabled(descriptor.id), !isIncludedInGlobalSearch(descriptor.id) else { return nil }
+            guard isEnabled(descriptor.id),
+                  includeGlobalSearchPlugins || !isIncludedInGlobalSearch(descriptor.id)
+            else { return nil }
             let itemName = mainItemName(for: descriptor)
             guard let score = mainItemScore(
                 query: currentQuery,
@@ -582,6 +610,26 @@ final class SearchCoordinator {
                 actions: []
             )
         }
+    }
+
+    private func pluginsRouteResult() -> SearchResult? {
+        guard let score = mainItemScore(query: currentQuery, candidates: ["Plugins", "Plugin"]) else {
+            return nil
+        }
+        return SearchResult(
+            pluginId: "io.clipkeep.plugins",
+            id: "host-route:plugins",
+            title: "Plugins",
+            subtitle: "Browse all plugins",
+            preview: "Open the plugin browser",
+            kind: .command,
+            score: score + 200,
+            metadata: [
+                "route_mode": "plugins",
+                "symbol_name": "puzzlepiece.extension.fill",
+            ],
+            actions: []
+        )
     }
 
     private func mainItemScore(query: String, candidates: [String]) -> Double? {

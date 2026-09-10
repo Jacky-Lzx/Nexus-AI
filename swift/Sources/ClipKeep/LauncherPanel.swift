@@ -180,9 +180,11 @@ final class LauncherPanelController: NSWindowController,
 
     init(coordinator: SearchCoordinator) {
         self.coordinator = coordinator
-        pluginNamesById = Dictionary(
+        var pluginNames = Dictionary(
             uniqueKeysWithValues: coordinator.descriptors.map { ($0.id, $0.name) }
         )
+        pluginNames["io.clipkeep.plugins"] = "Nexus"
+        pluginNamesById = pluginNames
         let panel = LauncherPanel(
             contentRect: NSRect(x: 0, y: 0, width: Layout.width, height: Layout.collapsedHeight),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -514,7 +516,7 @@ final class LauncherPanelController: NSWindowController,
 
     private var showsPluginNameInCurrentMode: Bool {
         switch searchMode {
-        case .clipboard:
+        case .plugins, .clipboard:
             false
         case let .plugin(plugin):
             plugin.id != "io.clipkeep.kill-process"
@@ -530,7 +532,9 @@ final class LauncherPanelController: NSWindowController,
 
     @objc private func openSelected() {
         guard let result = selectedResult else { return }
-        if result.kind == .command,
+        if result.metadata["route_mode"] == "plugins" {
+            switchSearchMode(to: .plugins)
+        } else if result.kind == .command,
            let pluginId = result.metadata["route_plugin_id"],
            coordinator.isEnabled(pluginId),
            let plugin = coordinator.descriptors.first(where: { $0.id == pluginId }) {
@@ -807,7 +811,7 @@ final class LauncherPanelController: NSWindowController,
                 && coordinator.isIncludedInGlobalSearch(pluginId)
         case let .plugin(plugin):
             needsMenuBar = plugin.id == pluginId && coordinator.isEnabled(pluginId)
-        case .clipboard:
+        case .plugins, .clipboard:
             needsMenuBar = false
         }
         guard needsMenuBar, ensureAccessibilityPermission(), let previousApplication else { return }
@@ -975,6 +979,8 @@ final class LauncherPanelController: NSWindowController,
         switch searchMode {
         case .global:
             coordinator.searchGlobal(query, preservingPublishedResults: preservingResults)
+        case .plugins:
+            coordinator.searchPluginEntries(query, preservingPublishedResults: preservingResults)
         case .clipboard:
             coordinator.search(
                 query,

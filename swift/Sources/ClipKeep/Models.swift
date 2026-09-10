@@ -14,12 +14,14 @@ enum ImagePreviewQuality: String, CaseIterable {
 
 enum SearchMode: Equatable {
     case global
+    case plugins
     case clipboard
     case plugin(PluginDescriptor)
 
     var placeholder: String {
         switch self {
         case .global: "Search Nexus…"
+        case .plugins: "Search plugins…"
         case .clipboard: "Search clipboard history…"
         case let .plugin(plugin): "Search \(plugin.name)…"
         }
@@ -28,6 +30,7 @@ enum SearchMode: Equatable {
     var title: String {
         switch self {
         case .global: "Nexus"
+        case .plugins: "Plugins"
         case .clipboard: "Clipboard History"
         case let .plugin(plugin): plugin.name
         }
@@ -37,7 +40,7 @@ enum SearchMode: Equatable {
     var expandsWhenEmpty: Bool {
         switch self {
         case .global: false
-        case .clipboard, .plugin: true
+        case .plugins, .clipboard, .plugin: true
         }
     }
 }

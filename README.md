@@ -100,6 +100,8 @@ cross-platform even when another native frontend is added later.
 
 Press `Command-Shift-Space` to search applications, calculator results, and
 system commands together, or `Command-Shift-C` to search clipboard history.
+Search for `plugin` or `plugins` in the main window to open a searchable list of
+every enabled plugin, including plugins whose results already participate in global search.
 Calendar results can be added to the combined search in Settings; Clipboard is
 kept out of it and remains available through its shortcut or the existing
 "Clipboard History" result. Escape and focus loss hide the panel without stopping
