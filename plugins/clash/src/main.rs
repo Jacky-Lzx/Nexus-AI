@@ -7,11 +7,14 @@ use std::{
     collections::BTreeMap,
     io::{self, Read, Write},
     net::{TcpStream, ToSocketAddrs},
+    os::unix::net::UnixStream,
+    path::Path,
     time::Duration,
 };
 
 const PLUGIN_ID: &str = "io.clipkeep.clash";
 const DEFAULT_CONTROLLER: &str = "http://127.0.0.1:9090";
+const DEFAULT_UNIX_SOCKET: &str = "/tmp/verge/verge-mihomo.sock";
 
 fn main() -> io::Result<()> {
     run_plugin(ClashPlugin::default())
@@ -80,6 +83,7 @@ impl ClashMode {
 struct ClashPlugin {
     controller: String,
     secret: String,
+    unix_socket: String,
     current_mode: Option<ClashMode>,
     last_error: Option<String>,
 }
@@ -89,6 +93,7 @@ impl Default for ClashPlugin {
         Self {
             controller: DEFAULT_CONTROLLER.into(),
             secret: String::new(),
+            unix_socket: DEFAULT_UNIX_SOCKET.into(),
             current_mode: None,
             last_error: None,
         }
@@ -97,7 +102,8 @@ impl Default for ClashPlugin {
 
 impl ClashPlugin {
     fn refresh_mode(&mut self) {
-        match ControllerClient::new(&self.controller, &self.secret).and_then(|client| client.mode())
+        match ControllerClient::new(&self.controller, &self.secret, &self.unix_socket)
+            .and_then(|client| client.mode())
         {
             Ok(mode) => {
                 self.current_mode = Some(mode);
@@ -111,7 +117,7 @@ impl ClashPlugin {
     }
 
     fn set_mode(&mut self, mode: ClashMode) -> Result<Option<String>, String> {
-        ControllerClient::new(&self.controller, &self.secret)?.set_mode(mode)?;
+        ControllerClient::new(&self.controller, &self.secret, &self.unix_socket)?.set_mode(mode)?;
         self.current_mode = Some(mode);
         self.last_error = None;
         Ok(Some(format!("Clash mode changed to {}", mode.title())))
@@ -154,9 +160,17 @@ impl Plugin for ClashPlugin {
             .trim_end_matches('/')
             .to_owned();
         let secret = settings.get("secret").cloned().unwrap_or_default();
-        let changed = controller != self.controller || secret != self.secret;
+        let unix_socket = settings
+            .get("unix_socket")
+            .map(|value| value.trim())
+            .unwrap_or(DEFAULT_UNIX_SOCKET)
+            .to_owned();
+        let changed = controller != self.controller
+            || secret != self.secret
+            || unix_socket != self.unix_socket;
         self.controller = controller;
         self.secret = secret;
+        self.unix_socket = unix_socket;
         if changed {
             self.current_mode = None;
             self.last_error = None;
@@ -236,11 +250,15 @@ struct ControllerClient {
     host_header: String,
     base_path: String,
     secret: String,
+    unix_socket: String,
 }
 
 impl ControllerClient {
-    fn new(controller: &str, secret: &str) -> Result<Self, String> {
-        if controller.contains(['\r', '\n']) || secret.contains(['\r', '\n']) {
+    fn new(controller: &str, secret: &str, unix_socket: &str) -> Result<Self, String> {
+        if controller.contains(['\r', '\n'])
+            || secret.contains(['\r', '\n'])
+            || unix_socket.contains(['\r', '\n'])
+        {
             return Err("Clash controller settings contain invalid characters".into());
         }
         let rest = controller
@@ -266,6 +284,7 @@ impl ControllerClient {
             host_header: authority.into(),
             base_path: path.trim_matches('/').into(),
             secret: secret.into(),
+            unix_socket: unix_socket.into(),
         })
     }
 
@@ -285,6 +304,23 @@ impl ControllerClient {
     }
 
     fn request(&self, method: &str, body: Option<&[u8]>) -> Result<Vec<u8>, String> {
+        let timeout = Duration::from_millis(800);
+        let mut unix_error = None;
+        if !self.unix_socket.is_empty() && Path::new(&self.unix_socket).exists() {
+            match UnixStream::connect(&self.unix_socket) {
+                Ok(mut stream) => {
+                    stream
+                        .set_read_timeout(Some(timeout))
+                        .map_err(|error| format!("Could not configure Clash socket: {error}"))?;
+                    stream
+                        .set_write_timeout(Some(timeout))
+                        .map_err(|error| format!("Could not configure Clash socket: {error}"))?;
+                    return self.exchange(&mut stream, method, body, false);
+                }
+                Err(error) => unix_error = Some(error.to_string()),
+            }
+        }
+
         let mut addresses = self
             .address
             .to_socket_addrs()
@@ -292,9 +328,16 @@ impl ControllerClient {
         let address = addresses
             .next()
             .ok_or("Could not resolve Clash controller")?;
-        let timeout = Duration::from_millis(800);
-        let mut stream = TcpStream::connect_timeout(&address, timeout)
-            .map_err(|error| format!("Could not connect to Clash: {error}"))?;
+        let mut stream = TcpStream::connect_timeout(&address, timeout).map_err(|error| {
+            unix_error.map_or_else(
+                || format!("Could not connect to Clash: {error}"),
+                |socket_error| {
+                    format!(
+                        "Could not connect to Clash socket ({socket_error}) or controller ({error})"
+                    )
+                },
+            )
+        })?;
         stream
             .set_read_timeout(Some(timeout))
             .map_err(|error| format!("Could not configure Clash connection: {error}"))?;
@@ -302,6 +345,16 @@ impl ControllerClient {
             .set_write_timeout(Some(timeout))
             .map_err(|error| format!("Could not configure Clash connection: {error}"))?;
 
+        self.exchange(&mut stream, method, body, true)
+    }
+
+    fn exchange(
+        &self,
+        stream: &mut (impl Read + Write),
+        method: &str,
+        body: Option<&[u8]>,
+        include_authorization: bool,
+    ) -> Result<Vec<u8>, String> {
         let path = if self.base_path.is_empty() {
             "/configs".to_owned()
         } else {
@@ -311,7 +364,7 @@ impl ControllerClient {
             "{method} {path} HTTP/1.1\r\nHost: {}\r\nAccept: application/json\r\nConnection: close\r\n",
             self.host_header
         );
-        if !self.secret.is_empty() {
+        if include_authorization && !self.secret.is_empty() {
             request.push_str(&format!("Authorization: Bearer {}\r\n", self.secret));
         }
         if let Some(body) = body {
@@ -390,7 +443,13 @@ fn decode_chunked(mut input: &[u8]) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{net::TcpListener, thread};
+    use std::{
+        fs,
+        net::TcpListener,
+        os::unix::net::UnixListener,
+        thread,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn mock_server(status: &str, body: &'static str) -> (String, thread::JoinHandle<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -432,7 +491,7 @@ mod tests {
     #[test]
     fn reads_current_mode_with_bearer_secret() {
         let (url, server) = mock_server("200 OK", r#"{"mode":"rule"}"#);
-        let client = ControllerClient::new(&url, "hello").unwrap();
+        let client = ControllerClient::new(&url, "hello", "").unwrap();
         assert_eq!(client.mode().unwrap(), ClashMode::Rule);
         let request = server.join().unwrap();
         assert!(request.starts_with("GET /configs HTTP/1.1"));
@@ -442,7 +501,7 @@ mod tests {
     #[test]
     fn patches_selected_mode() {
         let (url, server) = mock_server("204 No Content", "");
-        let client = ControllerClient::new(&url, "").unwrap();
+        let client = ControllerClient::new(&url, "", "").unwrap();
         client.set_mode(ClashMode::Direct).unwrap();
         let request = server.join().unwrap();
         assert!(request.starts_with("PATCH /configs HTTP/1.1"));
@@ -451,6 +510,44 @@ mod tests {
 
     #[test]
     fn rejects_non_http_controller_urls() {
-        assert!(ControllerClient::new("https://127.0.0.1:9090", "").is_err());
+        assert!(ControllerClient::new("https://127.0.0.1:9090", "", "").is_err());
+    }
+
+    #[test]
+    fn prefers_clash_verge_unix_socket_without_authorization() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "nexus-clash-test-{}-{unique}.sock",
+            std::process::id()
+        ));
+        let listener = UnixListener::bind(&path).unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 2048];
+            let length = stream.read(&mut request).unwrap();
+            let request = String::from_utf8_lossy(&request[..length]).into_owned();
+            let body = r#"{"mode":"global"}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+            request
+        });
+        let client = ControllerClient::new(
+            "http://127.0.0.1:1",
+            "must-not-be-sent",
+            path.to_str().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(client.mode().unwrap(), ClashMode::Global);
+        let request = server.join().unwrap();
+        assert!(request.starts_with("GET /configs HTTP/1.1"));
+        assert!(!request.contains("Authorization:"));
+        fs::remove_file(path).unwrap();
     }
 }

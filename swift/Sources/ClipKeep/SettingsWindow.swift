@@ -187,7 +187,11 @@ final class SettingsWindowController: NSWindowController,
               let identifier = field.identifier?.rawValue else { return }
         if identifier.hasPrefix("pluginMainItemName:") {
             changePluginMainItemName(field)
-        } else if [ClashPreference.controllerURL, ClashPreference.secret].contains(identifier) {
+        } else if [
+            ClashPreference.controllerURL,
+            ClashPreference.secret,
+            ClashPreference.unixSocket,
+        ].contains(identifier) {
             changeClashSetting(field)
         } else if [ClipboardPreference.terminalExecutable, ClipboardPreference.editorExecutable]
             .contains(identifier) {
@@ -433,6 +437,22 @@ final class SettingsWindowController: NSWindowController,
                 control: days
             ))
         } else if plugin.id == "io.clipkeep.clash" {
+            let unixSocket = NSTextField(
+                string: UserDefaults.standard.string(forKey: ClashPreference.unixSocket)
+                    ?? "/tmp/verge/verge-mihomo.sock"
+            )
+            unixSocket.placeholderString = "/tmp/verge/verge-mihomo.sock"
+            unixSocket.identifier = NSUserInterfaceItemIdentifier(ClashPreference.unixSocket)
+            unixSocket.target = self
+            unixSocket.action = #selector(changeClashSetting(_:))
+            unixSocket.delegate = self
+            unixSocket.widthAnchor.constraint(equalToConstant: 210).isActive = true
+            options.addArrangedSubview(settingRow(
+                title: "Clash Verge Socket",
+                description: "Preferred local socket; leave empty to use the HTTP controller",
+                control: unixSocket
+            ))
+
             let controller = NSTextField(
                 string: UserDefaults.standard.string(forKey: ClashPreference.controllerURL)
                     ?? "http://127.0.0.1:9090"

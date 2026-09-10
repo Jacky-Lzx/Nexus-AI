@@ -169,11 +169,13 @@ enum CalendarPreference {
 enum ClashPreference {
     static let controllerURL = "clash.controllerURL"
     static let secret = "clash.secret"
+    static let unixSocket = "clash.unixSocket"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             controllerURL: "http://127.0.0.1:9090",
             secret: "",
+            unixSocket: "/tmp/verge/verge-mihomo.sock",
         ])
     }
 
@@ -182,6 +184,8 @@ enum ClashPreference {
             "controller_url": UserDefaults.standard.string(forKey: controllerURL)
                 ?? "http://127.0.0.1:9090",
             "secret": UserDefaults.standard.string(forKey: secret) ?? "",
+            "unix_socket": UserDefaults.standard.string(forKey: unixSocket)
+                ?? "/tmp/verge/verge-mihomo.sock",
         ]
     }
 }

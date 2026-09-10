@@ -121,7 +121,8 @@ awake until then. Run `Decaffeinate` from the same plugin to end the session ear
 
 Open `Clash` to inspect and switch between Rule, Global, and Direct modes. Configure
 the HTTP `external-controller` address and optional `secret` in the Clash settings
-pane. The default controller is `http://127.0.0.1:9090`.
+pane. Clash Verge Rev is detected through `/tmp/verge/verge-mihomo.sock` first;
+the default HTTP fallback is `http://127.0.0.1:9090`.
 
 Open the `Menu Bar` item to search commands from every submenu of the application
 that was focused before Nexus opened. Results include their complete menu path, such
