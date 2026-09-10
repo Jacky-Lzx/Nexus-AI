@@ -6,19 +6,26 @@ struct MenuBarSnapshotItem: Codable {
     let title: String
     let subtitle: String
     let path: String
+    let pathComponents: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, subtitle, path
+        case pathComponents = "path_components"
+    }
+}
+
+enum MenuBarPressResult {
+    case success
+    case menuNotFound
+    case actionFailed(AXError)
 }
 
 final class MenuBarProvider {
-    private var targetProcessIdentifier: pid_t?
-    private var elementsByID: [String: AXUIElement] = [:]
-
     func items(for application: NSRunningApplication) -> [MenuBarSnapshotItem] {
         guard let menuBar = menuBar(for: application.processIdentifier),
               let children = attribute(kAXChildrenAttribute, from: menuBar) as? [AXUIElement]
         else { return [] }
 
-        targetProcessIdentifier = application.processIdentifier
-        elementsByID.removeAll(keepingCapacity: true)
         var items: [MenuBarSnapshotItem] = []
         var nextID = 0
         for (index, item) in children.enumerated() {
@@ -39,11 +46,29 @@ final class MenuBarProvider {
         return items
     }
 
-    func pressItem(processIdentifier: pid_t, id: String) -> Bool {
-        guard targetProcessIdentifier == processIdentifier, let element = elementsByID[id] else {
-            return false
+    func pressItem(processIdentifier: pid_t, path: [String]) -> MenuBarPressResult {
+        guard let topLevelTitle = path.first,
+              let menuBar = menuBar(for: processIdentifier),
+              let topLevelItem = descendants(of: menuBar).enumerated().first(where: { index, item in
+                  normalizedTopLevelTitle(of: item, index: index) == topLevelTitle
+              })?.element,
+              var menu = descendants(of: topLevelItem).first(where: { role(of: $0) == kAXMenuRole })
+        else { return .menuNotFound }
+
+        for (offset, title) in path.dropFirst().enumerated() {
+            guard let item = descendants(of: menu).first(where: {
+                role(of: $0) == kAXMenuItemRole
+                    && (attribute(kAXTitleAttribute, from: $0) as? String) == title
+            }) else { return .menuNotFound }
+            if offset == path.count - 2 {
+                let error = AXUIElementPerformAction(item, kAXPressAction as CFString)
+                return error == .success ? .success : .actionFailed(error)
+            }
+            guard let submenu = descendants(of: item).first(where: { role(of: $0) == kAXMenuRole })
+            else { return .menuNotFound }
+            menu = submenu
         }
-        return AXUIElementPerformAction(element, kAXPressAction as CFString) == .success
+        return .menuNotFound
     }
 
     private func collectItems(
@@ -72,12 +97,12 @@ final class MenuBarProvider {
             } else if (attribute(kAXEnabledAttribute, from: element) as? Bool) != false {
                 let id = "\(processIdentifier):\(nextID)"
                 nextID += 1
-                elementsByID[id] = element
                 items.append(MenuBarSnapshotItem(
                     id: id,
                     title: title,
                     subtitle: applicationName,
-                    path: path.joined(separator: " › ")
+                    path: path.joined(separator: " › "),
+                    pathComponents: path
                 ))
             }
         }
@@ -89,6 +114,11 @@ final class MenuBarProvider {
 
     private func role(of element: AXUIElement) -> String {
         attribute(kAXRoleAttribute, from: element) as? String ?? ""
+    }
+
+    private func normalizedTopLevelTitle(of element: AXUIElement, index: Int) -> String {
+        let title = attribute(kAXTitleAttribute, from: element) as? String ?? ""
+        return title.isEmpty && index == 0 ? "Apple" : title
     }
 
     private func menuBar(for processIdentifier: pid_t) -> AXUIElement? {

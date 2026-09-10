@@ -627,7 +627,8 @@ final class LauncherPanelController: NSWindowController,
     private func performMenuBarPress(on result: SearchResult) {
         guard ensureAccessibilityPermission(),
               let processIdentifier = result.metadata["target_pid"].flatMap(Int32.init),
-              let menuItemID = result.metadata["menu_item_id"]
+              let encodedPath = result.metadata["menu_path"]?.data(using: .utf8),
+              let menuPath = try? JSONDecoder().decode([String].self, from: encodedPath)
         else { return }
         let application = previousApplication?.processIdentifier == processIdentifier
             ? previousApplication
@@ -638,15 +639,88 @@ final class LauncherPanelController: NSWindowController,
         }
         previousApplication = application
         hide(restorePreviousApplication: true) { [weak self] in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                guard let self else { return }
-                if !self.menuBarProvider.pressItem(
-                    processIdentifier: processIdentifier,
-                    id: menuItemID
-                ) {
-                    self.coordinator.onStatusChanged?("Could not perform the selected menu command")
-                }
+            self?.performMenuBarCommand(
+                path: menuPath,
+                in: application,
+                attemptsRemaining: 20
+            )
+        }
+    }
+
+    private func performMenuBarCommand(
+        path: [String],
+        in application: NSRunningApplication,
+        attemptsRemaining: Int
+    ) {
+        let processIdentifier = application.processIdentifier
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == processIdentifier else {
+            guard attemptsRemaining > 0 else {
+                NSLog(
+                    "Menu Bar: target application did not become frontmost: pid=%d path=%@",
+                    processIdentifier,
+                    path.joined(separator: " > ")
+                )
+                coordinator.onStatusChanged?("The target application did not become active")
+                return
             }
+            application.activate()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.performMenuBarCommand(
+                    path: path,
+                    in: application,
+                    attemptsRemaining: attemptsRemaining - 1
+                )
+            }
+            return
+        }
+
+        performMenuProviderRetry(
+            path: path,
+            in: application,
+            attemptsRemaining: attemptsRemaining
+        )
+    }
+
+    private func performMenuProviderRetry(
+        path: [String],
+        in application: NSRunningApplication,
+        attemptsRemaining: Int
+    ) {
+        let processIdentifier = application.processIdentifier
+        switch menuBarProvider.pressItem(processIdentifier: processIdentifier, path: path) {
+        case .success:
+            return
+        case .menuNotFound where attemptsRemaining > 0:
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.performMenuBarCommand(
+                    path: path,
+                    in: application,
+                    attemptsRemaining: attemptsRemaining - 1
+                )
+            }
+        case .menuNotFound:
+            NSLog(
+                "Menu Bar: command was not found after activation: pid=%d path=%@",
+                processIdentifier,
+                path.joined(separator: " > ")
+            )
+            coordinator.onStatusChanged?("The selected menu command is no longer available")
+        case .actionFailed where attemptsRemaining > 0:
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.performMenuBarCommand(
+                    path: path,
+                    in: application,
+                    attemptsRemaining: attemptsRemaining - 1
+                )
+            }
+        case let .actionFailed(error):
+            NSLog(
+                "Menu Bar: AXPress failed: pid=%d error=%d path=%@",
+                processIdentifier,
+                error.rawValue,
+                path.joined(separator: " > ")
+            )
+            coordinator.onStatusChanged?("The target application rejected the menu command")
         }
     }
 

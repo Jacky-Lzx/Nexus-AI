@@ -21,6 +21,7 @@ struct MenuBarItem {
     title: String,
     subtitle: String,
     path: String,
+    path_components: Vec<String>,
 }
 
 impl Plugin for MenuBarPlugin {
@@ -86,6 +87,10 @@ impl MenuBarItem {
             score,
             metadata: BTreeMap::from([
                 ("menu_item_id".into(), self.id.clone()),
+                (
+                    "menu_path".into(),
+                    serde_json::to_string(&self.path_components).unwrap_or_default(),
+                ),
                 ("symbol_name".into(), "menubar.rectangle".into()),
                 ("target_pid".into(), target_pid.to_string()),
             ]),
@@ -128,7 +133,7 @@ mod tests {
             ("target_pid".into(), "42".into()),
             (
                 "items".into(),
-                r#"[{"id":"42:1","title":"Open…","subtitle":"TextEdit","path":"File › Open…"}]"#
+                r#"[{"id":"42:1","title":"Open…","subtitle":"TextEdit","path":"File › Open…","path_components":["File","Open…"]}]"#
                     .into(),
             ),
         ]);
@@ -137,6 +142,7 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].metadata["target_pid"], "42");
         assert_eq!(results[0].metadata["menu_item_id"], "42:1");
+        assert_eq!(results[0].metadata["menu_path"], r#"["File","Open…"]"#);
         assert_eq!(results[0].title, "Open…");
     }
 }
