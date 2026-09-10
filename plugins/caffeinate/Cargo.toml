@@ -1,0 +1,9 @@
+[package]
+name = "clipkeep-plugin-caffeinate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol.workspace = true

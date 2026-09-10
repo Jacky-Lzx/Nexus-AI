@@ -101,6 +101,38 @@ private final class ReminderFormView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }
 
+private final class CaffeinateFormView: NSView {
+    private let datePicker = NSDatePicker()
+
+    var endDate: Date { datePicker.dateValue }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 360, height: 48))
+        let label = NSTextField(labelWithString: "Keep Awake Until")
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+
+        datePicker.datePickerStyle = .textFieldAndStepper
+        datePicker.datePickerElements = [.yearMonthDay, .hourMinute]
+        datePicker.minDate = Date(timeIntervalSinceNow: 60)
+        datePicker.dateValue = Date(timeIntervalSinceNow: 3_600)
+        datePicker.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(datePicker)
+
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.widthAnchor.constraint(equalToConstant: 112),
+            datePicker.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 8),
+            datePicker.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
+            datePicker.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+}
+
 private final class ResultsSplitView: NSSplitView {
     var showsDivider = true {
         didSet {
@@ -553,6 +585,10 @@ final class LauncherPanelController: NSWindowController,
             performReminderCreation(on: result)
             return
         }
+        if result.pluginId == "io.clipkeep.caffeinate", action.id == "start" {
+            performCaffeinate(on: result)
+            return
+        }
         if result.pluginId == "io.clipkeep.menu-bar", action.id == "press" {
             performMenuBarPress(on: result)
             return
@@ -625,6 +661,38 @@ final class LauncherPanelController: NSWindowController,
                 }
                 self.coordinator.execute(result, actionId: "create", input: input)
             }
+        }
+    }
+
+    private func performCaffeinate(on result: SearchResult) {
+        let form = CaffeinateFormView()
+        let alert = NSAlert()
+        alert.messageText = "Caffeinate"
+        alert.informativeText = "Choose when Nexus should allow the display and Mac to sleep again."
+        alert.alertStyle = .informational
+        alert.accessoryView = form
+        alert.addButton(withTitle: "Caffeinate")
+        alert.addButton(withTitle: "Cancel")
+        ignoreNextResign = true
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            window?.makeKey()
+            window?.makeFirstResponder(searchField)
+            return
+        }
+        let durationSeconds = Int(form.endDate.timeIntervalSinceNow.rounded(.up))
+        guard durationSeconds > 0 else {
+            coordinator.onStatusChanged?("Choose a future end time")
+            window?.makeKey()
+            window?.makeFirstResponder(searchField)
+            return
+        }
+        coordinator.execute(
+            result,
+            actionId: "start",
+            input: String(durationSeconds)
+        ) { [weak self] success in
+            guard let self, success else { return }
+            self.hide(restorePreviousApplication: true)
         }
     }
 

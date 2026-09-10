@@ -1,0 +1,8 @@
+id = "io.clipkeep.caffeinate"
+name = "Caffeinate"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-caffeinate"
+default_enabled = true
+include_in_global_search = false
+capabilities = ["system.prevent-sleep", "background"]

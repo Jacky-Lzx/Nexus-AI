@@ -4,6 +4,7 @@ members = [
     "crates/clipkeep-plugin-sdk",
     "crates/clipkeep-protocol",
     "plugins/applications",
+    "plugins/caffeinate",
     "plugins/calculator",
     "plugins/calendar",
     "plugins/clipboard",

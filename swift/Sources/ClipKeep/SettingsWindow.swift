@@ -239,6 +239,8 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Search, preview, and paste your clipboard history"
         case "io.clipkeep.applications":
             pluginDescription = "Quickly search and open applications installed on this Mac"
+        case "io.clipkeep.caffeinate":
+            pluginDescription = "Keep the display and Mac awake until a chosen time"
         case "io.clipkeep.calculator":
             pluginDescription = "Evaluate expressions and paste the result"
         case "io.clipkeep.calendar":

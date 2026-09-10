@@ -19,6 +19,7 @@ install -d "$bundle_dir/Contents/PlugIns"
 rm -f "$bundle_dir/Contents/MacOS/clipkeep" "$bundle_dir/Contents/MacOS/ClipKeep"
 install -m 755 target/swift/Nexus "$bundle_dir/Contents/MacOS/Nexus"
 applications_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.applications.clipkeepplugin"
+caffeinate_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.caffeinate.clipkeepplugin"
 clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
@@ -33,6 +34,10 @@ install -d "$clipboard_plugin/Contents/MacOS" "$clipboard_plugin/Contents/Resour
 install -m 755 target/release/clipkeep-plugin-applications "$applications_plugin/Contents/MacOS/clipkeep-plugin-applications"
 install -m 644 plugins/applications/plugin.toml "$applications_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Applications-Info.plist "$applications_plugin/Contents/Info.plist"
+install -d "$caffeinate_plugin/Contents/MacOS" "$caffeinate_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-caffeinate "$caffeinate_plugin/Contents/MacOS/clipkeep-plugin-caffeinate"
+install -m 644 plugins/caffeinate/plugin.toml "$caffeinate_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-Caffeinate-Info.plist "$caffeinate_plugin/Contents/Info.plist"
 install -m 755 target/release/clipkeep-plugin-clipboard "$clipboard_plugin/Contents/MacOS/clipkeep-plugin-clipboard"
 install -m 644 plugins/clipboard/plugin.toml "$clipboard_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Clipboard-Info.plist "$clipboard_plugin/Contents/Info.plist"
@@ -74,6 +79,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.applications \
         "$applications_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.caffeinate \
+        "$caffeinate_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.clipboard \
         "$clipboard_plugin"

@@ -209,6 +209,7 @@ struct PluginDescriptor: Equatable {
         switch id {
         case "io.clipkeep.clipboard": "clipboard"
         case "io.clipkeep.applications": "square.grid.2x2"
+        case "io.clipkeep.caffeinate": "cup.and.saucer.fill"
         case "io.clipkeep.calculator": "function"
         case "io.clipkeep.calendar": "calendar"
         case "io.clipkeep.kill-process": "xmark.circle"
@@ -231,6 +232,13 @@ private let fallbackBuiltInPlugins = [
         defaultEnabled: true,
         defaultIncludedInGlobalSearch: true,
         capabilities: ["applications.read", "applications.open", "background"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.caffeinate", name: "Caffeinate", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-caffeinate",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-caffeinate"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: false,
+        capabilities: ["system.prevent-sleep", "background"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.clipboard",
