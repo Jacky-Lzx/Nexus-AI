@@ -587,8 +587,8 @@ final class LauncherPanelController: NSWindowController,
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         if searchMode == .clipboard,
-           relevantModifiers == [.option, .shift],
-           event.charactersIgnoringModifiers?.lowercased() == "e",
+           relevantModifiers == [.command],
+           event.charactersIgnoringModifiers == "\r",
            let result = selectedResult,
            let action = result.actions.first(where: { $0.id == "edit" }) {
             perform(action, on: result)
