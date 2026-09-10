@@ -5,15 +5,15 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleDisplayName</key>
-    <string>ClipKeep</string>
+    <string>Nexus</string>
     <key>CFBundleExecutable</key>
-    <string>ClipKeep</string>
+    <string>Nexus</string>
     <key>CFBundleIdentifier</key>
     <string>io.clipkeep.ClipKeep</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>ClipKeep</string>
+    <string>Nexus</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -27,8 +27,8 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSCalendarsFullAccessUsageDescription</key>
-    <string>ClipKeep reads upcoming events to show them in the launcher.</string>
+    <string>Nexus reads upcoming events to show them in the launcher.</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>ClipKeep uses System Events only when you run a selected system command.</string>
+    <string>Nexus uses System Events only when you run a selected system command.</string>
 </dict>
 </plist>

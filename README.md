@@ -1,6 +1,6 @@
-# ClipKeep
+# Nexus
 
-ClipKeep is a local-first application launcher and clipboard history palette.
+Nexus is a local-first application launcher and clipboard history palette.
 Its native Swift/AppKit interface talks to process-isolated Rust plugins through
 a versioned JSON protocol. The current GUI is optimized for macOS; the Rust
 plugin protocol remains portable to future Windows and Linux frontends.
@@ -57,17 +57,17 @@ To create a normal macOS application bundle that can be moved into
 ```sh
 chmod +x scripts/package-macos.sh
 ./scripts/package-macos.sh
-open dist/ClipKeep.app
+open dist/Nexus.app
 ```
 
 For UI testing or scripted launch, an initial search can be supplied with
-`open -n dist/ClipKeep.app --args --query Safari`.
+`open -n dist/Nexus.app --args --query Safari`.
 
 The generated bundle is unsigned. On another Mac, Gatekeeper may require the
 user to right-click the app and choose **Open**. Public distribution should add
 Developer ID signing and notarization.
 
-Direct paste requires macOS Accessibility permission so ClipKeep can send the
+Direct paste requires macOS Accessibility permission so Nexus can send the
 `Command-V` keystroke to the previously focused application. The first direct
 paste attempt opens the system permission prompt; once enabled, choose the entry
 again to paste it.
@@ -90,7 +90,7 @@ the old ad-hoc build; subsequent signed builds retain the same designated requir
 To use an Apple Development or Developer ID identity instead, set
 `CLIPKEEP_CODESIGN_IDENTITY` to its certificate name when packaging.
 
-ClipKeep requires macOS 26 or later. Rust plugin executables can remain
+Nexus requires macOS 26 or later. Rust plugin executables can remain
 cross-platform even when another native frontend is added later.
 
 Press `Command-Shift-Space` to search applications, calculator results, and
@@ -99,7 +99,7 @@ Calendar results can be added to the combined search in Settings; Clipboard is
 kept out of it and remains available through its shortcut or the existing
 "Clipboard History" result. Escape and focus loss hide the panel without stopping
 its plugin processes. Use
-**Quit** in the bottom action bar to stop ClipKeep completely.
+**Quit** in the bottom action bar to stop Nexus completely.
 
 Encrypted history is stored in the platform application-data directory:
 
@@ -110,7 +110,7 @@ Encrypted history is stored in the platform application-data directory:
 ## Privacy note
 
 Clipboard history can contain passwords, images, files, and other sensitive
-content. ClipKeep never sends data over the network. History is encrypted at
+content. Nexus never sends data over the network. History is encrypted at
 rest, concealed/transient pasteboard data is ignored by default, and additional
 applications can be excluded by bundle identifier in Settings.
 
@@ -136,7 +136,7 @@ stops the process and unregisters its shortcut.
 ## Plugin bundles
 
 A plugin bundle is a directory ending in `.clipkeepplugin` that contains a Rust
-executable and `plugin.toml`. ClipKeep scans both `Contents/PlugIns` inside the
+executable and `plugin.toml`. Nexus scans both `Contents/PlugIns` inside the
 application and:
 
 ```text
@@ -160,5 +160,5 @@ Discovered plugins automatically receive a settings pane, enable switch,
 configurable shortcut, global-search inclusion switch, status-menu entry, and
 isolated process lifecycle. Clipboard History is deliberately excluded from the
 combined search regardless of its manifest and is only opened explicitly.
-Run `ClipKeep --list-plugins` against a built app to validate discovery. Plugin
+Run `Nexus --list-plugins` against a built app to validate discovery. Plugin
 stderr logs are written under the app-support `Logs` directory.

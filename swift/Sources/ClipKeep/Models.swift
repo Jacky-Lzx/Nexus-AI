@@ -19,7 +19,7 @@ enum SearchMode: Equatable {
 
     var placeholder: String {
         switch self {
-        case .global: "Search ClipKeep…"
+        case .global: "Search Nexus…"
         case .clipboard: "Search clipboard history…"
         case let .plugin(plugin): "Search \(plugin.name)…"
         }
@@ -27,7 +27,7 @@ enum SearchMode: Equatable {
 
     var title: String {
         switch self {
-        case .global: "ClipKeep"
+        case .global: "Nexus"
         case .clipboard: "Clipboard History"
         case let .plugin(plugin): plugin.name
         }

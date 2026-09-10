@@ -2,7 +2,12 @@
 set -eu
 
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-bundle_dir="$project_dir/dist/ClipKeep.app"
+bundle_dir="$project_dir/dist/Nexus.app"
+legacy_bundle_dir="$project_dir/dist/ClipKeep.app"
+
+if [ ! -e "$bundle_dir" ] && [ -d "$legacy_bundle_dir" ]; then
+    mv "$legacy_bundle_dir" "$bundle_dir"
+fi
 
 cd "$project_dir"
 MACOSX_DEPLOYMENT_TARGET=26.0 cargo build --workspace --release
@@ -11,8 +16,8 @@ install -d "$bundle_dir/Contents/MacOS"
 install -d "$bundle_dir/Contents/Resources"
 install -d "$bundle_dir/Contents/PlugIns"
 # Remove the executable name used by the former egui host when updating a bundle in place.
-rm -f "$bundle_dir/Contents/MacOS/clipkeep"
-install -m 755 target/swift/ClipKeep "$bundle_dir/Contents/MacOS/ClipKeep"
+rm -f "$bundle_dir/Contents/MacOS/clipkeep" "$bundle_dir/Contents/MacOS/ClipKeep"
+install -m 755 target/swift/Nexus "$bundle_dir/Contents/MacOS/Nexus"
 applications_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.applications.clipkeepplugin"
 clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"

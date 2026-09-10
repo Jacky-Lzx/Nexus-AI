@@ -5,7 +5,7 @@
     <key>CFBundleIdentifier</key>
     <string>io.clipkeep.ClipKeep.clipboard</string>
     <key>CFBundleName</key>
-    <string>ClipKeep Clipboard Plugin</string>
+    <string>Nexus Clipboard Plugin</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>

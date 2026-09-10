@@ -100,7 +100,7 @@ final class LauncherPanelController: NSWindowController,
     private let detailText = NSTextField(wrappingLabelWithString: "")
     private let detailImage = PreviewImageView()
     private let detailInfo = NSStackView()
-    private let statusLabel = NSTextField(labelWithString: "ClipKeep")
+    private let statusLabel = NSTextField(labelWithString: "Nexus")
     private var results: [SearchResult] = []
     private var expanded = false
     private var searchMode = SearchMode.global

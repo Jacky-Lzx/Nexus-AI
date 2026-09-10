@@ -60,7 +60,7 @@ impl CalendarPlugin {
         let (title, subtitle, action) = if denied {
             (
                 "Calendar Access Required",
-                "Allow ClipKeep to read events in System Settings",
+                "Allow Nexus to read events in System Settings",
                 Some(ResultAction {
                     id: "open-settings".into(),
                     title: "Open Privacy Settings".into(),

@@ -5,7 +5,7 @@
     <key>CFBundleIdentifier</key>
     <string>io.clipkeep.ClipKeep.applications</string>
     <key>CFBundleName</key>
-    <string>ClipKeep Applications Plugin</string>
+    <string>Nexus Applications Plugin</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>

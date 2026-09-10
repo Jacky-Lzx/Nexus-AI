@@ -46,8 +46,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "clipboard", accessibilityDescription: "ClipKeep")
-            button.toolTip = "ClipKeep"
+            button.image = NSImage(systemSymbolName: "command.circle", accessibilityDescription: "Nexus")
+            button.toolTip = "Nexus"
         }
         rebuildMenu()
     }
@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func rebuildMenu() {
         let menu = NSMenu()
         let globalSearch = menu.addItem(
-            withTitle: "Search ClipKeep  \(GlobalHotKey.shortcut(for: GlobalHotKey.globalSearchId)?.displayName ?? "")",
+            withTitle: "Search Nexus  \(GlobalHotKey.shortcut(for: GlobalHotKey.globalSearchId)?.displayName ?? "")",
             action: #selector(showGlobalSearch),
             keyEquivalent: ""
         )
@@ -94,7 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pluginsItem.submenu = pluginsMenu
         menu.addItem(pluginsItem)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit ClipKeep", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Nexus", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
         statusItem.menu = menu

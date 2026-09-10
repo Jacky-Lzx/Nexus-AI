@@ -75,7 +75,7 @@ final class SettingsWindowController: NSWindowController,
     }
 
     private func configure(_ window: NSWindow) {
-        window.title = "ClipKeep Settings"
+        window.title = "Nexus Settings"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
@@ -282,7 +282,7 @@ final class SettingsWindowController: NSWindowController,
             includeInGlobalSearch.action = #selector(changeGlobalSearchInclusion(_:))
             options.addArrangedSubview(settingRow(
                 title: "Include in Global Search",
-                description: "Mix this plugin's results into the main ClipKeep search",
+                description: "Mix this plugin's results into the main Nexus search",
                 control: includeInGlobalSearch
             ))
         }

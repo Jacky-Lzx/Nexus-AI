@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "ClipKeep",
+    name: "Nexus",
     platforms: [.macOS("26.0")],
     products: [
-        .executable(name: "ClipKeep", targets: ["ClipKeep"]),
+        .executable(name: "Nexus", targets: ["Nexus"]),
     ],
     targets: [
         .executableTarget(
-            name: "ClipKeep",
+            name: "Nexus",
             path: "swift/Sources/ClipKeep",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
