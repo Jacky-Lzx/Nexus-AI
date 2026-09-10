@@ -170,6 +170,8 @@ final class LauncherPanelController: NSWindowController,
     private var scrollTrailingConstraint: NSLayoutConstraint?
     private var presentationTopConstraint: NSLayoutConstraint?
     private var presentationHeightConstraint: NSLayoutConstraint?
+    private var contentTopConstraint: NSLayoutConstraint?
+    private var footerHeightConstraint: NSLayoutConstraint?
     private var presentationValueLabels: [(NSTextField, PluginPresentationItem)] = []
     private var presentationTimer: Timer?
     private var activeActionInput: ActiveActionInput?
@@ -354,6 +356,7 @@ final class LauncherPanelController: NSWindowController,
 
         content.translatesAutoresizingMaskIntoConstraints = false
         content.alphaValue = 0
+        content.isHidden = true
         root.addSubview(content)
         buildResults()
 
@@ -361,6 +364,7 @@ final class LauncherPanelController: NSWindowController,
             equalTo: searchContainer.bottomAnchor
         )
         presentationHeightConstraint = presentationContainer.heightAnchor.constraint(equalToConstant: 0)
+        contentTopConstraint = content.topAnchor.constraint(equalTo: presentationContainer.bottomAnchor)
         NSLayoutConstraint.activate([
             searchContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: Layout.outerInset),
             searchContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
@@ -385,7 +389,7 @@ final class LauncherPanelController: NSWindowController,
             presentationStack.leadingAnchor.constraint(equalTo: presentationContainer.leadingAnchor),
             presentationStack.trailingAnchor.constraint(equalTo: presentationContainer.trailingAnchor),
             presentationStack.bottomAnchor.constraint(equalTo: presentationContainer.bottomAnchor),
-            content.topAnchor.constraint(equalTo: presentationContainer.bottomAnchor, constant: Layout.contentSpacing),
+            contentTopConstraint!,
             content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
             content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Layout.outerInset),
             content.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -Layout.outerInset),
@@ -460,6 +464,7 @@ final class LauncherPanelController: NSWindowController,
             equalTo: listPane.trailingAnchor,
             constant: -8
         )
+        footerHeightConstraint = footer.heightAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
             splitView.topAnchor.constraint(equalTo: content.topAnchor),
             splitView.leadingAnchor.constraint(equalTo: content.leadingAnchor),
@@ -482,7 +487,7 @@ final class LauncherPanelController: NSWindowController,
             footer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             footer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             footer.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-            footer.heightAnchor.constraint(equalToConstant: 46),
+            footerHeightConstraint!,
             statusLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor, constant: 12),
             statusLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
         ])
@@ -1415,6 +1420,11 @@ final class LauncherPanelController: NSWindowController,
         guard expanded != shouldExpand || !animated else { return }
         expanded = shouldExpand
         guard let panel = window else { return }
+        contentTopConstraint?.constant = shouldExpand ? Layout.contentSpacing : 0
+        footerHeightConstraint?.constant = shouldExpand ? 46 : 0
+        if shouldExpand {
+            content.isHidden = false
+        }
         var frame = panel.frame
         let newHeight = shouldExpand ? Layout.expandedHeight : Layout.collapsedHeight
         frame.origin.y += frame.height - newHeight
@@ -1430,11 +1440,15 @@ final class LauncherPanelController: NSWindowController,
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 changes()
             }, completionHandler: { [weak self] in
+                if shouldExpand == false {
+                    self?.content.isHidden = true
+                }
                 self?.updateScrollerVisibility()
             })
         } else {
             content.alphaValue = shouldExpand ? 1 : 0
             presentationContainer.alphaValue = shouldExpand ? 1 : 0
+            content.isHidden = !shouldExpand
             panel.setFrame(frame, display: true)
             updateScrollerVisibility()
         }
