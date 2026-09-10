@@ -9,5 +9,5 @@
     <key>CFBundleExecutable</key><string>clipkeep-plugin-system-commands</string>
     <key>LSMinimumSystemVersion</key><string>26.0</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Nexus uses System Events only when you run a selected system command.</string>
+    <string>Nexus uses System Events or Finder only when you run a selected system command.</string>
 </dict></plist>

@@ -2,6 +2,7 @@ use clipkeep_plugin_sdk::{Plugin, run_plugin};
 use clipkeep_protocol::{ConfigurationItem, ResultAction, ResultKind, SearchResult};
 use std::{
     collections::{BTreeMap, HashSet},
+    ffi::c_void,
     io,
     process::{Command, ExitStatus},
 };
@@ -46,6 +47,55 @@ const COMMANDS: &[SystemCommand] = &[
         title: "Start Screen Saver",
         subtitle: "Start the macOS screen saver",
         keywords: "screen saver 屏幕保护",
+        destructive: false,
+    },
+    SystemCommand {
+        id: "mute",
+        title: "Toggle Mute",
+        subtitle: "Mute or unmute system audio",
+        keywords: "mute unmute audio sound volume 静音 取消静音 音量",
+        destructive: false,
+    },
+    SystemCommand {
+        id: "volume-up",
+        title: "Volume Up",
+        subtitle: "Increase the system audio volume",
+        keywords: "volume up increase audio sound 调高 增加 音量",
+        destructive: false,
+    },
+    SystemCommand {
+        id: "volume-down",
+        title: "Volume Down",
+        subtitle: "Decrease the system audio volume",
+        keywords: "volume down decrease audio sound 调低 减少 音量",
+        destructive: false,
+    },
+    SystemCommand {
+        id: "play-pause",
+        title: "Play/Pause",
+        subtitle: "Play or pause the current media session",
+        keywords: "play pause media music 播放 暂停 音乐",
+        destructive: false,
+    },
+    SystemCommand {
+        id: "previous-track",
+        title: "Previous Track",
+        subtitle: "Return to the previous media track",
+        keywords: "previous track song media music back 上一首 前一首 音乐",
+        destructive: false,
+    },
+    SystemCommand {
+        id: "next-track",
+        title: "Next Track",
+        subtitle: "Skip to the next media track",
+        keywords: "next track song media music skip 下一首 音乐",
+        destructive: false,
+    },
+    SystemCommand {
+        id: "eject-all",
+        title: "Eject All Mounted Disks",
+        subtitle: "Eject every mounted disk that can be removed safely",
+        keywords: "eject all mounted disk drive volume 弹出 所有 磁盘 移动硬盘 U盘",
         destructive: false,
     },
     SystemCommand {
@@ -116,22 +166,68 @@ impl Plugin for SystemCommandsPlugin {
         let id = result_id
             .strip_prefix("system-command:")
             .ok_or_else(|| "invalid system command result".to_owned())?;
-        let status = match id {
-            "lock" => apple_script("tell application \"System Events\" to keystroke \"q\" using {control down, command down}"),
-            "display-sleep" => Command::new("/usr/bin/pmset").arg("displaysleepnow").status(),
-            "screen-saver" => Command::new("/usr/bin/open").args(["-a", "ScreenSaverEngine"]).status(),
-            "sleep" => apple_script("tell application \"System Events\" to sleep"),
-            "settings" => Command::new("/usr/bin/open").arg("x-apple.systempreferences:").status(),
-            "force-quit" => apple_script("tell application \"System Events\" to key code 53 using {option down, command down}"),
-            "log-out" => apple_script("tell application \"System Events\" to log out"),
-            "restart" => apple_script("tell application \"System Events\" to restart"),
-            "shut-down" => apple_script("tell application \"System Events\" to shut down"),
+        let message = match id {
+            "lock" => run_status(
+                apple_script(
+                    "tell application \"System Events\" to keystroke \"q\" using {control down, command down}",
+                ),
+                "lock screen",
+            )?,
+            "display-sleep" => run_status(
+                Command::new("/usr/bin/pmset")
+                    .arg("displaysleepnow")
+                    .status(),
+                "turn display off",
+            )?,
+            "screen-saver" => run_status(
+                Command::new("/usr/bin/open")
+                    .args(["-a", "ScreenSaverEngine"])
+                    .status(),
+                "start screen saver",
+            )?,
+            "mute" => post_media_key(NX_KEYTYPE_MUTE)?,
+            "volume-up" => post_media_key(NX_KEYTYPE_SOUND_UP)?,
+            "volume-down" => post_media_key(NX_KEYTYPE_SOUND_DOWN)?,
+            "play-pause" => post_media_key(NX_KEYTYPE_PLAY)?,
+            "previous-track" => post_media_key(NX_KEYTYPE_PREVIOUS)?,
+            "next-track" => post_media_key(NX_KEYTYPE_NEXT)?,
+            "eject-all" => run_status(
+                apple_script(
+                    "tell application \"Finder\" to eject every disk whose ejectable is true",
+                ),
+                "eject mounted disks",
+            )?,
+            "sleep" => run_status(
+                apple_script("tell application \"System Events\" to sleep"),
+                "sleep Mac",
+            )?,
+            "settings" => run_status(
+                Command::new("/usr/bin/open")
+                    .arg("x-apple.systempreferences:")
+                    .status(),
+                "open System Settings",
+            )?,
+            "force-quit" => run_status(
+                apple_script(
+                    "tell application \"System Events\" to key code 53 using {option down, command down}",
+                ),
+                "show Force Quit",
+            )?,
+            "log-out" => run_status(
+                apple_script("tell application \"System Events\" to log out"),
+                "log out",
+            )?,
+            "restart" => run_status(
+                apple_script("tell application \"System Events\" to restart"),
+                "restart Mac",
+            )?,
+            "shut-down" => run_status(
+                apple_script("tell application \"System Events\" to shut down"),
+                "shut down Mac",
+            )?,
             _ => return Err("unknown system command".into()),
-        }.map_err(|error| error.to_string())?;
-        if !status.success() {
-            return Err(format!("system command failed with {status}"));
-        }
-        Ok(Some("System command sent".into()))
+        };
+        Ok(Some(message.into()))
     }
 
     fn configure(&mut self, settings: &BTreeMap<String, String>) -> Result<bool, String> {
@@ -166,6 +262,65 @@ fn apple_script(script: &str) -> io::Result<ExitStatus> {
     Command::new("/usr/bin/osascript")
         .args(["-e", script])
         .status()
+}
+
+fn run_status(status: io::Result<ExitStatus>, action: &str) -> Result<&'static str, String> {
+    let status = status.map_err(|error| format!("could not {action}: {error}"))?;
+    if status.success() {
+        Ok("System command sent")
+    } else {
+        Err(format!("could not {action}: command exited with {status}"))
+    }
+}
+
+const NX_KEYTYPE_SOUND_UP: i64 = 0;
+const NX_KEYTYPE_SOUND_DOWN: i64 = 1;
+const NX_KEYTYPE_MUTE: i64 = 7;
+const NX_KEYTYPE_PLAY: i64 = 16;
+const NX_KEYTYPE_NEXT: i64 = 17;
+const NX_KEYTYPE_PREVIOUS: i64 = 18;
+
+const NX_SYSDEFINED: u32 = 14;
+const NX_SUBTYPE_AUX_CONTROL_BUTTONS: i64 = 8;
+const NX_KEY_DOWN: i64 = 0xA;
+const NX_KEY_UP: i64 = 0xB;
+const CG_HID_EVENT_TAP: u32 = 0;
+const CG_EVENT_SUBTYPE: u32 = 110;
+const CG_EVENT_DATA1: u32 = 112;
+const CG_EVENT_DATA2: u32 = 113;
+
+fn post_media_key(key: i64) -> Result<&'static str, String> {
+    // Media keys are system-defined auxiliary-control events rather than
+    // ordinary keyboard events. Posting both phases mirrors a physical key.
+    unsafe {
+        let event = CGEventCreate(std::ptr::null());
+        if event.is_null() {
+            return Err("could not create media key event".into());
+        }
+        CGEventSetType(event, NX_SYSDEFINED);
+        CGEventSetIntegerValueField(event, CG_EVENT_SUBTYPE, NX_SUBTYPE_AUX_CONTROL_BUTTONS);
+        CGEventSetIntegerValueField(event, CG_EVENT_DATA2, -1);
+        for state in [NX_KEY_DOWN, NX_KEY_UP] {
+            let data = (key << 16) | (state << 8);
+            CGEventSetIntegerValueField(event, CG_EVENT_DATA1, data);
+            CGEventPost(CG_HID_EVENT_TAP, event);
+        }
+        CFRelease(event.cast_const());
+    }
+    Ok("Media command sent")
+}
+
+#[link(name = "CoreGraphics", kind = "framework")]
+unsafe extern "C" {
+    fn CGEventCreate(source: *const c_void) -> *mut c_void;
+    fn CGEventSetType(event: *mut c_void, event_type: u32);
+    fn CGEventSetIntegerValueField(event: *mut c_void, field: u32, value: i64);
+    fn CGEventPost(tap: u32, event: *mut c_void);
+}
+
+#[link(name = "CoreFoundation", kind = "framework")]
+unsafe extern "C" {
+    fn CFRelease(value: *const c_void);
 }
 
 fn matches_query(command: &SystemCommand, query: &str) -> bool {
@@ -206,6 +361,13 @@ fn command_symbol(id: &str) -> &'static str {
         "lock" => "lock",
         "display-sleep" => "display",
         "screen-saver" => "sparkles.rectangle.stack",
+        "mute" => "speaker.slash",
+        "volume-up" => "speaker.plus",
+        "volume-down" => "speaker.minus",
+        "play-pause" => "playpause",
+        "previous-track" => "backward.end",
+        "next-track" => "forward.end",
+        "eject-all" => "eject",
         "sleep" => "moon.zzz",
         "settings" => "gearshape",
         "force-quit" => "xmark.app",
@@ -225,6 +387,36 @@ mod tests {
         assert!(matches_query(&COMMANDS[0], "lock"));
         assert!(matches_query(&COMMANDS[0], "锁屏"));
         assert!(!matches_query(&COMMANDS[0], "restart"));
+    }
+
+    #[test]
+    fn includes_media_volume_and_disk_commands() {
+        let ids: HashSet<_> = COMMANDS.iter().map(|command| command.id).collect();
+        for id in [
+            "mute",
+            "volume-up",
+            "volume-down",
+            "play-pause",
+            "previous-track",
+            "next-track",
+            "eject-all",
+        ] {
+            assert!(ids.contains(id), "missing command: {id}");
+        }
+        assert!(matches_query(
+            COMMANDS
+                .iter()
+                .find(|command| command.id == "play-pause")
+                .unwrap(),
+            "播放"
+        ));
+        assert!(matches_query(
+            COMMANDS
+                .iter()
+                .find(|command| command.id == "eject-all")
+                .unwrap(),
+            "弹出 磁盘"
+        ));
     }
 
     #[test]
