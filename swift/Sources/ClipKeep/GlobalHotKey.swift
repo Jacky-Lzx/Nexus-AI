@@ -71,11 +71,24 @@ struct PluginShortcut: Codable, Equatable {
 enum LauncherKeyAction: String, CaseIterable {
     case moveDown
     case moveUp
+    case moveHalfPageDown
+    case moveHalfPageUp
 
     var title: String {
         switch self {
         case .moveDown: return "Move Down"
         case .moveUp: return "Move Up"
+        case .moveHalfPageDown: return "Move Half Page Down"
+        case .moveHalfPageUp: return "Move Half Page Up"
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .moveDown: return "Move the selection to the next result"
+        case .moveUp: return "Move the selection to the previous result"
+        case .moveHalfPageDown: return "Move the selection down by half of the visible results"
+        case .moveHalfPageUp: return "Move the selection up by half of the visible results"
         }
     }
 
@@ -92,6 +105,18 @@ enum LauncherKeyAction: String, CaseIterable {
                 keyCode: UInt32(kVK_ANSI_K),
                 modifiers: UInt32(optionKey),
                 keyLabel: "K"
+            )
+        case .moveHalfPageDown:
+            return PluginShortcut(
+                keyCode: UInt32(kVK_ANSI_D),
+                modifiers: UInt32(optionKey),
+                keyLabel: "D"
+            )
+        case .moveHalfPageUp:
+            return PluginShortcut(
+                keyCode: UInt32(kVK_ANSI_U),
+                modifiers: UInt32(optionKey),
+                keyLabel: "U"
             )
         }
     }

@@ -554,9 +554,7 @@ final class SettingsWindowController: NSWindowController,
             )
             options.addArrangedSubview(settingRow(
                 title: action.title,
-                description: action == .moveDown
-                    ? "Move the selection to the next result"
-                    : "Move the selection to the previous result",
+                description: action.helpText,
                 control: shortcut
             ))
         }

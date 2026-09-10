@@ -1061,6 +1061,12 @@ final class LauncherPanelController: NSWindowController,
         tableView.scrollRowToVisible(next)
     }
 
+    private func moveSelectionByHalfPage(_ direction: Int) {
+        let rowStride = max(tableView.rowHeight + tableView.intercellSpacing.height, 1)
+        let visibleRows = max(Int(scrollView.contentView.bounds.height / rowStride), 1)
+        moveSelection(direction * max(visibleRows / 2, 1))
+    }
+
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         if event.keyCode == 48,
@@ -1110,6 +1116,14 @@ final class LauncherPanelController: NSWindowController,
         }
         if LauncherKeyAction.moveUp.matches(event) {
             moveSelection(-1)
+            return true
+        }
+        if LauncherKeyAction.moveHalfPageDown.matches(event) {
+            moveSelectionByHalfPage(1)
+            return true
+        }
+        if LauncherKeyAction.moveHalfPageUp.matches(event) {
+            moveSelectionByHalfPage(-1)
             return true
         }
         return false
