@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 final class ExternalTextEditor {
     private enum EditorError: LocalizedError {
@@ -83,9 +83,38 @@ final class ExternalTextEditor {
             }
             try process.run()
             processes[sessionId] = process
+            activateEditor(
+                processIdentifier: process.processIdentifier,
+                executableURL: terminal,
+                remainingAttempts: 15
+            )
         } catch {
             try? FileManager.default.removeItem(at: directory)
             completion(.failure(error))
+        }
+    }
+
+    private func activateEditor(
+        processIdentifier: pid_t,
+        executableURL: URL,
+        remainingAttempts: Int
+    ) {
+        guard remainingAttempts > 0, processes.values.contains(where: { $0.processIdentifier == processIdentifier })
+        else { return }
+        let application = NSRunningApplication(processIdentifier: processIdentifier)
+            ?? NSWorkspace.shared.runningApplications.first(where: {
+                $0.executableURL?.standardizedFileURL == executableURL.standardizedFileURL
+            })
+        if let application {
+            application.activate(options: [.activateAllWindows])
+            if application.isActive { return }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+            self?.activateEditor(
+                processIdentifier: processIdentifier,
+                executableURL: executableURL,
+                remainingAttempts: remainingAttempts - 1
+            )
         }
     }
 

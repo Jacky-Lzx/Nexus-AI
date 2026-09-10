@@ -197,8 +197,15 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    func hide(restorePreviousApplication: Bool = false, pasteAfterRestore: Bool = false) {
-        guard let panel = window, panel.isVisible, !hiding else { return }
+    func hide(
+        restorePreviousApplication: Bool = false,
+        pasteAfterRestore: Bool = false,
+        completion: (() -> Void)? = nil
+    ) {
+        guard let panel = window, panel.isVisible, !hiding else {
+            completion?()
+            return
+        }
         hiding = true
         let applicationToRestore = restorePreviousApplication ? previousApplication : nil
         NSAnimationContext.runAnimationGroup({ context in
@@ -215,6 +222,7 @@ final class LauncherPanelController: NSWindowController,
                     Self.sendPaste(to: applicationToRestore)
                 }
             }
+            completion?()
         })
     }
 
@@ -517,22 +525,25 @@ final class LauncherPanelController: NSWindowController,
     private func performClipboardEdit(on result: SearchResult) {
         let applicationToRestore = previousApplication
         let canPaste = ensureAccessibilityPermission()
-        hide()
-        externalTextEditor.edit(result.preview) { [weak self] editResult in
-            guard let self else {
-                applicationToRestore?.activate()
-                return
-            }
-            switch editResult {
-            case let .failure(error):
-                coordinator.onStatusChanged?(error.localizedDescription)
-                applicationToRestore?.activate()
-            case let .success(editedText):
-                coordinator.execute(result, actionId: "apply_edit", input: editedText) { success in
+        hide { [weak self] in
+            guard let self else { return }
+            NSApp.deactivate()
+            externalTextEditor.edit(result.preview) { [weak self] editResult in
+                guard let self else {
                     applicationToRestore?.activate()
-                    guard success, canPaste, let applicationToRestore else { return }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                        Self.sendPaste(to: applicationToRestore)
+                    return
+                }
+                switch editResult {
+                case let .failure(error):
+                    coordinator.onStatusChanged?(error.localizedDescription)
+                    applicationToRestore?.activate()
+                case let .success(editedText):
+                    coordinator.execute(result, actionId: "apply_edit", input: editedText) { success in
+                        applicationToRestore?.activate()
+                        guard success, canPaste, let applicationToRestore else { return }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            Self.sendPaste(to: applicationToRestore)
+                        }
                     }
                 }
             }
