@@ -460,8 +460,10 @@ final class LauncherPanelController: NSWindowController,
     @objc private func openSelected() {
         guard let result = selectedResult else { return }
         if result.kind == .command,
-           result.metadata["route"] == "clipboard_history" {
-            switchSearchMode(to: .clipboard)
+           let pluginId = result.metadata["route_plugin_id"],
+           coordinator.isEnabled(pluginId),
+           let plugin = coordinator.descriptors.first(where: { $0.id == pluginId }) {
+            switchSearchMode(to: pluginId == "io.clipkeep.clipboard" ? .clipboard : .plugin(plugin))
         } else if let action = result.actions.first(where: { $0.default }) ?? result.actions.first {
             perform(action, on: result)
         }

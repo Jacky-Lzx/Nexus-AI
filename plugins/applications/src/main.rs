@@ -55,7 +55,13 @@ impl Plugin for ApplicationsPlugin {
             .take(limit)
             .map(|(score, application)| application.as_result(score))
             .collect();
-        if let Some(command) = clipboard_history_command(&query) {
+        for command in [
+            clipboard_history_command(&query),
+            kill_process_command(&query),
+        ]
+        .into_iter()
+        .flatten()
+        {
             results.push(command);
             results.sort_by(|left, right| {
                 right
@@ -92,18 +98,48 @@ impl Plugin for ApplicationsPlugin {
 }
 
 fn clipboard_history_command(query: &str) -> Option<SearchResult> {
+    route_command(
+        query,
+        "Clipboard History",
+        "Search copied text, images, and files",
+        "clipboard-history",
+        "clipboard_history",
+        "io.clipkeep.clipboard",
+    )
+}
+
+fn kill_process_command(query: &str) -> Option<SearchResult> {
+    route_command(
+        query,
+        "Kill Process",
+        "Find and terminate a running process",
+        "kill-process",
+        "kill_process",
+        "io.clipkeep.kill-process",
+    )
+}
+
+fn route_command(
+    query: &str,
+    title: &str,
+    subtitle: &str,
+    id: &str,
+    route: &str,
+    route_plugin_id: &str,
+) -> Option<SearchResult> {
     if query.is_empty() {
         return None;
     }
-    let score = fuzzy_score("Clipboard History", query)? + 500.0;
+    let score = fuzzy_score(title, query)? + 500.0;
     let mut metadata = BTreeMap::new();
-    metadata.insert("route".into(), "clipboard_history".into());
+    metadata.insert("route".into(), route.into());
+    metadata.insert("route_plugin_id".into(), route_plugin_id.into());
     Some(SearchResult {
         plugin_id: PLUGIN_ID.into(),
-        id: "command:clipboard-history".into(),
-        title: "Clipboard History".into(),
-        subtitle: "Search copied text, images, and files".into(),
-        preview: "Open Clipboard History".into(),
+        id: format!("command:{id}"),
+        title: title.into(),
+        subtitle: subtitle.into(),
+        preview: format!("Open {title}"),
         kind: ResultKind::Command,
         score,
         metadata,
@@ -515,6 +551,19 @@ mod tests {
         assert_eq!(command.metadata["route"], "clipboard_history");
         assert!(clipboard_history_command("clip hist").is_some());
         assert!(clipboard_history_command("").is_none());
+    }
+
+    #[test]
+    fn kill_process_is_exposed_as_a_searchable_command() {
+        let command = kill_process_command("kill process").unwrap();
+        assert_eq!(command.kind, ResultKind::Command);
+        assert_eq!(command.metadata["route"], "kill_process");
+        assert_eq!(
+            command.metadata["route_plugin_id"],
+            "io.clipkeep.kill-process"
+        );
+        assert!(kill_process_command("kill proc").is_some());
+        assert!(kill_process_command("").is_none());
     }
 
     #[test]

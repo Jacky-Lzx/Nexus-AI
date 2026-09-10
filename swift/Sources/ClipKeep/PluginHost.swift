@@ -421,6 +421,10 @@ final class SearchCoordinator {
     private func publishResults() {
         let results = resultsByPlugin.values
             .flatMap { $0 }
+            .filter { result in
+                guard let pluginId = result.metadata["route_plugin_id"] else { return true }
+                return isEnabled(pluginId)
+            }
             .sorted {
                 if $0.score == $1.score { return $0.title < $1.title }
                 return $0.score > $1.score

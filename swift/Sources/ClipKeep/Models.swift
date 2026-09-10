@@ -204,7 +204,7 @@ private let fallbackBuiltInPlugins = [
         id: "io.clipkeep.kill-process", name: "Kill Process", version: "0.1.0", protocolVersion: 1,
         executable: "clipkeep-plugin-kill-process",
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-kill-process"),
-        defaultEnabled: true, defaultIncludedInGlobalSearch: true,
+        defaultEnabled: true, defaultIncludedInGlobalSearch: false,
         capabilities: ["processes.read", "processes.terminate"]
     ),
     PluginDescriptor(
