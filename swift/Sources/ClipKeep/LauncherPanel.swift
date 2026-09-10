@@ -86,6 +86,7 @@ final class LauncherPanelController: NSWindowController,
     NSTableViewDelegate {
 
     private let coordinator: SearchCoordinator
+    private let pluginNamesById: [String: String]
     private let root = NSView()
     private let searchContainer = NSView()
     private let searchIcon = NSImageView()
@@ -129,6 +130,9 @@ final class LauncherPanelController: NSWindowController,
 
     init(coordinator: SearchCoordinator) {
         self.coordinator = coordinator
+        pluginNamesById = Dictionary(
+            uniqueKeysWithValues: coordinator.descriptors.map { ($0.id, $0.name) }
+        )
         let panel = LauncherPanel(
             contentRect: NSRect(x: 0, y: 0, width: Layout.width, height: Layout.collapsedHeight),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -440,7 +444,11 @@ final class LauncherPanelController: NSWindowController,
         let id = NSUserInterfaceItemIdentifier("ResultCell")
         let cell = tableView.makeView(withIdentifier: id, owner: self) as? ResultCellView ?? ResultCellView()
         cell.identifier = id
-        cell.configure(result, selected: row == tableView.selectedRow)
+        cell.configure(
+            result,
+            pluginName: pluginNamesById[result.pluginId] ?? result.pluginId,
+            selected: row == tableView.selectedRow
+        )
         return cell
     }
 
@@ -864,6 +872,7 @@ private final class ResultCellView: NSTableCellView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let multilineIndicator = NSTextField(labelWithString: "↩")
     private let subtitleLabel = NSTextField(labelWithString: "")
+    private let pluginLabel = NSTextField(labelWithString: "")
     private var stackedTextConstraints: [NSLayoutConstraint] = []
     private var inlineTextConstraints: [NSLayoutConstraint] = []
     private var multilineIndicatorSpacingConstraint: NSLayoutConstraint?
@@ -906,11 +915,21 @@ private final class ResultCellView: NSTableCellView {
         subtitleLabel.usesSingleLineMode = true
         subtitleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        pluginLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        pluginLabel.textColor = .tertiaryLabelColor
+        pluginLabel.alignment = .right
+        pluginLabel.lineBreakMode = .byTruncatingTail
+        pluginLabel.maximumNumberOfLines = 1
+        pluginLabel.usesSingleLineMode = true
+        pluginLabel.setContentHuggingPriority(.required, for: .horizontal)
+        pluginLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        pluginLabel.translatesAutoresizingMaskIntoConstraints = false
         addSubview(symbol)
         addSubview(artwork)
         addSubview(titleLabel)
         addSubview(multilineIndicator)
         addSubview(subtitleLabel)
+        addSubview(pluginLabel)
         multilineIndicatorSpacingConstraint = multilineIndicator.leadingAnchor.constraint(
             equalTo: titleLabel.trailingAnchor,
             constant: 0
@@ -925,19 +944,22 @@ private final class ResultCellView: NSTableCellView {
             artwork.widthAnchor.constraint(equalTo: symbol.widthAnchor),
             artwork.heightAnchor.constraint(equalTo: symbol.heightAnchor),
             titleLabel.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 10),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
             multilineIndicatorSpacingConstraint!,
-            multilineIndicator.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -10),
+            multilineIndicator.trailingAnchor.constraint(lessThanOrEqualTo: pluginLabel.leadingAnchor, constant: -12),
             multilineIndicator.firstBaselineAnchor.constraint(
                 equalTo: titleLabel.firstBaselineAnchor,
                 constant: 3
             ),
-            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            pluginLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            pluginLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            pluginLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 150),
         ])
         stackedTextConstraints = [
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 9),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: pluginLabel.leadingAnchor, constant: -12),
             subtitleLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
             subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 3),
+            subtitleLabel.trailingAnchor.constraint(lessThanOrEqualTo: pluginLabel.leadingAnchor, constant: -12),
         ]
         inlineTextConstraints = [
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -946,13 +968,14 @@ private final class ResultCellView: NSTableCellView {
                 constant: -16
             ),
             subtitleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
         ]
         NSLayoutConstraint.activate(stackedTextConstraints)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(_ result: SearchResult, selected: Bool) {
+    func configure(_ result: SearchResult, pluginName: String, selected: Bool) {
         let image = Self.artworkImage(for: result)
         artwork.image = image
         artwork.isHidden = image == nil
@@ -973,7 +996,15 @@ private final class ResultCellView: NSTableCellView {
         multilineIndicator.stringValue = hasMultipleLines ? "↩" : ""
         multilineIndicator.isHidden = !hasMultipleLines
         multilineIndicatorSpacingConstraint?.constant = hasMultipleLines ? 4 : 0
-        subtitleLabel.stringValue = result.subtitle
+        if result.kind == .application {
+            subtitleLabel.stringValue = "\(result.subtitle) · \(pluginName)"
+            pluginLabel.stringValue = ""
+            pluginLabel.isHidden = true
+        } else {
+            subtitleLabel.stringValue = result.subtitle
+            pluginLabel.stringValue = pluginName
+            pluginLabel.isHidden = false
+        }
         layer?.backgroundColor = selected
             ? NSColor.white.withAlphaComponent(0.12).cgColor
             : NSColor.clear.cgColor
