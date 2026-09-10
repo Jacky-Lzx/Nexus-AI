@@ -11,10 +11,10 @@ use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
     fs,
     hash::{Hash, Hasher},
-    io::{self, Write},
+    io,
     path::{Path, PathBuf},
     process::Command,
-    time::{SystemTime, UNIX_EPOCH},
+    time::SystemTime,
 };
 
 const PLUGIN_ID: &str = "io.clipkeep.clipboard";
@@ -108,6 +108,34 @@ impl ClipboardPlugin {
             .parse()
             .map_err(|_| "invalid clipboard result id".to_owned())
     }
+
+    fn apply_edited_text(
+        &mut self,
+        result_id: &str,
+        edited: &str,
+    ) -> Result<Option<String>, String> {
+        if edited.len() > MAX_ITEM_BYTES {
+            return Err("edited clipboard text is too large".into());
+        }
+        let id = Self::item_id(result_id)?;
+        let position = self
+            .items
+            .iter()
+            .position(|item| item.id == id)
+            .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
+        let item = self.items[position].clone();
+        if !matches!(item.kind, ClipKind::Text | ClipKind::RichText) {
+            return Err("only text clipboard entries can be edited".into());
+        }
+        let content = plain_text_content(edited.to_owned());
+        self.items[position] = ClipItem::new(id, content);
+        self.items[position].favorite = item.favorite;
+        let edited_item = self.items[position].clone();
+        self.clipboard.restore(&edited_item)?;
+        promote_item(&mut self.items, position, now_secs());
+        self.save()?;
+        Ok(Some("Edited text ready to paste".into()))
+    }
 }
 
 impl Plugin for ClipboardPlugin {
@@ -161,31 +189,6 @@ impl Plugin for ClipboardPlugin {
                 self.save()?;
                 Ok(Some(format!("{} ready to paste", item.kind.label())))
             }
-            "edit" => {
-                let position = self
-                    .items
-                    .iter()
-                    .position(|item| item.id == id)
-                    .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
-                let item = self.items[position].clone();
-                if !matches!(item.kind, ClipKind::Text | ClipKind::RichText) || item.text.is_empty()
-                {
-                    return Err("only text clipboard entries can be edited".into());
-                }
-                let edited = edit_text_in_neovim(id, &item.text)?;
-                if edited.len() > MAX_ITEM_BYTES {
-                    return Err("edited clipboard text is too large".into());
-                }
-                let content = plain_text_content(edited);
-                let favorite = item.favorite;
-                self.items[position] = ClipItem::new(id, content);
-                self.items[position].favorite = favorite;
-                let edited_item = self.items[position].clone();
-                self.clipboard.restore(&edited_item)?;
-                promote_item(&mut self.items, position, now_secs());
-                self.save()?;
-                Ok(Some("Edited text ready to paste".into()))
-            }
             "favorite" => {
                 let favorite = {
                     let item = self
@@ -213,6 +216,20 @@ impl Plugin for ClipboardPlugin {
                 Ok(Some("Deleted".to_owned()))
             }
             _ => Err(format!("unknown clipboard action: {action_id}")),
+        }
+    }
+
+    fn execute_with_input(
+        &mut self,
+        result_id: &str,
+        action_id: &str,
+        input: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        if action_id == "apply_edit" {
+            let edited = input.ok_or_else(|| "edited text is missing".to_owned())?;
+            self.apply_edited_text(result_id, edited)
+        } else {
+            self.execute(result_id, action_id)
         }
     }
 
@@ -345,65 +362,6 @@ fn plain_text_content(text: String) -> CapturedContent {
         fingerprint: hasher.finish(),
         thumbnail: None,
     }
-}
-
-fn edit_text_in_neovim(id: u64, text: &str) -> Result<String, String> {
-    let kitty = find_executable(
-        "kitty",
-        &[
-            "/opt/homebrew/bin/kitty",
-            "/usr/local/bin/kitty",
-            "/Applications/kitty.app/Contents/MacOS/kitty",
-        ],
-    )
-    .ok_or_else(|| "Kitty was not found".to_owned())?;
-    let neovim = find_executable("nvim", &["/opt/homebrew/bin/nvim", "/usr/local/bin/nvim"])
-        .ok_or_else(|| "Neovim was not found".to_owned())?;
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let path = std::env::temp_dir().join(format!(
-        "nexus-clipboard-edit-{}-{id}-{nonce}.txt",
-        std::process::id()
-    ));
-
-    let result = (|| {
-        let mut options = fs::OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        let mut file = options.open(&path).map_err(|error| error.to_string())?;
-        file.write_all(text.as_bytes())
-            .map_err(|error| error.to_string())?;
-        drop(file);
-
-        let status = Command::new(&kitty)
-            .arg("--start-as=normal")
-            .arg("--title=nvim_edit")
-            .arg(&neovim)
-            .arg(&path)
-            .status()
-            .map_err(|error| format!("could not open Kitty: {error}"))?;
-        if !status.success() {
-            return Err(format!("Neovim exited with status {status}"));
-        }
-        fs::read_to_string(&path).map_err(|error| error.to_string())
-    })();
-    let _ = fs::remove_file(path);
-    result
-}
-
-fn find_executable(name: &str, fallbacks: &[&str]) -> Option<PathBuf> {
-    std::env::var_os("PATH")
-        .into_iter()
-        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
-        .map(|directory| directory.join(name))
-        .chain(fallbacks.iter().map(PathBuf::from))
-        .find(|path| path.is_file())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

@@ -14,6 +14,15 @@ pub trait Plugin {
 
     fn execute(&mut self, result_id: &str, action_id: &str) -> Result<Option<String>, String>;
 
+    fn execute_with_input(
+        &mut self,
+        result_id: &str,
+        action_id: &str,
+        _input: Option<&str>,
+    ) -> Result<Option<String>, String> {
+        self.execute(result_id, action_id)
+    }
+
     fn configure(&mut self, _settings: &BTreeMap<String, String>) -> Result<bool, String> {
         Ok(false)
     }
@@ -100,11 +109,13 @@ fn handle_request(
             request_id,
             result_id,
             action_id,
+            input,
         } => {
-            let (success, message) = match plugin.execute(&result_id, &action_id) {
-                Ok(message) => (true, message),
-                Err(message) => (false, Some(message)),
-            };
+            let (success, message) =
+                match plugin.execute_with_input(&result_id, &action_id, input.as_deref()) {
+                    Ok(message) => (true, message),
+                    Err(message) => (false, Some(message)),
+                };
             send(
                 output,
                 &PluginEvent::ActionFinished {

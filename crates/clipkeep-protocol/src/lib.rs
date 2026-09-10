@@ -22,6 +22,8 @@ pub enum HostRequest {
         request_id: u64,
         result_id: String,
         action_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        input: Option<String>,
     },
     Shutdown,
 }
@@ -127,6 +129,23 @@ mod tests {
             request,
             HostRequest::Configure {
                 settings: BTreeMap::from([("retention_days".into(), "30".into())]),
+            }
+        );
+    }
+
+    #[test]
+    fn execute_request_accepts_optional_action_input() {
+        let request: HostRequest = serde_json::from_str(
+            r#"{"type":"execute","request_id":9,"result_id":"clipboard:1","action_id":"apply_edit","input":"changed"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            request,
+            HostRequest::Execute {
+                request_id: 9,
+                result_id: "clipboard:1".into(),
+                action_id: "apply_edit".into(),
+                input: Some("changed".into()),
             }
         );
     }

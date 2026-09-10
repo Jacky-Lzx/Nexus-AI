@@ -33,7 +33,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   as closing the palette and pasting into the previous app is protocol-driven
 - `Command-Shift-Space` opens a combined search across opted-in plugins
 - `Command-Shift-C` searches clipboard history only
-- In Clipboard History, `Enter` pastes immediately; `Command-Enter` opens the selected text in Neovim and pastes the saved text after the editor closes
+- In Clipboard History, `Enter` pastes immediately; `Command-Enter` starts an asynchronous Kitty/Neovim edit session and pastes the saved text after the editor closes
+- Kitty and Neovim executable paths can be configured per Clipboard History plugin; empty paths use automatic discovery
 - Automatically hides when focus moves to another application
 - Escape hides the palette and restores focus to the previously active application
 - Choosing a clipboard entry restores the previous application and pastes it directly

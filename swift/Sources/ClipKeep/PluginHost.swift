@@ -99,13 +99,15 @@ final class PluginProcess {
         send(["type": "configure", "settings": settings])
     }
 
-    func execute(requestId: UInt64, resultId: String, actionId: String) {
-        send([
+    func execute(requestId: UInt64, resultId: String, actionId: String, input: String? = nil) {
+        var request: [String: Any] = [
             "type": "execute",
             "request_id": requestId,
             "result_id": resultId,
             "action_id": actionId,
-        ])
+        ]
+        if let input { request["input"] = input }
+        send(request)
     }
 
     private func send(_ object: [String: Any]) {
@@ -272,15 +274,17 @@ final class SearchCoordinator {
         }
     }
 
-    func execute(_ result: SearchResult, actionId: String, completion: ((Bool) -> Void)? = nil) {
-        let timeout: TimeInterval? = result.pluginId == "io.clipkeep.clipboard" && actionId == "edit"
-            ? nil
-            : 5
+    func execute(
+        _ result: SearchResult,
+        actionId: String,
+        input: String? = nil,
+        completion: ((Bool) -> Void)? = nil
+    ) {
         execute(
             pluginId: result.pluginId,
             resultId: result.id,
             actionId: actionId,
-            timeout: timeout,
+            input: input,
             completion: completion
         )
     }
@@ -290,7 +294,7 @@ final class SearchCoordinator {
             pluginId: pluginId,
             resultId: "plugin:settings",
             actionId: actionId,
-            timeout: 5,
+            input: nil,
             completion: completion
         )
     }
@@ -299,7 +303,7 @@ final class SearchCoordinator {
         pluginId: String,
         resultId: String,
         actionId: String,
-        timeout: TimeInterval?,
+        input: String?,
         completion: ((Bool) -> Void)?
     ) {
         guard let process = processes[pluginId] else { completion?(false); return }
@@ -309,10 +313,10 @@ final class SearchCoordinator {
         process.execute(
             requestId: sentRequestId,
             resultId: resultId,
-            actionId: actionId
+            actionId: actionId,
+            input: input
         )
-        guard let timeout else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self, weak process] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak process] in
             guard let self, let process,
                   self.processes[pluginId] === process,
                   let pending = self.actionCompletions.removeValue(forKey: sentRequestId) else { return }

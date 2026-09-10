@@ -101,6 +101,7 @@ final class LauncherPanelController: NSWindowController,
     private let detailImage = PreviewImageView()
     private let detailInfo = NSStackView()
     private let statusLabel = NSTextField(labelWithString: "Nexus")
+    private let externalTextEditor = ExternalTextEditor()
     private var results: [SearchResult] = []
     private var expanded = false
     private var searchMode = SearchMode.global
@@ -483,7 +484,7 @@ final class LauncherPanelController: NSWindowController,
 
     private func perform(_ action: ResultAction, on result: SearchResult) {
         if result.pluginId == "io.clipkeep.clipboard", action.id == "edit" {
-            performClipboardEdit(action, on: result)
+            performClipboardEdit(on: result)
             return
         }
         if action.destructive {
@@ -513,15 +514,27 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    private func performClipboardEdit(_ action: ResultAction, on result: SearchResult) {
+    private func performClipboardEdit(on result: SearchResult) {
         let applicationToRestore = previousApplication
         let canPaste = ensureAccessibilityPermission()
         hide()
-        coordinator.execute(result, actionId: action.id) { success in
-            applicationToRestore?.activate()
-            guard success, canPaste, let applicationToRestore else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                Self.sendPaste(to: applicationToRestore)
+        externalTextEditor.edit(result.preview) { [weak self] editResult in
+            guard let self else {
+                applicationToRestore?.activate()
+                return
+            }
+            switch editResult {
+            case let .failure(error):
+                coordinator.onStatusChanged?(error.localizedDescription)
+                applicationToRestore?.activate()
+            case let .success(editedText):
+                coordinator.execute(result, actionId: "apply_edit", input: editedText) { success in
+                    applicationToRestore?.activate()
+                    guard success, canPaste, let applicationToRestore else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        Self.sendPaste(to: applicationToRestore)
+                    }
+                }
             }
         }
     }

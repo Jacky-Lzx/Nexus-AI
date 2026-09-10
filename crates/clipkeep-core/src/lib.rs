@@ -213,6 +213,7 @@ impl SearchCore {
             request_id,
             result_id: result.id.clone(),
             action_id: action_id.into(),
+            input: None,
         };
         if let Some(client) = self
             .plugins

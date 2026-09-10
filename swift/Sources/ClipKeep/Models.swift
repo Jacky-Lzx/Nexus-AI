@@ -92,13 +92,25 @@ enum ClipboardPreference {
     static let retentionDays = "clipboard.retentionDays"
     static let ignoreConcealed = "clipboard.ignoreConcealed"
     static let ignoredBundleIds = "clipboard.ignoredBundleIds"
+    static let terminalExecutable = "clipboard.terminalExecutable"
+    static let editorExecutable = "clipboard.editorExecutable"
 
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             retentionDays: 30,
             ignoreConcealed: true,
             ignoredBundleIds: "com.1password.1password,com.agilebits.onepassword7",
+            terminalExecutable: "",
+            editorExecutable: "",
         ])
+    }
+
+    static var terminalExecutablePath: String {
+        UserDefaults.standard.string(forKey: terminalExecutable) ?? ""
+    }
+
+    static var editorExecutablePath: String {
+        UserDefaults.standard.string(forKey: editorExecutable) ?? ""
     }
 
     static var pluginSettings: [String: String] {

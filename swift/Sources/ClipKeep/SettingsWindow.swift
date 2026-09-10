@@ -170,6 +170,7 @@ final class SettingsWindowController: NSWindowController,
     }
 
     func controlTextDidChange(_ obj: Notification) {
+        guard obj.object as? NSTextField === searchField else { return }
         let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         visiblePanes = query.isEmpty
             ? allPanes
@@ -179,6 +180,13 @@ final class SettingsWindowController: NSWindowController,
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
         showSelectedPlugin()
+    }
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard let field = obj.object as? NSTextField,
+              [ClipboardPreference.terminalExecutable, ClipboardPreference.editorExecutable]
+                .contains(field.identifier?.rawValue) else { return }
+        changeExternalEditorPath(field)
     }
 
     private var selectedPane: SettingsPaneItem? {
@@ -290,6 +298,33 @@ final class SettingsWindowController: NSWindowController,
         }
 
         if plugin.id == "io.clipkeep.clipboard" {
+            let terminalPath = NSTextField(string: ClipboardPreference.terminalExecutablePath)
+            terminalPath.placeholderString = "Auto-detect Kitty"
+            terminalPath.toolTip = "Kitty executable path"
+            terminalPath.identifier = NSUserInterfaceItemIdentifier(ClipboardPreference.terminalExecutable)
+            terminalPath.target = self
+            terminalPath.action = #selector(changeExternalEditorPath(_:))
+            terminalPath.delegate = self
+            terminalPath.widthAnchor.constraint(equalToConstant: 145).isActive = true
+
+            let editorPath = NSTextField(string: ClipboardPreference.editorExecutablePath)
+            editorPath.placeholderString = "Auto-detect Neovim"
+            editorPath.toolTip = "Neovim executable path"
+            editorPath.identifier = NSUserInterfaceItemIdentifier(ClipboardPreference.editorExecutable)
+            editorPath.target = self
+            editorPath.action = #selector(changeExternalEditorPath(_:))
+            editorPath.delegate = self
+            editorPath.widthAnchor.constraint(equalToConstant: 145).isActive = true
+
+            let editorPaths = NSStackView(views: [terminalPath, editorPath])
+            editorPaths.orientation = .horizontal
+            editorPaths.spacing = 8
+            options.addArrangedSubview(settingRow(
+                title: "External Editor",
+                description: "Kitty and Neovim paths; leave empty to auto-detect",
+                control: editorPaths
+            ))
+
             let quality = NSPopUpButton()
             quality.addItems(withTitles: ImagePreviewQuality.allCases.map(\.title))
             quality.selectItem(withTitle: launcher.imagePreviewQuality.title)
@@ -385,7 +420,10 @@ final class SettingsWindowController: NSWindowController,
             detailPane.addSubview(view)
         }
         NSLayoutConstraint.activate([
-            icon.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 76),
+            icon.topAnchor.constraint(
+                equalTo: detailPane.topAnchor,
+                constant: plugin.id == "io.clipkeep.clipboard" ? 28 : 76
+            ),
             icon.centerXAnchor.constraint(equalTo: detailPane.centerXAnchor),
             icon.widthAnchor.constraint(equalToConstant: 64),
             icon.heightAnchor.constraint(equalToConstant: 64),
@@ -396,7 +434,10 @@ final class SettingsWindowController: NSWindowController,
             description.leadingAnchor.constraint(greaterThanOrEqualTo: detailPane.leadingAnchor, constant: 28),
             enabled.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 22),
             enabled.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -24),
-            optionsTitle.topAnchor.constraint(equalTo: description.bottomAnchor, constant: 30),
+            optionsTitle.topAnchor.constraint(
+                equalTo: description.bottomAnchor,
+                constant: plugin.id == "io.clipkeep.clipboard" ? 16 : 30
+            ),
             optionsTitle.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 30),
             options.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
             options.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -24),
@@ -526,6 +567,14 @@ final class SettingsWindowController: NSWindowController,
         guard let title = sender.selectedItem?.title,
               let quality = ImagePreviewQuality.allCases.first(where: { $0.title == title }) else { return }
         launcher.imagePreviewQuality = quality
+    }
+
+    @objc private func changeExternalEditorPath(_ sender: NSTextField) {
+        guard let key = sender.identifier?.rawValue else { return }
+        UserDefaults.standard.set(
+            sender.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
+            forKey: key
+        )
     }
 
     @objc private func changeClipboardRetention(_ sender: NSPopUpButton) {
