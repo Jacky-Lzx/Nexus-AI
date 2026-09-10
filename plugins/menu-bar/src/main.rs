@@ -20,7 +20,7 @@ struct MenuBarItem {
     id: String,
     title: String,
     subtitle: String,
-    index: usize,
+    path: String,
 }
 
 impl Plugin for MenuBarPlugin {
@@ -33,7 +33,11 @@ impl Plugin for MenuBarPlugin {
         let mut matches = self
             .items
             .iter()
-            .filter_map(|item| match_score(&item.title, &query).map(|score| (score, item)))
+            .filter_map(|item| {
+                match_score(&item.title, &query)
+                    .or_else(|| match_score(&item.path, &query).map(|score| score - 100.0))
+                    .map(|score| (score, item))
+            })
             .collect::<Vec<_>>();
         matches.sort_by(|left, right| right.0.total_cmp(&left.0));
         Ok(matches
@@ -68,22 +72,26 @@ impl Plugin for MenuBarPlugin {
 
 impl MenuBarItem {
     fn as_result(&self, target_pid: i32, score: f32) -> SearchResult {
+        let parent_path = self.path.rsplit_once(" › ").map(|(parent, _)| parent);
+        let subtitle = parent_path
+            .map(|parent| format!("{} · {}", self.subtitle, parent))
+            .unwrap_or_else(|| self.subtitle.clone());
         SearchResult {
             plugin_id: PLUGIN_ID.into(),
             id: format!("menu-bar:{}", self.id),
             title: self.title.clone(),
-            subtitle: self.subtitle.clone(),
-            preview: format!("Open {}", self.title),
+            subtitle,
+            preview: self.path.clone(),
             kind: ResultKind::Command,
             score,
             metadata: BTreeMap::from([
-                ("menu_index".into(), self.index.to_string()),
+                ("menu_item_id".into(), self.id.clone()),
                 ("symbol_name".into(), "menubar.rectangle".into()),
                 ("target_pid".into(), target_pid.to_string()),
             ]),
             actions: vec![ResultAction {
                 id: "press".into(),
-                title: "Open Menu".into(),
+                title: "Run Menu Command".into(),
                 destructive: false,
                 default: true,
                 closes_window: true,
@@ -120,13 +128,15 @@ mod tests {
             ("target_pid".into(), "42".into()),
             (
                 "items".into(),
-                r#"[{"id":"42:1","title":"File","subtitle":"TextEdit","index":1}]"#.into(),
+                r#"[{"id":"42:1","title":"Open…","subtitle":"TextEdit","path":"File › Open…"}]"#
+                    .into(),
             ),
         ]);
         plugin.configure(&settings).unwrap();
-        let results = plugin.search("fi", 10).unwrap();
+        let results = plugin.search("file", 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].metadata["target_pid"], "42");
-        assert_eq!(results[0].metadata["menu_index"], "1");
+        assert_eq!(results[0].metadata["menu_item_id"], "42:1");
+        assert_eq!(results[0].title, "Open…");
     }
 }

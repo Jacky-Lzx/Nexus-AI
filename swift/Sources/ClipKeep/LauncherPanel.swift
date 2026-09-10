@@ -627,7 +627,7 @@ final class LauncherPanelController: NSWindowController,
     private func performMenuBarPress(on result: SearchResult) {
         guard ensureAccessibilityPermission(),
               let processIdentifier = result.metadata["target_pid"].flatMap(Int32.init),
-              let index = result.metadata["menu_index"].flatMap(Int.init)
+              let menuItemID = result.metadata["menu_item_id"]
         else { return }
         let application = previousApplication?.processIdentifier == processIdentifier
             ? previousApplication
@@ -642,9 +642,9 @@ final class LauncherPanelController: NSWindowController,
                 guard let self else { return }
                 if !self.menuBarProvider.pressItem(
                     processIdentifier: processIdentifier,
-                    index: index
+                    id: menuItemID
                 ) {
-                    self.coordinator.onStatusChanged?("Could not open the selected menu")
+                    self.coordinator.onStatusChanged?("Could not perform the selected menu command")
                 }
             }
         }

@@ -111,10 +111,10 @@ the content and a future date and time. Nexus requests notification permission o
 the first reminder and continues checking reminders while it runs in the background.
 Reminder data is stored locally alongside the other Nexus application data.
 
-Open the `Menu Bar` item to search the left-side menus of the application that was
-focused before Nexus opened. Selecting a result restores that application and opens
-the chosen menu through macOS Accessibility. Right-side status items are intentionally
-excluded.
+Open the `Menu Bar` item to search commands from every submenu of the application
+that was focused before Nexus opened. Results include their complete menu path, such
+as `File › New Window`; selecting one restores the application and performs that
+command through macOS Accessibility. Right-side status items are intentionally excluded.
 
 Encrypted history is stored in the platform application-data directory:
 
