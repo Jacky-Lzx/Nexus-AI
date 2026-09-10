@@ -341,10 +341,16 @@ struct CapturedContent {
 
 impl CapturedContent {
     fn byte_len(&self) -> usize {
-        self.representations
+        let representation_bytes = self
+            .representations
             .iter()
             .map(|value| value.data.len())
-            .sum()
+            .sum();
+        if representation_bytes == 0 && matches!(self.kind, ClipKind::Text | ClipKind::RichText) {
+            self.text.len()
+        } else {
+            representation_bytes
+        }
     }
 }
 
@@ -358,7 +364,9 @@ fn plain_text_content(text: String) -> CapturedContent {
     CapturedContent {
         kind: ClipKind::Text,
         text,
-        representations: vec![Representation { item: 0, uti, data }],
+        // Let PlatformClipboard::restore use NSPasteboard.setString so AppKit owns
+        // the exact text encoding, including whether a trailing newline exists.
+        representations: Vec::new(),
         fingerprint: hasher.finish(),
         thumbnail: None,
     }
@@ -397,10 +405,16 @@ impl ClipItem {
     }
 
     fn byte_len(&self) -> usize {
-        self.representations
+        let representation_bytes = self
+            .representations
             .iter()
             .map(|value| value.data.len())
-            .sum()
+            .sum();
+        if representation_bytes == 0 && matches!(self.kind, ClipKind::Text | ClipKind::RichText) {
+            self.text.len()
+        } else {
+            representation_bytes
+        }
     }
 
     fn search_text(&self) -> String {
@@ -1194,6 +1208,6 @@ mod tests {
         assert_eq!(content.kind, ClipKind::Text);
         assert_eq!(content.text, "edited text");
         assert_eq!(content.byte_len(), 11);
-        assert_eq!(content.representations[0].uti, "public.utf8-plain-text");
+        assert!(content.representations.is_empty());
     }
 }
