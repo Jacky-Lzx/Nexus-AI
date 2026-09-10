@@ -162,8 +162,11 @@ capabilities = ["search"]
 ```
 
 Discovered plugins automatically receive a settings pane, enable switch,
-configurable shortcut, global-search inclusion switch, status-menu entry, and
-isolated process lifecycle. Clipboard History is deliberately excluded from the
-combined search regardless of its manifest and is only opened explicitly.
+configurable shortcut, main-search item name, global-search inclusion switch,
+status-menu entry, and isolated process lifecycle. An enabled plugin excluded
+from Global Search receives a searchable item in the main page that opens its
+dedicated search window. That item is always hidden while the plugin participates
+in Global Search. Clipboard History is deliberately excluded from the combined
+search regardless of its manifest and is only opened explicitly.
 Run `Nexus --list-plugins` against a built app to validate discovery. Plugin
 stderr logs are written under the app-support `Logs` directory.

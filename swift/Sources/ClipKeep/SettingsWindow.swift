@@ -184,9 +184,13 @@ final class SettingsWindowController: NSWindowController,
 
     func controlTextDidEndEditing(_ obj: Notification) {
         guard let field = obj.object as? NSTextField,
-              [ClipboardPreference.terminalExecutable, ClipboardPreference.editorExecutable]
-                .contains(field.identifier?.rawValue) else { return }
-        changeExternalEditorPath(field)
+              let identifier = field.identifier?.rawValue else { return }
+        if identifier.hasPrefix("pluginMainItemName:") {
+            changePluginMainItemName(field)
+        } else if [ClipboardPreference.terminalExecutable, ClipboardPreference.editorExecutable]
+            .contains(identifier) {
+            changeExternalEditorPath(field)
+        }
     }
 
     private var selectedPane: SettingsPaneItem? {
@@ -282,6 +286,19 @@ final class SettingsWindowController: NSWindowController,
             title: "Keyboard Shortcut",
             description: "Click and press a shortcut to open this plugin",
             control: shortcut
+        ))
+
+        let mainItemName = NSTextField(string: coordinator.mainItemName(for: plugin))
+        mainItemName.placeholderString = plugin.name
+        mainItemName.identifier = NSUserInterfaceItemIdentifier("pluginMainItemName:\(plugin.id)")
+        mainItemName.target = self
+        mainItemName.action = #selector(changePluginMainItemName(_:))
+        mainItemName.delegate = self
+        mainItemName.widthAnchor.constraint(equalToConstant: 180).isActive = true
+        options.addArrangedSubview(settingRow(
+            title: "Main Search Item Name",
+            description: "Used to open this plugin when it is excluded from Global Search",
+            control: mainItemName
         ))
 
         if plugin.id != "io.clipkeep.clipboard" {
@@ -538,12 +555,12 @@ final class SettingsWindowController: NSWindowController,
         row.addSubview(descriptionLabel)
         row.addSubview(control)
         NSLayoutConstraint.activate([
-            row.heightAnchor.constraint(equalToConstant: 68),
+            row.heightAnchor.constraint(equalToConstant: 60),
             titleLabel.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 20),
-            titleLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 12),
+            titleLabel.topAnchor.constraint(equalTo: row.topAnchor, constant: 9),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: control.leadingAnchor, constant: -16),
             descriptionLabel.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
-            descriptionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 5),
+            descriptionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
             descriptionLabel.trailingAnchor.constraint(lessThanOrEqualTo: control.leadingAnchor, constant: -16),
             control.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -18),
             control.centerYAnchor.constraint(equalTo: row.centerYAnchor),
@@ -561,6 +578,15 @@ final class SettingsWindowController: NSWindowController,
         guard let id = sender.identifier?.rawValue,
               let plugin = coordinator.descriptors.first(where: { $0.id == id }) else { return }
         coordinator.setIncludedInGlobalSearch(sender.state == .on, descriptor: plugin)
+    }
+
+    @objc private func changePluginMainItemName(_ sender: NSTextField) {
+        guard let identifier = sender.identifier?.rawValue,
+              identifier.hasPrefix("pluginMainItemName:") else { return }
+        let pluginId = String(identifier.dropFirst("pluginMainItemName:".count))
+        guard let plugin = coordinator.descriptors.first(where: { $0.id == pluginId }) else { return }
+        coordinator.setMainItemName(sender.stringValue, descriptor: plugin)
+        sender.stringValue = coordinator.mainItemName(for: plugin)
     }
 
     @objc private func changePreviewQuality(_ sender: NSPopUpButton) {

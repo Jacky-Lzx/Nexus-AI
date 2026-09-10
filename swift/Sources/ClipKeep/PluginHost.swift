@@ -225,6 +225,24 @@ final class SearchCoordinator {
         onPluginStateChanged?()
     }
 
+    func mainItemName(for descriptor: PluginDescriptor) -> String {
+        let key = "plugin.mainItemName.\(descriptor.id)"
+        let configured = UserDefaults.standard.string(forKey: key)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return configured.isEmpty ? descriptor.name : configured
+    }
+
+    func setMainItemName(_ name: String, descriptor: PluginDescriptor) {
+        let key = "plugin.mainItemName.\(descriptor.id)"
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set(name, forKey: key)
+        }
+        if currentSearchIsGlobal { publishResults() }
+    }
+
     func searchGlobal(_ query: String) {
         let pluginIds = descriptors
             .filter { isEnabled($0.id) && isIncludedInGlobalSearch($0.id) }
@@ -440,16 +458,75 @@ final class SearchCoordinator {
     }
 
     private func publishResults() {
-        let results = resultsByPlugin.values
+        var results = resultsByPlugin.values
             .flatMap { $0 }
             .filter { result in
                 guard let pluginId = result.metadata["route_plugin_id"] else { return true }
                 return isEnabled(pluginId)
             }
-            .sorted {
-                if $0.score == $1.score { return $0.title < $1.title }
-                return $0.score > $1.score
-            }
+
+        if currentSearchIsGlobal {
+            results.append(contentsOf: mainItemResults())
+        }
+
+        results.sort {
+            if $0.score == $1.score { return $0.title < $1.title }
+            return $0.score > $1.score
+        }
         onResultsChanged?(results)
+    }
+
+    private func mainItemResults() -> [SearchResult] {
+        descriptors.compactMap { descriptor in
+            guard isEnabled(descriptor.id), !isIncludedInGlobalSearch(descriptor.id) else { return nil }
+            let itemName = mainItemName(for: descriptor)
+            guard let score = mainItemScore(
+                query: currentQuery,
+                candidates: [itemName, descriptor.name, descriptor.id]
+            ) else { return nil }
+            return SearchResult(
+                pluginId: descriptor.id,
+                id: "plugin-route:\(descriptor.id)",
+                title: itemName,
+                subtitle: "Open \(descriptor.name)",
+                preview: "Search with \(descriptor.name)",
+                kind: .command,
+                score: score,
+                metadata: [
+                    "route_plugin_id": descriptor.id,
+                    "symbol_name": descriptor.symbolName,
+                ],
+                actions: []
+            )
+        }
+    }
+
+    private func mainItemScore(query: String, candidates: [String]) -> Double? {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !query.isEmpty else { return 2_000 }
+
+        return candidates.compactMap { candidate -> Double? in
+            let candidate = candidate.lowercased()
+            if candidate == query { return 3_500 }
+            if candidate.hasPrefix(query) { return 3_300 - Double(candidate.count) }
+            if let range = candidate.range(of: query) {
+                let position = candidate.distance(from: candidate.startIndex, to: range.lowerBound)
+                return 3_000 - Double(position * 10)
+            }
+
+            var queryIndex = query.startIndex
+            var gaps = 0
+            var matched = false
+            for character in candidate {
+                guard queryIndex < query.endIndex else { break }
+                if character == query[queryIndex] {
+                    matched = true
+                    query.formIndex(after: &queryIndex)
+                } else if matched {
+                    gaps += 1
+                }
+            }
+            return queryIndex == query.endIndex ? 2_600 - Double(gaps * 5) : nil
+        }.max()
     }
 }
