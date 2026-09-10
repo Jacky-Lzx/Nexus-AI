@@ -513,6 +513,14 @@ final class SearchCoordinator {
             repeatCurrentSearch()
         case let .actionFinished(requestId, success, message):
             onStatusChanged?(message ?? "Done")
+            if success, let message, !message.isEmpty {
+                let pluginName = descriptors.first(where: { $0.id == pluginId })?.name ?? "Nexus"
+                onNotification?(PluginNotification(
+                    id: "action:\(pluginId):\(requestId)",
+                    title: pluginName,
+                    body: message
+                ))
+            }
             actionCompletions.removeValue(forKey: requestId)?.completion(success)
             repeatCurrentSearch()
         case let .error(message):
