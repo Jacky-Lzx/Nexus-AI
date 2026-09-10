@@ -243,18 +243,33 @@ final class SearchCoordinator {
         if currentSearchIsGlobal { publishResults() }
     }
 
-    func searchGlobal(_ query: String) {
+    func searchGlobal(_ query: String, preservingPublishedResults: Bool = false) {
         let pluginIds = descriptors
             .filter { isEnabled($0.id) && isIncludedInGlobalSearch($0.id) }
             .map(\.id)
-        search(query, pluginIds: pluginIds, isGlobal: true)
+        search(
+            query,
+            pluginIds: pluginIds,
+            isGlobal: true,
+            preservingPublishedResults: preservingPublishedResults
+        )
     }
 
-    func search(_ query: String, pluginId: String) {
-        search(query, pluginIds: [pluginId], isGlobal: false)
+    func search(_ query: String, pluginId: String, preservingPublishedResults: Bool = false) {
+        search(
+            query,
+            pluginIds: [pluginId],
+            isGlobal: false,
+            preservingPublishedResults: preservingPublishedResults
+        )
     }
 
-    private func search(_ query: String, pluginIds: [String], isGlobal: Bool) {
+    private func search(
+        _ query: String,
+        pluginIds: [String],
+        isGlobal: Bool,
+        preservingPublishedResults: Bool
+    ) {
         let requestedPluginIds = Set(pluginIds)
         let availablePluginIds = requestedPluginIds.filter { processes[$0] != nil }
         let targetChanged = currentPluginIds != requestedPluginIds || currentSearchIsGlobal != isGlobal
@@ -266,7 +281,9 @@ final class SearchCoordinator {
         stagedResultsByPlugin.removeAll()
         if targetChanged {
             resultsByPlugin.removeAll()
-            publishResults()
+            if !preservingPublishedResults {
+                publishResults()
+            }
         }
         guard !availablePluginIds.isEmpty else {
             resultsByPlugin.removeAll()
@@ -284,6 +301,9 @@ final class SearchCoordinator {
                       self.pendingSearches[pluginId] == sentQueryId else { return }
                 let name = self.descriptors.first(where: { $0.id == pluginId })?.name ?? pluginId
                 self.onStatusChanged?("\(name) is taking longer than expected…")
+                if targetChanged, preservingPublishedResults {
+                    self.publishResults()
+                }
             }
         }
         // Publish fast plugins together instead of flashing an intermediate empty state.

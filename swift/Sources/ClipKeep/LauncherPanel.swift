@@ -590,7 +590,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         updateModeLayout()
-        requestSearch("")
+        requestSearch("", preservingResults: true)
         setExpanded(shouldExpand(for: ""), animated: true)
         window?.makeFirstResponder(searchField)
     }
@@ -743,16 +743,24 @@ final class LauncherPanelController: NSWindowController,
         scrollView.reflectScrolledClipView(scrollView.contentView)
     }
 
-    private func requestSearch(_ query: String) {
+    private func requestSearch(_ query: String, preservingResults: Bool = false) {
         resetScrollOnNextResults = true
         resetResultsScrollPosition()
         switch searchMode {
         case .global:
-            coordinator.searchGlobal(query)
+            coordinator.searchGlobal(query, preservingPublishedResults: preservingResults)
         case .clipboard:
-            coordinator.search(query, pluginId: "io.clipkeep.clipboard")
+            coordinator.search(
+                query,
+                pluginId: "io.clipkeep.clipboard",
+                preservingPublishedResults: preservingResults
+            )
         case let .plugin(plugin):
-            coordinator.search(query, pluginId: plugin.id)
+            coordinator.search(
+                query,
+                pluginId: plugin.id,
+                preservingPublishedResults: preservingResults
+            )
         }
     }
 
