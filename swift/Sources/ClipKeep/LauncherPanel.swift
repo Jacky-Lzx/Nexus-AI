@@ -150,6 +150,7 @@ final class LauncherPanelController: NSWindowController,
     private let detailInfo = NSStackView()
     private let statusLabel = NSTextField(labelWithString: "Nexus")
     private let externalTextEditor = ExternalTextEditor()
+    private let menuBarProvider = MenuBarProvider()
     private var results: [SearchResult] = []
     private var expanded = false
     private var searchMode = SearchMode.global
@@ -230,6 +231,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         updateModeLayout()
+        refreshMenuBarPlugin(for: mode)
         requestSearch(query)
         setExpanded(shouldExpand(for: query), animated: false)
         position(panel)
@@ -547,6 +549,10 @@ final class LauncherPanelController: NSWindowController,
             performReminderCreation(on: result)
             return
         }
+        if result.pluginId == "io.clipkeep.menu-bar", action.id == "press" {
+            performMenuBarPress(on: result)
+            return
+        }
         if action.destructive {
             let alert = NSAlert()
             alert.messageText = result.metadata["confirmation_title"] ?? "\(action.title)?"
@@ -614,6 +620,32 @@ final class LauncherPanelController: NSWindowController,
                     return
                 }
                 self.coordinator.execute(result, actionId: "create", input: input)
+            }
+        }
+    }
+
+    private func performMenuBarPress(on result: SearchResult) {
+        guard ensureAccessibilityPermission(),
+              let processIdentifier = result.metadata["target_pid"].flatMap(Int32.init),
+              let index = result.metadata["menu_index"].flatMap(Int.init)
+        else { return }
+        let application = previousApplication?.processIdentifier == processIdentifier
+            ? previousApplication
+            : NSRunningApplication(processIdentifier: processIdentifier)
+        guard let application else {
+            coordinator.onStatusChanged?("The target application is no longer running")
+            return
+        }
+        previousApplication = application
+        hide(restorePreviousApplication: true) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                guard let self else { return }
+                if !self.menuBarProvider.pressItem(
+                    processIdentifier: processIdentifier,
+                    index: index
+                ) {
+                    self.coordinator.onStatusChanged?("Could not open the selected menu")
+                }
             }
         }
     }
@@ -686,9 +718,33 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         updateModeLayout()
+        refreshMenuBarPlugin(for: mode)
         requestSearch("", preservingResults: true)
         setExpanded(shouldExpand(for: ""), animated: true)
         window?.makeFirstResponder(searchField)
+    }
+
+    private func refreshMenuBarPlugin(for mode: SearchMode) {
+        let pluginId = "io.clipkeep.menu-bar"
+        let needsMenuBar: Bool
+        switch mode {
+        case .global:
+            needsMenuBar = coordinator.isEnabled(pluginId)
+                && coordinator.isIncludedInGlobalSearch(pluginId)
+        case let .plugin(plugin):
+            needsMenuBar = plugin.id == pluginId && coordinator.isEnabled(pluginId)
+        case .clipboard:
+            needsMenuBar = false
+        }
+        guard needsMenuBar, ensureAccessibilityPermission(), let previousApplication else { return }
+        let items = menuBarProvider.items(for: previousApplication)
+        guard let data = try? JSONEncoder().encode(items),
+              let encodedItems = String(data: data, encoding: .utf8)
+        else { return }
+        coordinator.configureRuntimeSettings([
+            "target_pid": String(previousApplication.processIdentifier),
+            "items": encodedItems,
+        ], for: pluginId)
     }
 
     private var selectedResult: SearchResult? {
@@ -955,7 +1011,7 @@ final class LauncherPanelController: NSWindowController,
         guard !AXIsProcessTrusted() else { return true }
         let promptKey = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         AXIsProcessTrustedWithOptions([promptKey: true] as CFDictionary)
-        statusLabel.stringValue = "Enable Accessibility to paste automatically"
+        statusLabel.stringValue = "Enable Accessibility to control other applications"
         return false
     }
 

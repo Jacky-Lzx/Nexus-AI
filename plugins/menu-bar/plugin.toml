@@ -1,0 +1,8 @@
+id = "io.clipkeep.menu-bar"
+name = "Menu Bar"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-menu-bar"
+default_enabled = true
+include_in_global_search = false
+capabilities = ["accessibility.read", "accessibility.press"]

@@ -209,6 +209,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.calculator": "function"
         case "io.clipkeep.calendar": "calendar"
         case "io.clipkeep.kill-process": "xmark.circle"
+        case "io.clipkeep.menu-bar": "menubar.rectangle"
         case "io.clipkeep.reminders": "bell.badge"
         case "io.clipkeep.system-commands": "power"
         default: "puzzlepiece.extension"
@@ -259,6 +260,13 @@ private let fallbackBuiltInPlugins = [
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-kill-process"),
         defaultEnabled: true, defaultIncludedInGlobalSearch: false,
         capabilities: ["processes.read", "processes.terminate"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.menu-bar", name: "Menu Bar", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-menu-bar",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-menu-bar"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: false,
+        capabilities: ["accessibility.read", "accessibility.press"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.reminders", name: "Reminders", version: "0.1.0", protocolVersion: 1,

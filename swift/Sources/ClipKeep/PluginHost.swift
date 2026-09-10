@@ -390,6 +390,10 @@ final class SearchCoordinator {
         processes[pluginId]?.configure(settings: settings(for: pluginId))
     }
 
+    func configureRuntimeSettings(_ settings: [String: String], for pluginId: String) {
+        processes[pluginId]?.configure(settings: settings)
+    }
+
     func loadConfigurationItems(
         for pluginId: String,
         completion: @escaping ([PluginConfigurationItem]) -> Void

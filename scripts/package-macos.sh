@@ -23,6 +23,7 @@ clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplu
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
+menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
 rm -f "$applications_plugin/clipkeep-plugin-applications" "$applications_plugin/plugin.toml"
@@ -47,6 +48,10 @@ install -d "$kill_process_plugin/Contents/MacOS" "$kill_process_plugin/Contents/
 install -m 755 target/release/clipkeep-plugin-kill-process "$kill_process_plugin/Contents/MacOS/clipkeep-plugin-kill-process"
 install -m 644 plugins/kill-process/plugin.toml "$kill_process_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-KillProcess-Info.plist "$kill_process_plugin/Contents/Info.plist"
+install -d "$menu_bar_plugin/Contents/MacOS" "$menu_bar_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-menu-bar "$menu_bar_plugin/Contents/MacOS/clipkeep-plugin-menu-bar"
+install -m 644 plugins/menu-bar/plugin.toml "$menu_bar_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-MenuBar-Info.plist "$menu_bar_plugin/Contents/Info.plist"
 install -d "$reminders_plugin/Contents/MacOS" "$reminders_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-reminders "$reminders_plugin/Contents/MacOS/clipkeep-plugin-reminders"
 install -m 644 plugins/reminders/plugin.toml "$reminders_plugin/Contents/Resources/plugin.toml"
@@ -81,6 +86,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.kill-process \
         "$kill_process_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.menu-bar \
+        "$menu_bar_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.reminders \
         "$reminders_plugin"

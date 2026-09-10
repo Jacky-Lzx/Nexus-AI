@@ -190,6 +190,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-menu-bar"
+version = "0.1.0"
+dependencies = [
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "clipkeep-plugin-reminders"
 version = "0.1.0"
 dependencies = [

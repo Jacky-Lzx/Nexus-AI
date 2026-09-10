@@ -8,6 +8,7 @@ members = [
     "plugins/calendar",
     "plugins/clipboard",
     "plugins/kill-process",
+    "plugins/menu-bar",
     "plugins/reminders",
     "plugins/system-commands",
 ]

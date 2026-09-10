@@ -111,6 +111,11 @@ the content and a future date and time. Nexus requests notification permission o
 the first reminder and continues checking reminders while it runs in the background.
 Reminder data is stored locally alongside the other Nexus application data.
 
+Open the `Menu Bar` item to search the left-side menus of the application that was
+focused before Nexus opened. Selecting a result restores that application and opens
+the chosen menu through macOS Accessibility. Right-side status items are intentionally
+excluded.
+
 Encrypted history is stored in the platform application-data directory:
 
 - macOS: `~/Library/Application Support/io.clipkeep.ClipKeep/history.ckh`
@@ -137,6 +142,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
+- `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/reminders`: persistent reminders and background notification delivery
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
