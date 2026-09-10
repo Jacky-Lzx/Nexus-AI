@@ -658,7 +658,7 @@ final class LauncherPanelController: NSWindowController,
             detailText.isHidden = false
             return
         }
-        detailText.stringValue = result.preview
+        detailText.attributedStringValue = renderedClipboardPreview(result.preview)
         detailImage.image = thumbnailImage(from: result)
         detailImage.isHidden = detailImage.image == nil
         detailText.isHidden = detailImage.image != nil
@@ -681,6 +681,35 @@ final class LauncherPanelController: NSWindowController,
             info.append((key.capitalized, value))
         }
         updateDetailInfo(info)
+    }
+
+    private func renderedClipboardPreview(_ text: String) -> NSAttributedString {
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineSpacing = 2
+        let contentAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 15),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paragraph,
+        ]
+        let newlineAttributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold),
+            .foregroundColor: NSColor.systemOrange.withAlphaComponent(0.82),
+            .baselineOffset: -1,
+            .paragraphStyle: paragraph,
+        ]
+        let output = NSMutableAttributedString()
+        let lines = normalized.components(separatedBy: "\n")
+        for (index, line) in lines.enumerated() {
+            output.append(NSAttributedString(string: line, attributes: contentAttributes))
+            if index < lines.count - 1 {
+                output.append(NSAttributedString(string: "  ↵", attributes: newlineAttributes))
+                output.append(NSAttributedString(string: "\n", attributes: contentAttributes))
+            }
+        }
+        return output
     }
 
     private func updateModeLayout() {
