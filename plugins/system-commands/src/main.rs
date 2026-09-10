@@ -2,7 +2,6 @@ use clipkeep_plugin_sdk::{Plugin, run_plugin};
 use clipkeep_protocol::{ConfigurationItem, ResultAction, ResultKind, SearchResult};
 use std::{
     collections::{BTreeMap, HashSet},
-    ffi::c_void,
     io,
     process::{Command, ExitStatus},
 };
@@ -185,12 +184,10 @@ impl Plugin for SystemCommandsPlugin {
                     .status(),
                 "start screen saver",
             )?,
-            "mute" => post_media_key(NX_KEYTYPE_MUTE)?,
-            "volume-up" => post_media_key(NX_KEYTYPE_SOUND_UP)?,
-            "volume-down" => post_media_key(NX_KEYTYPE_SOUND_DOWN)?,
-            "play-pause" => post_media_key(NX_KEYTYPE_PLAY)?,
-            "previous-track" => post_media_key(NX_KEYTYPE_PREVIOUS)?,
-            "next-track" => post_media_key(NX_KEYTYPE_NEXT)?,
+            "mute" | "volume-up" | "volume-down" | "play-pause" | "previous-track"
+            | "next-track" => {
+                return Err("media and volume commands must be handled by Nexus".into());
+            }
             "eject-all" => run_status(
                 apple_script(
                     "tell application \"Finder\" to eject every disk whose ejectable is true",
@@ -271,56 +268,6 @@ fn run_status(status: io::Result<ExitStatus>, action: &str) -> Result<&'static s
     } else {
         Err(format!("could not {action}: command exited with {status}"))
     }
-}
-
-const NX_KEYTYPE_SOUND_UP: i64 = 0;
-const NX_KEYTYPE_SOUND_DOWN: i64 = 1;
-const NX_KEYTYPE_MUTE: i64 = 7;
-const NX_KEYTYPE_PLAY: i64 = 16;
-const NX_KEYTYPE_NEXT: i64 = 17;
-const NX_KEYTYPE_PREVIOUS: i64 = 18;
-
-const NX_SYSDEFINED: u32 = 14;
-const NX_SUBTYPE_AUX_CONTROL_BUTTONS: i64 = 8;
-const NX_KEY_DOWN: i64 = 0xA;
-const NX_KEY_UP: i64 = 0xB;
-const CG_HID_EVENT_TAP: u32 = 0;
-const CG_EVENT_SUBTYPE: u32 = 110;
-const CG_EVENT_DATA1: u32 = 112;
-const CG_EVENT_DATA2: u32 = 113;
-
-fn post_media_key(key: i64) -> Result<&'static str, String> {
-    // Media keys are system-defined auxiliary-control events rather than
-    // ordinary keyboard events. Posting both phases mirrors a physical key.
-    unsafe {
-        let event = CGEventCreate(std::ptr::null());
-        if event.is_null() {
-            return Err("could not create media key event".into());
-        }
-        CGEventSetType(event, NX_SYSDEFINED);
-        CGEventSetIntegerValueField(event, CG_EVENT_SUBTYPE, NX_SUBTYPE_AUX_CONTROL_BUTTONS);
-        CGEventSetIntegerValueField(event, CG_EVENT_DATA2, -1);
-        for state in [NX_KEY_DOWN, NX_KEY_UP] {
-            let data = (key << 16) | (state << 8);
-            CGEventSetIntegerValueField(event, CG_EVENT_DATA1, data);
-            CGEventPost(CG_HID_EVENT_TAP, event);
-        }
-        CFRelease(event.cast_const());
-    }
-    Ok("Media command sent")
-}
-
-#[link(name = "CoreGraphics", kind = "framework")]
-unsafe extern "C" {
-    fn CGEventCreate(source: *const c_void) -> *mut c_void;
-    fn CGEventSetType(event: *mut c_void, event_type: u32);
-    fn CGEventSetIntegerValueField(event: *mut c_void, field: u32, value: i64);
-    fn CGEventPost(tap: u32, event: *mut c_void);
-}
-
-#[link(name = "CoreFoundation", kind = "framework")]
-unsafe extern "C" {
-    fn CFRelease(value: *const c_void);
 }
 
 fn matches_query(command: &SystemCommand, query: &str) -> bool {

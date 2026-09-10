@@ -399,6 +399,24 @@ final class SearchCoordinator {
         input: String?,
         completion: ((Bool) -> Void)?
     ) {
+        if pluginId == "io.clipkeep.system-commands",
+           actionId == "run",
+           let command = SystemMediaController.command(for: resultId) {
+            let success = SystemMediaController.perform(command)
+            let message = success
+                ? command.confirmation
+                : "Enable Accessibility in System Settings to control media playback"
+            onStatusChanged?(message)
+            if success {
+                onNotification?(PluginNotification(
+                    id: "system-media:\(resultId):\(Date().timeIntervalSince1970)",
+                    title: "System Commands",
+                    body: message
+                ))
+            }
+            completion?(success)
+            return
+        }
         guard let process = processes[pluginId] else { completion?(false); return }
         requestId += 1
         let sentRequestId = requestId
