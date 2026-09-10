@@ -970,6 +970,8 @@ private final class ResultCellView: NSTableCellView {
     private var stackedTextConstraints: [NSLayoutConstraint] = []
     private var inlineTextConstraints: [NSLayoutConstraint] = []
     private var multilineIndicatorSpacingConstraint: NSLayoutConstraint?
+    private var artworkWidthConstraint: NSLayoutConstraint?
+    private var artworkHeightConstraint: NSLayoutConstraint?
     private var usesInlineSubtitle = false
 
     override init(frame frameRect: NSRect) {
@@ -1029,15 +1031,17 @@ private final class ResultCellView: NSTableCellView {
             equalTo: titleLabel.trailingAnchor,
             constant: 0
         )
+        artworkWidthConstraint = artwork.widthAnchor.constraint(equalToConstant: 36)
+        artworkHeightConstraint = artwork.heightAnchor.constraint(equalToConstant: 36)
         NSLayoutConstraint.activate([
             symbol.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             symbol.centerYAnchor.constraint(equalTo: centerYAnchor),
             symbol.widthAnchor.constraint(equalToConstant: 36),
             symbol.heightAnchor.constraint(equalToConstant: 36),
-            artwork.leadingAnchor.constraint(equalTo: symbol.leadingAnchor),
+            artwork.centerXAnchor.constraint(equalTo: symbol.centerXAnchor),
             artwork.centerYAnchor.constraint(equalTo: symbol.centerYAnchor),
-            artwork.widthAnchor.constraint(equalTo: symbol.widthAnchor),
-            artwork.heightAnchor.constraint(equalTo: symbol.heightAnchor),
+            artworkWidthConstraint!,
+            artworkHeightConstraint!,
             titleLabel.leadingAnchor.constraint(equalTo: symbol.trailingAnchor, constant: 10),
             multilineIndicatorSpacingConstraint!,
             multilineIndicator.trailingAnchor.constraint(lessThanOrEqualTo: pluginLabel.leadingAnchor, constant: -12),
@@ -1083,6 +1087,9 @@ private final class ResultCellView: NSTableCellView {
         artwork.image = image
         artwork.isHidden = image == nil
         symbol.isHidden = image != nil
+        let artworkSize: CGFloat = Self.usesFlatClipboardIcon(result) ? 18 : 36
+        artworkWidthConstraint?.constant = artworkSize
+        artworkHeightConstraint?.constant = artworkSize
         switch result.kind {
         case .application: symbol.stringValue = "A"
         case .clipboardText: symbol.stringValue = "T"
@@ -1147,5 +1154,16 @@ private final class ResultCellView: NSTableCellView {
         let image = NSWorkspace.shared.icon(forFile: path)
         applicationIconCache.setObject(image, forKey: cacheKey)
         return image
+    }
+
+    private static func usesFlatClipboardIcon(_ result: SearchResult) -> Bool {
+        switch result.kind {
+        case .clipboardText, .clipboardRichText, .clipboardFiles:
+            true
+        case .clipboardImage:
+            result.metadata["thumbnail_image_path"] == nil
+        default:
+            false
+        }
     }
 }
