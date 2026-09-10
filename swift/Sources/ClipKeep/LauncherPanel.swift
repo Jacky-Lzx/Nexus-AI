@@ -1330,12 +1330,18 @@ final class LauncherPanelController: NSWindowController,
             presentationStack.addArrangedSubview(makePresentationRow(item))
         }
         let visible = !items.isEmpty
-        presentationContainer.isHidden = !visible
-        presentationTopConstraint?.constant = visible ? Layout.contentSpacing : 0
-        presentationHeightConstraint?.constant = visible
+        let height = visible
             ? CGFloat(items.count * 36 + max(items.count - 1, 0) * 6)
             : 0
-        root.layoutSubtreeIfNeeded()
+        let layoutChanged = presentationContainer.isHidden == visible
+            || presentationTopConstraint?.constant != (visible ? Layout.contentSpacing : 0)
+            || presentationHeightConstraint?.constant != height
+        presentationContainer.isHidden = !visible
+        presentationTopConstraint?.constant = visible ? Layout.contentSpacing : 0
+        presentationHeightConstraint?.constant = height
+        if layoutChanged {
+            root.layoutSubtreeIfNeeded()
+        }
         updateScrollerVisibility()
 
         if items.contains(where: { $0.metadata["countdown_until"] != nil }) {
@@ -1420,6 +1426,7 @@ final class LauncherPanelController: NSWindowController,
         guard expanded != shouldExpand || !animated else { return }
         expanded = shouldExpand
         guard let panel = window else { return }
+        root.layoutSubtreeIfNeeded()
         contentTopConstraint?.constant = shouldExpand ? Layout.contentSpacing : 0
         footerHeightConstraint?.constant = shouldExpand ? 46 : 0
         if shouldExpand {
@@ -1431,6 +1438,7 @@ final class LauncherPanelController: NSWindowController,
         frame.size.height = newHeight
         let changes = {
             panel.animator().setFrame(frame, display: true)
+            self.root.animator().layoutSubtreeIfNeeded()
             self.content.animator().alphaValue = shouldExpand ? 1 : 0
             self.presentationContainer.animator().alphaValue = shouldExpand ? 1 : 0
         }
@@ -1450,6 +1458,7 @@ final class LauncherPanelController: NSWindowController,
             presentationContainer.alphaValue = shouldExpand ? 1 : 0
             content.isHidden = !shouldExpand
             panel.setFrame(frame, display: true)
+            root.layoutSubtreeIfNeeded()
             updateScrollerVisibility()
         }
     }
