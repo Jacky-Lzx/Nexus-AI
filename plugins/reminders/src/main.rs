@@ -202,6 +202,7 @@ fn new_reminder_result() -> SearchResult {
             default: true,
             closes_window: false,
             paste_to_previous: false,
+            input_fields: Vec::new(),
         }],
     }
 }

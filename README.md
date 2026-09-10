@@ -160,6 +160,9 @@ stops the process and unregisters its shortcut.
 Plugins can also publish compact presentation items for their dedicated search page.
 The host renders their icon, title, value, and semantic style consistently; countdown
 metadata is updated locally by the GUI without continuously querying the plugin.
+Actions may declare typed inline input fields with placeholders and numeric bounds.
+The AppKit host renders them in the search bar, provides Tab/Shift-Tab navigation,
+and returns their values to the Rust plugin as JSON when the user presses Return.
 
 Applications and System Commands expose their complete item catalogs in Settings.
 Each application or command can be hidden independently; hidden items are filtered

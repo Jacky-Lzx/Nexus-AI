@@ -1,7 +1,9 @@
 use clipkeep_plugin_sdk::{Plugin, run_plugin};
 use clipkeep_protocol::{
-    PluginPresentationItem, PresentationStyle, ResultAction, ResultKind, SearchResult,
+    ActionInputField, ActionInputKind, PluginPresentationItem, PresentationStyle, ResultAction,
+    ResultKind, SearchResult,
 };
+use serde::Deserialize;
 use std::{
     collections::BTreeMap,
     io,
@@ -25,6 +27,16 @@ struct ActiveCaffeination {
     ends_at: SystemTime,
 }
 
+#[derive(Deserialize)]
+struct CaffeinateInput {
+    #[serde(default)]
+    hours: u64,
+    #[serde(default)]
+    minutes: u64,
+    #[serde(default)]
+    seconds: u64,
+}
+
 impl CaffeinatePlugin {
     fn refresh(&mut self) {
         let finished = self
@@ -38,9 +50,7 @@ impl CaffeinatePlugin {
     }
 
     fn start(&mut self, input: &str) -> Result<Option<String>, String> {
-        let duration_seconds = input
-            .parse::<u64>()
-            .map_err(|_| "caffeinate duration must be a number of seconds")?;
+        let duration_seconds = parse_duration(input)?;
         if duration_seconds == 0 {
             return Err("caffeinate duration must be greater than zero".into());
         }
@@ -193,17 +203,19 @@ fn start_result(active: Option<&ActiveCaffeination>) -> SearchResult {
         preview: subtitle,
         kind: ResultKind::Command,
         score: 4_000.0,
-        metadata: BTreeMap::from([
-            ("input_form".into(), "caffeinate".into()),
-            ("symbol_name".into(), "cup.and.saucer.fill".into()),
-        ]),
+        metadata: BTreeMap::from([("symbol_name".into(), "cup.and.saucer.fill".into())]),
         actions: vec![ResultAction {
             id: "start".into(),
-            title: "Choose End Time".into(),
+            title: "Caffeinate".into(),
             destructive: false,
             default: true,
-            closes_window: false,
+            closes_window: true,
             paste_to_previous: false,
+            input_fields: vec![
+                duration_field("hours", "Hours", 8_760),
+                duration_field("minutes", "Minutes", 59),
+                duration_field("seconds", "Seconds", 59),
+            ],
         }],
     }
 }
@@ -226,8 +238,37 @@ fn stop_result(active: &ActiveCaffeination) -> SearchResult {
             default: true,
             closes_window: true,
             paste_to_previous: false,
+            input_fields: Vec::new(),
         }],
     }
+}
+
+fn duration_field(id: &str, label: &str, maximum: i64) -> ActionInputField {
+    ActionInputField {
+        id: id.into(),
+        label: label.into(),
+        placeholder: label.into(),
+        kind: ActionInputKind::Integer,
+        required: false,
+        minimum: Some(0),
+        maximum: Some(maximum),
+    }
+}
+
+fn parse_duration(input: &str) -> Result<u64, String> {
+    let input: CaffeinateInput =
+        serde_json::from_str(input).map_err(|error| format!("invalid duration: {error}"))?;
+    input
+        .hours
+        .checked_mul(3_600)
+        .and_then(|hours| {
+            input
+                .minutes
+                .checked_mul(60)
+                .and_then(|minutes| hours.checked_add(minutes))
+        })
+        .and_then(|duration| duration.checked_add(input.seconds))
+        .ok_or_else(|| "caffeinate duration is too large".into())
 }
 
 fn matches_query(query: &str, candidates: &[&str]) -> bool {
@@ -277,7 +318,9 @@ mod tests {
     #[cfg(target_os = "macos")]
     fn starts_and_stops_system_caffeinate() {
         let mut plugin = CaffeinatePlugin::default();
-        plugin.start("5").unwrap();
+        plugin
+            .start(r#"{"hours":0,"minutes":0,"seconds":5}"#)
+            .unwrap();
         assert!(plugin.active.is_some());
         plugin.stop().unwrap();
         assert!(plugin.active.is_none());

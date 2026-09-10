@@ -51,6 +51,7 @@ impl Plugin for CalculatorPlugin {
                     default: true,
                     closes_window: true,
                     paste_to_previous: true,
+                    input_fields: Vec::new(),
                 },
                 ResultAction {
                     id: "copy".into(),
@@ -59,6 +60,7 @@ impl Plugin for CalculatorPlugin {
                     default: false,
                     closes_window: false,
                     paste_to_previous: false,
+                    input_fields: Vec::new(),
                 },
             ],
         }])

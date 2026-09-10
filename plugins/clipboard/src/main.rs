@@ -498,6 +498,7 @@ impl ClipItem {
             default: true,
             closes_window: true,
             paste_to_previous: true,
+            input_fields: Vec::new(),
         }];
         if matches!(self.kind, ClipKind::Text | ClipKind::RichText) && !self.text.is_empty() {
             actions.push(ResultAction {
@@ -507,6 +508,7 @@ impl ClipItem {
                 default: false,
                 closes_window: true,
                 paste_to_previous: true,
+                input_fields: Vec::new(),
             });
         }
         actions.extend([
@@ -517,6 +519,7 @@ impl ClipItem {
                 default: false,
                 closes_window: false,
                 paste_to_previous: false,
+                input_fields: Vec::new(),
             },
             ResultAction {
                 id: "delete".into(),
@@ -525,6 +528,7 @@ impl ClipItem {
                 default: false,
                 closes_window: false,
                 paste_to_previous: false,
+                input_fields: Vec::new(),
             },
         ]);
         SearchResult {

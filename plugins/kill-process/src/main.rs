@@ -206,6 +206,7 @@ fn process_result(process: ProcessEntry, score: u32) -> SearchResult {
             default: true,
             closes_window: true,
             paste_to_previous: false,
+            input_fields: Vec::new(),
         }],
     }
 }

@@ -147,6 +147,8 @@ version = "0.1.0"
 dependencies = [
  "clipkeep-plugin-sdk",
  "clipkeep-protocol",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

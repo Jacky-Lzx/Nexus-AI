@@ -72,11 +72,13 @@ struct ResultAction: Codable {
     let `default`: Bool
     let closesWindow: Bool
     let pasteToPrevious: Bool
+    let inputFields: [ActionInputField]
 
     enum CodingKeys: String, CodingKey {
         case id, title, destructive, `default`
         case closesWindow = "closes_window"
         case pasteToPrevious = "paste_to_previous"
+        case inputFields = "input_fields"
     }
 
 
@@ -88,6 +90,33 @@ struct ResultAction: Codable {
         `default` = try values.decodeIfPresent(Bool.self, forKey: .default) ?? false
         closesWindow = try values.decodeIfPresent(Bool.self, forKey: .closesWindow) ?? false
         pasteToPrevious = try values.decodeIfPresent(Bool.self, forKey: .pasteToPrevious) ?? false
+        inputFields = try values.decodeIfPresent([ActionInputField].self, forKey: .inputFields) ?? []
+    }
+}
+
+enum ActionInputKind: String, Codable {
+    case text
+    case integer
+}
+
+struct ActionInputField: Codable {
+    let id: String
+    let label: String
+    let placeholder: String
+    let kind: ActionInputKind
+    let required: Bool
+    let minimum: Int?
+    let maximum: Int?
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        label = try values.decode(String.self, forKey: .label)
+        placeholder = try values.decodeIfPresent(String.self, forKey: .placeholder) ?? label
+        kind = try values.decodeIfPresent(ActionInputKind.self, forKey: .kind) ?? .text
+        required = try values.decodeIfPresent(Bool.self, forKey: .required) ?? false
+        minimum = try values.decodeIfPresent(Int.self, forKey: .minimum)
+        maximum = try values.decodeIfPresent(Int.self, forKey: .maximum)
     }
 }
 

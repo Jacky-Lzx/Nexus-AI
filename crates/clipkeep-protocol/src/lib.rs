@@ -143,6 +143,32 @@ pub struct ResultAction {
     pub closes_window: bool,
     #[serde(default)]
     pub paste_to_previous: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_fields: Vec<ActionInputField>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ActionInputField {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub placeholder: String,
+    #[serde(default)]
+    pub kind: ActionInputKind,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub maximum: Option<i64>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionInputKind {
+    #[default]
+    Text,
+    Integer,
 }
 
 #[cfg(test)]
@@ -182,6 +208,7 @@ mod tests {
         assert!(!action.default);
         assert!(!action.closes_window);
         assert!(!action.paste_to_previous);
+        assert!(action.input_fields.is_empty());
     }
 
     #[test]

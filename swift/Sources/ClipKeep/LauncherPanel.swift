@@ -101,36 +101,10 @@ private final class ReminderFormView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }
 
-private final class CaffeinateFormView: NSView {
-    private let datePicker = NSDatePicker()
-
-    var endDate: Date { datePicker.dateValue }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: NSRect(x: 0, y: 0, width: 360, height: 48))
-        let label = NSTextField(labelWithString: "Keep Awake Until")
-        label.font = .systemFont(ofSize: 13, weight: .medium)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
-
-        datePicker.datePickerStyle = .textFieldAndStepper
-        datePicker.datePickerElements = [.yearMonthDay, .hourMinute]
-        datePicker.minDate = Date(timeIntervalSinceNow: 60)
-        datePicker.dateValue = Date(timeIntervalSinceNow: 3_600)
-        datePicker.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(datePicker)
-
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.widthAnchor.constraint(equalToConstant: 112),
-            datePicker.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 8),
-            datePicker.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-            datePicker.centerYAnchor.constraint(equalTo: label.centerYAnchor),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+private struct ActiveActionInput {
+    let result: SearchResult
+    let action: ResultAction
+    let fields: [(ActionInputField, NSTextField)]
 }
 
 private final class ResultsSplitView: NSSplitView {
@@ -171,6 +145,7 @@ final class LauncherPanelController: NSWindowController,
     private let searchContainer = NSView()
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
+    private let actionInputStack = NSStackView()
     private let presentationContainer = NSView()
     private let presentationStack = NSStackView()
     private let content = NSView()
@@ -197,6 +172,7 @@ final class LauncherPanelController: NSWindowController,
     private var presentationHeightConstraint: NSLayoutConstraint?
     private var presentationValueLabels: [(NSTextField, PluginPresentationItem)] = []
     private var presentationTimer: Timer?
+    private var activeActionInput: ActiveActionInput?
     private var resetScrollOnNextResults = false
     private var detailImageGeneration: UInt64 = 0
 
@@ -261,6 +237,7 @@ final class LauncherPanelController: NSWindowController,
 
     func show(mode: SearchMode = .global, query: String = "") {
         guard let panel = window as? LauncherPanel else { return }
+        endActionInputForm(restoreSearchFocus: false)
         if let frontmost = NSWorkspace.shared.frontmostApplication,
            frontmost.processIdentifier != ProcessInfo.processInfo.processIdentifier {
             previousApplication = frontmost
@@ -360,6 +337,13 @@ final class LauncherPanelController: NSWindowController,
         searchField.usesSingleLineMode = true
         searchContainer.addSubview(searchField)
 
+        actionInputStack.orientation = .horizontal
+        actionInputStack.alignment = .centerY
+        actionInputStack.spacing = 10
+        actionInputStack.isHidden = true
+        actionInputStack.translatesAutoresizingMaskIntoConstraints = false
+        searchContainer.addSubview(actionInputStack)
+
         presentationContainer.translatesAutoresizingMaskIntoConstraints = false
         presentationContainer.isHidden = true
         root.addSubview(presentationContainer)
@@ -389,6 +373,10 @@ final class LauncherPanelController: NSWindowController,
             searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 11),
             searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -12),
             searchField.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
+            actionInputStack.leadingAnchor.constraint(equalTo: searchContainer.leadingAnchor, constant: 17),
+            actionInputStack.trailingAnchor.constraint(lessThanOrEqualTo: searchContainer.trailingAnchor, constant: -12),
+            actionInputStack.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
+            actionInputStack.heightAnchor.constraint(equalToConstant: 38),
             presentationTopConstraint!,
             presentationContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
             presentationContainer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Layout.outerInset),
@@ -533,12 +521,31 @@ final class LauncherPanelController: NSWindowController,
     }
 
     func controlTextDidChange(_ obj: Notification) {
+        guard let changedField = obj.object as? NSTextField, changedField === searchField else { return }
         let query = searchField.stringValue
         requestSearch(query)
         setExpanded(shouldExpand(for: query), animated: true)
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if activeActionInput != nil {
+            switch commandSelector {
+            case #selector(NSResponder.insertTab(_:)):
+                moveActionInputFocus(from: control, offset: 1)
+                return true
+            case #selector(NSResponder.insertBacktab(_:)):
+                moveActionInputFocus(from: control, offset: -1)
+                return true
+            case #selector(NSResponder.insertNewline(_:)):
+                submitActionInputForm()
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                endActionInputForm(restoreSearchFocus: true)
+                return true
+            default:
+                break
+            }
+        }
         switch commandSelector {
         case #selector(NSResponder.moveDown(_:)):
             moveSelection(1); return true
@@ -600,16 +607,16 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func perform(_ action: ResultAction, on result: SearchResult) {
+        if !action.inputFields.isEmpty {
+            beginActionInputForm(for: result, action: action)
+            return
+        }
         if result.pluginId == "io.clipkeep.clipboard", action.id == "edit" {
             performClipboardEdit(on: result)
             return
         }
         if result.pluginId == "io.clipkeep.reminders", action.id == "create" {
             performReminderCreation(on: result)
-            return
-        }
-        if result.pluginId == "io.clipkeep.caffeinate", action.id == "start" {
-            performCaffeinate(on: result)
             return
         }
         if result.pluginId == "io.clipkeep.menu-bar", action.id == "press" {
@@ -640,6 +647,151 @@ final class LauncherPanelController: NSWindowController,
         }
         if action.closesWindow && !action.pasteToPrevious {
             hide()
+        }
+    }
+
+    private func beginActionInputForm(for result: SearchResult, action: ResultAction) {
+        endActionInputForm(restoreSearchFocus: false)
+        searchIcon.isHidden = true
+        searchField.isHidden = true
+        actionInputStack.isHidden = false
+
+        let icon = NSImageView()
+        icon.image = NSImage(
+            systemSymbolName: result.metadata["symbol_name"] ?? "command",
+            accessibilityDescription: result.title
+        )
+        icon.contentTintColor = .secondaryLabelColor
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        actionInputStack.addArrangedSubview(icon)
+
+        let title = NSTextField(labelWithString: result.title)
+        title.font = .systemFont(ofSize: 16, weight: .semibold)
+        title.textColor = .labelColor
+        title.lineBreakMode = .byTruncatingTail
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        actionInputStack.addArrangedSubview(title)
+
+        var controls: [(ActionInputField, NSTextField)] = []
+        for definition in action.inputFields {
+            let (container, field) = makeActionInputField(definition)
+            actionInputStack.addArrangedSubview(container)
+            controls.append((definition, field))
+        }
+        for index in controls.indices {
+            controls[index].1.nextKeyView = controls[controls.index(after: index) % controls.count].1
+        }
+        activeActionInput = ActiveActionInput(result: result, action: action, fields: controls)
+        if let first = controls.first?.1 {
+            window?.makeFirstResponder(first)
+        }
+    }
+
+    private func makeActionInputField(_ definition: ActionInputField) -> (NSView, NSTextField) {
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 10
+        container.layer?.cornerCurve = .continuous
+        container.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.widthAnchor.constraint(equalToConstant: 104).isActive = true
+        container.heightAnchor.constraint(equalToConstant: 36).isActive = true
+
+        let field = NSTextField()
+        field.placeholderString = definition.placeholder.isEmpty ? definition.label : definition.placeholder
+        field.font = .systemFont(ofSize: 15, weight: .medium)
+        field.textColor = .labelColor
+        field.focusRingType = .none
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.usesSingleLineMode = true
+        field.delegate = self
+        field.setAccessibilityLabel(definition.label)
+        field.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(field)
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 11),
+            field.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -8),
+            field.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+        return (container, field)
+    }
+
+    private func endActionInputForm(restoreSearchFocus: Bool) {
+        activeActionInput = nil
+        for view in actionInputStack.arrangedSubviews {
+            actionInputStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        actionInputStack.isHidden = true
+        searchIcon.isHidden = false
+        searchField.isHidden = false
+        if restoreSearchFocus {
+            window?.makeFirstResponder(searchField)
+        }
+    }
+
+    private func moveActionInputFocus(from control: NSControl, offset: Int) {
+        guard let activeActionInput,
+              let current = activeActionInput.fields.firstIndex(where: { $0.1 === control })
+        else { return }
+        let count = activeActionInput.fields.count
+        let next = (current + offset + count) % count
+        window?.makeFirstResponder(activeActionInput.fields[next].1)
+    }
+
+    private func submitActionInputForm() {
+        guard let activeActionInput else { return }
+        var values: [String: Any] = [:]
+        for (definition, field) in activeActionInput.fields {
+            let value = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if value.isEmpty {
+                if definition.required {
+                    statusLabel.stringValue = "Enter \(definition.label.lowercased())"
+                    window?.makeFirstResponder(field)
+                    return
+                }
+                values[definition.id] = definition.kind == .integer ? 0 : ""
+                continue
+            }
+            switch definition.kind {
+            case .text:
+                values[definition.id] = value
+            case .integer:
+                guard let number = Int(value),
+                      definition.minimum.map({ number >= $0 }) ?? true,
+                      definition.maximum.map({ number <= $0 }) ?? true
+                else {
+                    let range = [definition.minimum, definition.maximum]
+                        .compactMap { $0 }
+                        .map(String.init)
+                        .joined(separator: "–")
+                    statusLabel.stringValue = range.isEmpty
+                        ? "Enter a valid \(definition.label.lowercased()) value"
+                        : "\(definition.label) must be \(range)"
+                    window?.makeFirstResponder(field)
+                    return
+                }
+                values[definition.id] = number
+            }
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: values),
+              let input = String(data: data, encoding: .utf8)
+        else { return }
+        coordinator.execute(
+            activeActionInput.result,
+            actionId: activeActionInput.action.id,
+            input: input
+        ) { [weak self] success in
+            guard let self, success else { return }
+            let closesWindow = activeActionInput.action.closesWindow
+            self.endActionInputForm(restoreSearchFocus: !closesWindow)
+            if closesWindow {
+                self.hide(restorePreviousApplication: true)
+            }
         }
     }
 
@@ -684,38 +836,6 @@ final class LauncherPanelController: NSWindowController,
                 }
                 self.coordinator.execute(result, actionId: "create", input: input)
             }
-        }
-    }
-
-    private func performCaffeinate(on result: SearchResult) {
-        let form = CaffeinateFormView()
-        let alert = NSAlert()
-        alert.messageText = "Caffeinate"
-        alert.informativeText = "Choose when Nexus should allow the display and Mac to sleep again."
-        alert.alertStyle = .informational
-        alert.accessoryView = form
-        alert.addButton(withTitle: "Caffeinate")
-        alert.addButton(withTitle: "Cancel")
-        ignoreNextResign = true
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            window?.makeKey()
-            window?.makeFirstResponder(searchField)
-            return
-        }
-        let durationSeconds = Int(form.endDate.timeIntervalSinceNow.rounded(.up))
-        guard durationSeconds > 0 else {
-            coordinator.onStatusChanged?("Choose a future end time")
-            window?.makeKey()
-            window?.makeFirstResponder(searchField)
-            return
-        }
-        coordinator.execute(
-            result,
-            actionId: "start",
-            input: String(durationSeconds)
-        ) { [weak self] success in
-            guard let self, success else { return }
-            self.hide(restorePreviousApplication: true)
         }
     }
 
@@ -882,6 +1002,7 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func switchSearchMode(to mode: SearchMode) {
+        endActionInputForm(restoreSearchFocus: false)
         searchMode = mode
         searchField.stringValue = ""
         searchField.placeholderString = mode.placeholder

@@ -68,6 +68,7 @@ impl CalendarPlugin {
                     default: true,
                     closes_window: true,
                     paste_to_previous: false,
+                    input_fields: Vec::new(),
                 }),
             )
         } else {
@@ -165,6 +166,7 @@ impl CalendarPlugin {
                             default: true,
                             closes_window: true,
                             paste_to_previous: false,
+                            input_fields: Vec::new(),
                         }],
                     },
                 ));

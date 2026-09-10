@@ -196,6 +196,7 @@ fn as_result(command: SystemCommand, index: usize) -> SearchResult {
             default: true,
             closes_window: true,
             paste_to_previous: false,
+            input_fields: Vec::new(),
         }],
     }
 }

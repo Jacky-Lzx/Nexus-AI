@@ -164,6 +164,7 @@ impl Application {
                 default: true,
                 closes_window: true,
                 paste_to_previous: false,
+                input_fields: Vec::new(),
             }],
         }
     }
