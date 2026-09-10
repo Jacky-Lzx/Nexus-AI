@@ -3,7 +3,11 @@ import Foundation
 final class PluginProcess {
     enum Event {
         case initialized(pluginId: String, protocolVersion: Int)
-        case searchResults(queryId: UInt64, items: [SearchResult])
+        case searchResults(
+            queryId: UInt64,
+            items: [SearchResult],
+            presentationItems: [PluginPresentationItem]
+        )
         case configurationItems(requestId: UInt64, items: [PluginConfigurationItem])
         case notification(PluginNotification)
         case catalogChanged
@@ -26,6 +30,7 @@ final class PluginProcess {
         let type: String
         let queryId: UInt64?
         let items: [SearchResult]?
+        let presentationItems: [PluginPresentationItem]?
         let configurationItems: [PluginConfigurationItem]?
         let notification: PluginNotification?
         let requestId: UInt64?
@@ -41,6 +46,7 @@ final class PluginProcess {
             case pluginId = "plugin_id"
             case protocolVersion = "protocol_version"
             case configurationItems = "configuration_items"
+            case presentationItems = "presentation_items"
         }
     }
 
@@ -152,7 +158,11 @@ final class PluginProcess {
             event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion)
         case "search_results":
             guard let queryId = envelope.queryId, let items = envelope.items else { return }
-            event = .searchResults(queryId: queryId, items: items)
+            event = .searchResults(
+                queryId: queryId,
+                items: items,
+                presentationItems: envelope.presentationItems ?? []
+            )
         case "configuration_items":
             guard let requestId = envelope.requestId,
                   let items = envelope.configurationItems else { return }
@@ -189,6 +199,7 @@ final class SearchCoordinator {
     private var processes: [String: PluginProcess] = [:]
     private var resultsByPlugin: [String: [SearchResult]] = [:]
     private var stagedResultsByPlugin: [String: [SearchResult]] = [:]
+    private var presentationItemsByPlugin: [String: [PluginPresentationItem]] = [:]
     private var currentQuery = ""
     private var currentPluginIds: Set<String> = []
     private var currentSearchIsGlobal = true
@@ -220,6 +231,10 @@ final class SearchCoordinator {
             : UserDefaults.standard.bool(forKey: key)
     }
 
+    func presentationItems(for pluginId: String) -> [PluginPresentationItem] {
+        presentationItemsByPlugin[pluginId] ?? []
+    }
+
     func setEnabled(_ enabled: Bool, descriptor: PluginDescriptor) {
         UserDefaults.standard.set(enabled, forKey: "plugin.enabled.\(descriptor.id)")
         if enabled {
@@ -228,6 +243,7 @@ final class SearchCoordinator {
             processes[descriptor.id] = nil
             resultsByPlugin[descriptor.id] = nil
             stagedResultsByPlugin[descriptor.id] = nil
+            presentationItemsByPlugin[descriptor.id] = nil
         }
         repeatCurrentSearch()
         onPluginStateChanged?()
@@ -473,10 +489,11 @@ final class SearchCoordinator {
                 guard let self, let process, self.processes[pluginId] === process else { return }
                 self.restartAttempts[pluginId] = 0
             }
-        case let .searchResults(eventQueryId, items)
+        case let .searchResults(eventQueryId, items, presentationItems)
             where eventQueryId == queryId && currentPluginIds.contains(pluginId):
             pendingSearches[pluginId] = nil
             stagedResultsByPlugin[pluginId] = items
+            presentationItemsByPlugin[pluginId] = presentationItems
             if pendingSearches.isEmpty {
                 commitStagedResults(queryId: eventQueryId)
             }

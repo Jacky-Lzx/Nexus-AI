@@ -1,5 +1,7 @@
 use clipkeep_plugin_sdk::{Plugin, run_plugin};
-use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
+use clipkeep_protocol::{
+    PluginPresentationItem, PresentationStyle, ResultAction, ResultKind, SearchResult,
+};
 use std::{
     collections::BTreeMap,
     io,
@@ -150,6 +152,27 @@ impl Plugin for CaffeinatePlugin {
         let was_active = self.active.is_some();
         self.refresh();
         Ok(was_active && self.active.is_none())
+    }
+
+    fn presentation_items(&self) -> Vec<PluginPresentationItem> {
+        let Some(active) = self.active.as_ref() else {
+            return Vec::new();
+        };
+        let countdown_until = active
+            .ends_at
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        vec![PluginPresentationItem {
+            id: "caffeinate-status".into(),
+            title: "Caffeinated".into(),
+            value: format!("{} remaining", remaining_duration(active)),
+            style: PresentationStyle::Success,
+            metadata: BTreeMap::from([
+                ("countdown_until".into(), countdown_until.to_string()),
+                ("symbol_name".into(), "cup.and.saucer.fill".into()),
+            ]),
+        }]
     }
 }
 

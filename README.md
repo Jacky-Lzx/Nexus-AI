@@ -157,6 +157,10 @@ Built-in plugins are separate executables. A plugin crash cannot directly crash
 the UI. A crashed plugin is restarted with bounded backoff, while disabling it
 stops the process and unregisters its shortcut.
 
+Plugins can also publish compact presentation items for their dedicated search page.
+The host renders their icon, title, value, and semantic style consistently; countdown
+metadata is updated locally by the GUI without continuously querying the plugin.
+
 Applications and System Commands expose their complete item catalogs in Settings.
 Each application or command can be hidden independently; hidden items are filtered
 inside the Rust plugin and therefore disappear from both global and dedicated

@@ -167,6 +167,33 @@ struct PluginNotification: Codable {
     let body: String
 }
 
+enum PluginPresentationStyle: String, Codable {
+    case info
+    case success
+    case warning
+}
+
+struct PluginPresentationItem: Codable {
+    let id: String
+    let title: String
+    let value: String
+    let style: PluginPresentationStyle
+    let metadata: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, value, style, metadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        id = try values.decode(String.self, forKey: .id)
+        title = try values.decode(String.self, forKey: .title)
+        value = try values.decodeIfPresent(String.self, forKey: .value) ?? ""
+        style = try values.decodeIfPresent(PluginPresentationStyle.self, forKey: .style) ?? .info
+        metadata = try values.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
+    }
+}
+
 enum PluginItemPreference {
     static func hiddenItemIds(for pluginId: String) -> Set<String> {
         Set(UserDefaults.standard.stringArray(forKey: key(for: pluginId)) ?? [])

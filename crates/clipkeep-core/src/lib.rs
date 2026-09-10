@@ -235,9 +235,9 @@ impl SearchCore {
             };
             while let Some(event) = client.try_event() {
                 match event {
-                    PluginEvent::SearchResults { query_id, items }
-                        if query_id == self.current_query_id =>
-                    {
+                    PluginEvent::SearchResults {
+                        query_id, items, ..
+                    } if query_id == self.current_query_id => {
                         self.results_by_plugin
                             .insert(client.plugin_id().to_owned(), items);
                         changed = true;

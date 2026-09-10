@@ -41,6 +41,8 @@ pub enum PluginEvent {
     SearchResults {
         query_id: u64,
         items: Vec<SearchResult>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        presentation_items: Vec<PluginPresentationItem>,
     },
     ConfigurationItems {
         request_id: u64,
@@ -58,6 +60,27 @@ pub enum PluginEvent {
     Error {
         message: String,
     },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PluginPresentationItem {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub value: String,
+    #[serde(default)]
+    pub style: PresentationStyle,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PresentationStyle {
+    #[default]
+    Info,
+    Success,
+    Warning,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -136,6 +159,20 @@ mod tests {
         let json = serde_json::to_value(request).unwrap();
         assert_eq!(json["type"], "search");
         assert_eq!(json["query_id"], 7);
+    }
+
+    #[test]
+    fn older_search_results_default_to_no_presentation_items() {
+        let event: PluginEvent =
+            serde_json::from_str(r#"{"type":"search_results","query_id":1,"items":[]}"#).unwrap();
+        assert_eq!(
+            event,
+            PluginEvent::SearchResults {
+                query_id: 1,
+                items: Vec::new(),
+                presentation_items: Vec::new(),
+            }
+        );
     }
 
     #[test]

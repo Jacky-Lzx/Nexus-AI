@@ -1,5 +1,6 @@
 use clipkeep_protocol::{
-    ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent, PluginNotification, SearchResult,
+    ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent, PluginNotification,
+    PluginPresentationItem, SearchResult,
 };
 use std::{
     collections::BTreeMap,
@@ -30,6 +31,10 @@ pub trait Plugin {
     }
 
     fn configuration_items(&self) -> Vec<ConfigurationItem> {
+        Vec::new()
+    }
+
+    fn presentation_items(&self) -> Vec<PluginPresentationItem> {
         Vec::new()
     }
 
@@ -120,7 +125,14 @@ fn handle_request(
             query,
             limit,
         } => match plugin.search(&query, limit) {
-            Ok(items) => send(output, &PluginEvent::SearchResults { query_id, items })?,
+            Ok(items) => send(
+                output,
+                &PluginEvent::SearchResults {
+                    query_id,
+                    items,
+                    presentation_items: plugin.presentation_items(),
+                },
+            )?,
             Err(message) => send(output, &PluginEvent::Error { message })?,
         },
         HostRequest::ListConfigurationItems { request_id } => send(

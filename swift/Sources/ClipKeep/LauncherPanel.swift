@@ -171,6 +171,8 @@ final class LauncherPanelController: NSWindowController,
     private let searchContainer = NSView()
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
+    private let presentationContainer = NSView()
+    private let presentationStack = NSStackView()
     private let content = NSView()
     private let splitView = ResultsSplitView()
     private let listPane = NSView()
@@ -191,6 +193,10 @@ final class LauncherPanelController: NSWindowController,
     private var previousApplication: NSRunningApplication?
     private var listWidthConstraint: NSLayoutConstraint?
     private var scrollTrailingConstraint: NSLayoutConstraint?
+    private var presentationTopConstraint: NSLayoutConstraint?
+    private var presentationHeightConstraint: NSLayoutConstraint?
+    private var presentationValueLabels: [(NSTextField, PluginPresentationItem)] = []
+    private var presentationTimer: Timer?
     private var resetScrollOnNextResults = false
     private var detailImageGeneration: UInt64 = 0
 
@@ -265,6 +271,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         updateModeLayout()
+        updatePresentationItems()
         refreshMenuBarPlugin(for: mode)
         requestSearch(query)
         setExpanded(shouldExpand(for: query), animated: false)
@@ -353,11 +360,23 @@ final class LauncherPanelController: NSWindowController,
         searchField.usesSingleLineMode = true
         searchContainer.addSubview(searchField)
 
+        presentationContainer.translatesAutoresizingMaskIntoConstraints = false
+        presentationContainer.isHidden = true
+        root.addSubview(presentationContainer)
+        presentationStack.orientation = .vertical
+        presentationStack.spacing = 6
+        presentationStack.translatesAutoresizingMaskIntoConstraints = false
+        presentationContainer.addSubview(presentationStack)
+
         content.translatesAutoresizingMaskIntoConstraints = false
         content.alphaValue = 0
         root.addSubview(content)
         buildResults()
 
+        presentationTopConstraint = presentationContainer.topAnchor.constraint(
+            equalTo: searchContainer.bottomAnchor
+        )
+        presentationHeightConstraint = presentationContainer.heightAnchor.constraint(equalToConstant: 0)
         NSLayoutConstraint.activate([
             searchContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: Layout.outerInset),
             searchContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
@@ -370,15 +389,18 @@ final class LauncherPanelController: NSWindowController,
             searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 11),
             searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -12),
             searchField.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
-            content.topAnchor.constraint(equalTo: searchContainer.bottomAnchor, constant: Layout.contentSpacing),
+            presentationTopConstraint!,
+            presentationContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
+            presentationContainer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Layout.outerInset),
+            presentationHeightConstraint!,
+            presentationStack.topAnchor.constraint(equalTo: presentationContainer.topAnchor),
+            presentationStack.leadingAnchor.constraint(equalTo: presentationContainer.leadingAnchor),
+            presentationStack.trailingAnchor.constraint(equalTo: presentationContainer.trailingAnchor),
+            presentationStack.bottomAnchor.constraint(equalTo: presentationContainer.bottomAnchor),
+            content.topAnchor.constraint(equalTo: presentationContainer.bottomAnchor, constant: Layout.contentSpacing),
             content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
             content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Layout.outerInset),
-            content.heightAnchor.constraint(
-                equalToConstant: Layout.expandedHeight
-                    - Layout.outerInset * 2
-                    - Layout.searchHeight
-                    - Layout.contentSpacing
-            ),
+            content.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -Layout.outerInset),
         ])
     }
 
@@ -504,6 +526,7 @@ final class LauncherPanelController: NSWindowController,
                 self.resetScrollOnNextResults = false
             }
             self.updateDetails()
+            self.updatePresentationItems()
         }
         coordinator.onStatusChanged = { [weak self] status in self?.statusLabel.stringValue = status }
         coordinator.onPluginStateChanged = { [weak self] in self?.onPluginStateChanged?() }
@@ -864,6 +887,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.placeholderString = mode.placeholder
         statusLabel.stringValue = mode.title
         updateModeLayout()
+        updatePresentationItems()
         refreshMenuBarPlugin(for: mode)
         requestSearch("", preservingResults: true)
         setExpanded(shouldExpand(for: ""), animated: true)
@@ -1123,6 +1147,112 @@ final class LauncherPanelController: NSWindowController,
         return container
     }
 
+    private func updatePresentationItems() {
+        let items: [PluginPresentationItem]
+        if case let .plugin(plugin) = searchMode {
+            items = Array(coordinator.presentationItems(for: plugin.id).prefix(3))
+        } else {
+            items = []
+        }
+
+        for view in presentationStack.arrangedSubviews {
+            presentationStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        presentationValueLabels.removeAll()
+        presentationTimer?.invalidate()
+        presentationTimer = nil
+
+        for item in items {
+            presentationStack.addArrangedSubview(makePresentationRow(item))
+        }
+        let visible = !items.isEmpty
+        presentationContainer.isHidden = !visible
+        presentationTopConstraint?.constant = visible ? Layout.contentSpacing : 0
+        presentationHeightConstraint?.constant = visible
+            ? CGFloat(items.count * 36 + max(items.count - 1, 0) * 6)
+            : 0
+        root.layoutSubtreeIfNeeded()
+        updateScrollerVisibility()
+
+        if items.contains(where: { $0.metadata["countdown_until"] != nil }) {
+            let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+                self?.refreshPresentationValues()
+            }
+            presentationTimer = timer
+            RunLoop.main.add(timer, forMode: .common)
+        }
+    }
+
+    private func makePresentationRow(_ item: PluginPresentationItem) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        row.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        row.wantsLayer = true
+        row.layer?.cornerRadius = 11
+        row.layer?.cornerCurve = .continuous
+        row.layer?.backgroundColor = presentationColor(for: item.style).cgColor
+        row.heightAnchor.constraint(equalToConstant: 36).isActive = true
+
+        let icon = NSImageView()
+        let symbolName = item.metadata["symbol_name"] ?? "info.circle.fill"
+        icon.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: item.title)
+        icon.contentTintColor = .secondaryLabelColor
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
+
+        let title = NSTextField(labelWithString: item.title)
+        title.font = .systemFont(ofSize: 13, weight: .medium)
+        title.textColor = .labelColor
+        title.lineBreakMode = .byTruncatingTail
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let value = NSTextField(labelWithString: presentationValue(for: item))
+        value.font = .monospacedDigitSystemFont(ofSize: 13, weight: .medium)
+        value.textColor = .secondaryLabelColor
+        value.alignment = .right
+        value.setContentHuggingPriority(.required, for: .horizontal)
+        value.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        row.addArrangedSubview(icon)
+        row.addArrangedSubview(title)
+        row.addArrangedSubview(value)
+        presentationValueLabels.append((value, item))
+        return row
+    }
+
+    private func refreshPresentationValues() {
+        for (label, item) in presentationValueLabels {
+            label.stringValue = presentationValue(for: item)
+        }
+    }
+
+    private func presentationValue(for item: PluginPresentationItem) -> String {
+        guard let rawTarget = item.metadata["countdown_until"],
+              let target = TimeInterval(rawTarget)
+        else { return item.value }
+        let remaining = max(Int(ceil(target - Date().timeIntervalSince1970)), 0)
+        let hours = remaining / 3_600
+        let minutes = (remaining % 3_600) / 60
+        let seconds = remaining % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d remaining", hours, minutes, seconds)
+        }
+        return String(format: "%02d:%02d remaining", minutes, seconds)
+    }
+
+    private func presentationColor(for style: PluginPresentationStyle) -> NSColor {
+        switch style {
+        case .info: NSColor.controlAccentColor.withAlphaComponent(0.10)
+        case .success: NSColor.systemGreen.withAlphaComponent(0.11)
+        case .warning: NSColor.systemOrange.withAlphaComponent(0.12)
+        }
+    }
+
     private func setExpanded(_ shouldExpand: Bool, animated: Bool) {
         guard expanded != shouldExpand || !animated else { return }
         expanded = shouldExpand
@@ -1134,6 +1264,7 @@ final class LauncherPanelController: NSWindowController,
         let changes = {
             panel.animator().setFrame(frame, display: true)
             self.content.animator().alphaValue = shouldExpand ? 1 : 0
+            self.presentationContainer.animator().alphaValue = shouldExpand ? 1 : 0
         }
         if animated {
             NSAnimationContext.runAnimationGroup({ context in
@@ -1145,6 +1276,7 @@ final class LauncherPanelController: NSWindowController,
             })
         } else {
             content.alphaValue = shouldExpand ? 1 : 0
+            presentationContainer.alphaValue = shouldExpand ? 1 : 0
             panel.setFrame(frame, display: true)
             updateScrollerVisibility()
         }
