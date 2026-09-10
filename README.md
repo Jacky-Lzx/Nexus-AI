@@ -33,6 +33,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
   as closing the palette and pasting into the previous app is protocol-driven
 - `Command-Shift-Space` opens a combined search across opted-in plugins
 - `Command-Shift-C` searches clipboard history only
+- In Clipboard History, `Shift-Option-E` opens the selected text in Neovim; after the editor closes, Nexus pastes the saved text back into the previous application
 - Automatically hides when focus moves to another application
 - Escape hides the palette and restores focus to the previously active application
 - Choosing a clipboard entry restores the previous application and pastes it directly

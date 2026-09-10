@@ -11,10 +11,10 @@ use std::{
     collections::{BTreeMap, hash_map::DefaultHasher},
     fs,
     hash::{Hash, Hasher},
-    io,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::Command,
-    time::SystemTime,
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 const PLUGIN_ID: &str = "io.clipkeep.clipboard";
@@ -161,6 +161,31 @@ impl Plugin for ClipboardPlugin {
                 self.save()?;
                 Ok(Some(format!("{} ready to paste", item.kind.label())))
             }
+            "edit" => {
+                let position = self
+                    .items
+                    .iter()
+                    .position(|item| item.id == id)
+                    .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
+                let item = self.items[position].clone();
+                if !matches!(item.kind, ClipKind::Text | ClipKind::RichText) || item.text.is_empty()
+                {
+                    return Err("only text clipboard entries can be edited".into());
+                }
+                let edited = edit_text_in_neovim(id, &item.text)?;
+                if edited.len() > MAX_ITEM_BYTES {
+                    return Err("edited clipboard text is too large".into());
+                }
+                let content = plain_text_content(edited);
+                let favorite = item.favorite;
+                self.items[position] = ClipItem::new(id, content);
+                self.items[position].favorite = favorite;
+                let edited_item = self.items[position].clone();
+                self.clipboard.restore(&edited_item)?;
+                promote_item(&mut self.items, position, now_secs());
+                self.save()?;
+                Ok(Some("Edited text ready to paste".into()))
+            }
             "favorite" => {
                 let favorite = {
                     let item = self
@@ -306,6 +331,81 @@ impl CapturedContent {
     }
 }
 
+fn plain_text_content(text: String) -> CapturedContent {
+    let uti = "public.utf8-plain-text".to_owned();
+    let data = text.as_bytes().to_vec();
+    let mut hasher = DefaultHasher::new();
+    0usize.hash(&mut hasher);
+    uti.hash(&mut hasher);
+    data.hash(&mut hasher);
+    CapturedContent {
+        kind: ClipKind::Text,
+        text,
+        representations: vec![Representation { item: 0, uti, data }],
+        fingerprint: hasher.finish(),
+        thumbnail: None,
+    }
+}
+
+fn edit_text_in_neovim(id: u64, text: &str) -> Result<String, String> {
+    let kitty = find_executable(
+        "kitty",
+        &[
+            "/opt/homebrew/bin/kitty",
+            "/usr/local/bin/kitty",
+            "/Applications/kitty.app/Contents/MacOS/kitty",
+        ],
+    )
+    .ok_or_else(|| "Kitty was not found".to_owned())?;
+    let neovim = find_executable("nvim", &["/opt/homebrew/bin/nvim", "/usr/local/bin/nvim"])
+        .ok_or_else(|| "Neovim was not found".to_owned())?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let path = std::env::temp_dir().join(format!(
+        "nexus-clipboard-edit-{}-{id}-{nonce}.txt",
+        std::process::id()
+    ));
+
+    let result = (|| {
+        let mut options = fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&path).map_err(|error| error.to_string())?;
+        file.write_all(text.as_bytes())
+            .map_err(|error| error.to_string())?;
+        drop(file);
+
+        let status = Command::new(&kitty)
+            .arg("--start-as=normal")
+            .arg("--title=nvim_edit")
+            .arg(&neovim)
+            .arg(&path)
+            .status()
+            .map_err(|error| format!("could not open Kitty: {error}"))?;
+        if !status.success() {
+            return Err(format!("Neovim exited with status {status}"));
+        }
+        fs::read_to_string(&path).map_err(|error| error.to_string())
+    })();
+    let _ = fs::remove_file(path);
+    result
+}
+
+fn find_executable(name: &str, fallbacks: &[&str]) -> Option<PathBuf> {
+    std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .map(|directory| directory.join(name))
+        .chain(fallbacks.iter().map(PathBuf::from))
+        .find(|path| path.is_file())
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct ClipItem {
     id: u64,
@@ -419,6 +519,42 @@ impl ClipItem {
             } else {
                 0.0
             };
+        let mut actions = vec![ResultAction {
+            id: "copy".into(),
+            title: "Paste".into(),
+            destructive: false,
+            default: true,
+            closes_window: true,
+            paste_to_previous: true,
+        }];
+        if matches!(self.kind, ClipKind::Text | ClipKind::RichText) && !self.text.is_empty() {
+            actions.push(ResultAction {
+                id: "edit".into(),
+                title: "Edit in Neovim".into(),
+                destructive: false,
+                default: false,
+                closes_window: true,
+                paste_to_previous: true,
+            });
+        }
+        actions.extend([
+            ResultAction {
+                id: "favorite".into(),
+                title: "Favorite".into(),
+                destructive: false,
+                default: false,
+                closes_window: false,
+                paste_to_previous: false,
+            },
+            ResultAction {
+                id: "delete".into(),
+                title: "Delete".into(),
+                destructive: true,
+                default: false,
+                closes_window: false,
+                paste_to_previous: false,
+            },
+        ]);
         SearchResult {
             plugin_id: PLUGIN_ID.into(),
             id: format!("clipboard:{}", self.id),
@@ -432,32 +568,7 @@ impl ClipItem {
             kind: self.kind.result_kind(),
             score: 1_000.0 - index as f32 + match_bonus + if self.favorite { 10.0 } else { 0.0 },
             metadata,
-            actions: vec![
-                ResultAction {
-                    id: "copy".into(),
-                    title: "Paste".into(),
-                    destructive: false,
-                    default: true,
-                    closes_window: true,
-                    paste_to_previous: true,
-                },
-                ResultAction {
-                    id: "favorite".into(),
-                    title: "Favorite".into(),
-                    destructive: false,
-                    default: false,
-                    closes_window: false,
-                    paste_to_previous: false,
-                },
-                ResultAction {
-                    id: "delete".into(),
-                    title: "Delete".into(),
-                    destructive: true,
-                    default: false,
-                    closes_window: false,
-                    paste_to_previous: false,
-                },
-            ],
+            actions,
         }
     }
 
@@ -1091,5 +1202,40 @@ mod tests {
         assert_eq!(text.subtitle(), "just now");
         assert_eq!(image.subtitle(), "0 B · just now");
         assert_eq!(rich_text.subtitle(), "Rich text · just now");
+    }
+
+    #[test]
+    fn edit_action_is_only_available_for_text_entries() {
+        let item = |kind, text: &str| ClipItem {
+            id: 1,
+            text: text.into(),
+            created_at: now_secs(),
+            favorite: false,
+            kind,
+            representations: Vec::new(),
+            fingerprint: 1,
+            thumbnail: None,
+        };
+        let has_edit = |item: ClipItem| {
+            item.as_result(0, "", &std::env::temp_dir())
+                .actions
+                .iter()
+                .any(|action| action.id == "edit")
+        };
+
+        assert!(has_edit(item(ClipKind::Text, "plain text")));
+        assert!(has_edit(item(ClipKind::RichText, "rich text")));
+        assert!(!has_edit(item(ClipKind::Image, "")));
+        assert!(!has_edit(item(ClipKind::Text, "")));
+    }
+
+    #[test]
+    fn edited_text_is_stored_as_plain_text() {
+        let content = plain_text_content("edited text".into());
+
+        assert_eq!(content.kind, ClipKind::Text);
+        assert_eq!(content.text, "edited text");
+        assert_eq!(content.byte_len(), 11);
+        assert_eq!(content.representations[0].uti, "public.utf8-plain-text");
     }
 }

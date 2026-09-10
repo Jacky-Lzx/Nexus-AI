@@ -273,17 +273,33 @@ final class SearchCoordinator {
     }
 
     func execute(_ result: SearchResult, actionId: String, completion: ((Bool) -> Void)? = nil) {
-        execute(pluginId: result.pluginId, resultId: result.id, actionId: actionId, completion: completion)
+        let timeout: TimeInterval? = result.pluginId == "io.clipkeep.clipboard" && actionId == "edit"
+            ? nil
+            : 5
+        execute(
+            pluginId: result.pluginId,
+            resultId: result.id,
+            actionId: actionId,
+            timeout: timeout,
+            completion: completion
+        )
     }
 
     func execute(pluginId: String, actionId: String, completion: ((Bool) -> Void)? = nil) {
-        execute(pluginId: pluginId, resultId: "plugin:settings", actionId: actionId, completion: completion)
+        execute(
+            pluginId: pluginId,
+            resultId: "plugin:settings",
+            actionId: actionId,
+            timeout: 5,
+            completion: completion
+        )
     }
 
     private func execute(
         pluginId: String,
         resultId: String,
         actionId: String,
+        timeout: TimeInterval?,
         completion: ((Bool) -> Void)?
     ) {
         guard let process = processes[pluginId] else { completion?(false); return }
@@ -295,7 +311,8 @@ final class SearchCoordinator {
             resultId: resultId,
             actionId: actionId
         )
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak process] in
+        guard let timeout else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self, weak process] in
             guard let self, let process,
                   self.processes[pluginId] === process,
                   let pending = self.actionCompletions.removeValue(forKey: sentRequestId) else { return }

@@ -482,6 +482,10 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func perform(_ action: ResultAction, on result: SearchResult) {
+        if result.pluginId == "io.clipkeep.clipboard", action.id == "edit" {
+            performClipboardEdit(action, on: result)
+            return
+        }
         if action.destructive {
             let alert = NSAlert()
             alert.messageText = result.metadata["confirmation_title"] ?? "\(action.title)?"
@@ -506,6 +510,19 @@ final class LauncherPanelController: NSWindowController,
         }
         if action.closesWindow && !action.pasteToPrevious {
             hide()
+        }
+    }
+
+    private func performClipboardEdit(_ action: ResultAction, on result: SearchResult) {
+        let applicationToRestore = previousApplication
+        let canPaste = ensureAccessibilityPermission()
+        hide()
+        coordinator.execute(result, actionId: action.id) { success in
+            applicationToRestore?.activate()
+            guard success, canPaste, let applicationToRestore else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                Self.sendPaste(to: applicationToRestore)
+            }
         }
     }
 
@@ -568,6 +585,15 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        if searchMode == .clipboard,
+           relevantModifiers == [.option, .shift],
+           event.charactersIgnoringModifiers?.lowercased() == "e",
+           let result = selectedResult,
+           let action = result.actions.first(where: { $0.id == "edit" }) {
+            perform(action, on: result)
+            return true
+        }
         if LauncherKeyAction.moveDown.matches(event) {
             moveSelection(1)
             return true
