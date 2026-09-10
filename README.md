@@ -15,6 +15,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
   system sleep, Settings, Force Quit, log out, restart, and shut down
+- Searches running processes by name and sends SIGTERM only
+  after an explicit confirmation containing the process name and PID
 - Preserves native pasteboard representations such as UTF-8, RTF, HTML,
   PNG, TIFF, file URLs, and multiple pasteboard items
 - Generates compact image thumbnails in Rust for list and detail previews
@@ -126,6 +128,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
+- `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
 

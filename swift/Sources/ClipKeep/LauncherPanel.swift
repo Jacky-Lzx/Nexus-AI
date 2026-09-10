@@ -470,8 +470,9 @@ final class LauncherPanelController: NSWindowController,
     private func perform(_ action: ResultAction, on result: SearchResult) {
         if action.destructive {
             let alert = NSAlert()
-            alert.messageText = "\(action.title)?"
-            alert.informativeText = "This system action may interrupt your current work."
+            alert.messageText = result.metadata["confirmation_title"] ?? "\(action.title)?"
+            alert.informativeText = result.metadata["confirmation_message"]
+                ?? "This system action may interrupt your current work."
             alert.alertStyle = .warning
             alert.addButton(withTitle: action.title)
             alert.addButton(withTitle: "Cancel")

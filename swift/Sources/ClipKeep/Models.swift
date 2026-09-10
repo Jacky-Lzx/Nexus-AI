@@ -156,6 +156,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.applications": "square.grid.2x2"
         case "io.clipkeep.calculator": "function"
         case "io.clipkeep.calendar": "calendar"
+        case "io.clipkeep.kill-process": "xmark.circle"
         case "io.clipkeep.system-commands": "power"
         default: "puzzlepiece.extension"
         }
@@ -198,6 +199,13 @@ private let fallbackBuiltInPlugins = [
         executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-calendar"),
         defaultEnabled: true, defaultIncludedInGlobalSearch: false,
         capabilities: ["calendar.read", "applications.open"]
+    ),
+    PluginDescriptor(
+        id: "io.clipkeep.kill-process", name: "Kill Process", version: "0.1.0", protocolVersion: 1,
+        executable: "clipkeep-plugin-kill-process",
+        executableURL: Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/clipkeep-plugin-kill-process"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: true,
+        capabilities: ["processes.read", "processes.terminate"]
     ),
     PluginDescriptor(
         id: "io.clipkeep.system-commands", name: "System Commands", version: "0.1.0", protocolVersion: 1,

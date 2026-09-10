@@ -231,6 +231,8 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Evaluate expressions and paste the result"
         case "io.clipkeep.calendar":
             pluginDescription = "Read-only access to your upcoming calendar events"
+        case "io.clipkeep.kill-process":
+            pluginDescription = "Find running processes and terminate them after confirmation"
         case "io.clipkeep.system-commands":
             pluginDescription = "Quickly run common macOS system actions"
         default:

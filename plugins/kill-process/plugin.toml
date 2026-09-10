@@ -1,0 +1,8 @@
+id = "io.clipkeep.kill-process"
+name = "Kill Process"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-kill-process"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["processes.read", "processes.terminate"]
