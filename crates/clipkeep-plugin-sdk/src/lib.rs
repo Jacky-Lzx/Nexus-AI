@@ -1,4 +1,6 @@
-use clipkeep_protocol::{HostRequest, PROTOCOL_VERSION, PluginEvent, SearchResult};
+use clipkeep_protocol::{
+    ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent, SearchResult,
+};
 use std::{
     collections::BTreeMap,
     io::{self, BufRead, BufReader, BufWriter, Write},
@@ -25,6 +27,10 @@ pub trait Plugin {
 
     fn configure(&mut self, _settings: &BTreeMap<String, String>) -> Result<bool, String> {
         Ok(false)
+    }
+
+    fn configuration_items(&self) -> Vec<ConfigurationItem> {
+        Vec::new()
     }
 
     fn tick(&mut self) -> Result<bool, String> {
@@ -105,6 +111,13 @@ fn handle_request(
             Ok(items) => send(output, &PluginEvent::SearchResults { query_id, items })?,
             Err(message) => send(output, &PluginEvent::Error { message })?,
         },
+        HostRequest::ListConfigurationItems { request_id } => send(
+            output,
+            &PluginEvent::ConfigurationItems {
+                request_id,
+                configuration_items: plugin.configuration_items(),
+            },
+        )?,
         HostRequest::Execute {
             request_id,
             result_id,

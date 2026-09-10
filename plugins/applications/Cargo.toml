@@ -8,6 +8,7 @@ license.workspace = true
 clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
 clipkeep-protocol.workspace = true
 directories = "6.0"
+serde_json.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

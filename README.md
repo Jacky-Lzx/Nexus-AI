@@ -138,6 +138,11 @@ Built-in plugins are separate executables. A plugin crash cannot directly crash
 the UI. A crashed plugin is restarted with bounded backoff, while disabling it
 stops the process and unregisters its shortcut.
 
+Applications and System Commands expose their complete item catalogs in Settings.
+Each application or command can be hidden independently; hidden items are filtered
+inside the Rust plugin and therefore disappear from both global and dedicated
+search results.
+
 ## Plugin bundles
 
 A plugin bundle is a directory ending in `.clipkeepplugin` that contains a Rust
@@ -168,5 +173,8 @@ from Global Search receives a searchable item in the main page that opens its
 dedicated search window. That item is always hidden while the plugin participates
 in Global Search. Clipboard History is deliberately excluded from the combined
 search regardless of its manifest and is only opened explicitly.
+Plugins can optionally implement the SDK's `configuration_items` catalog and
+consume the host-provided `hidden_items` setting to offer the same per-item
+visibility controls.
 Run `Nexus --list-plugins` against a built app to validate discovery. Plugin
 stderr logs are written under the app-support `Logs` directory.

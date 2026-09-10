@@ -138,6 +138,7 @@ dependencies = [
  "directories",
  "objc2",
  "objc2-foundation",
+ "serde_json",
 ]
 
 [[package]]
@@ -202,6 +203,7 @@ version = "0.1.0"
 dependencies = [
  "clipkeep-plugin-sdk",
  "clipkeep-protocol",
+ "serde_json",
 ]
 
 [[package]]

@@ -433,13 +433,49 @@ final class SettingsWindowController: NSWindowController,
             ))
         }
 
+        let hasItemConfiguration = [
+            "io.clipkeep.applications",
+            "io.clipkeep.system-commands",
+        ].contains(plugin.id)
+        let itemListTitle: NSTextField? = hasItemConfiguration
+            ? NSTextField(labelWithString: "Items")
+            : nil
+        let itemList: PluginConfigurationItemsView? = hasItemConfiguration
+            ? PluginConfigurationItemsView()
+            : nil
+        itemListTitle?.font = .systemFont(ofSize: 13, weight: .semibold)
+        itemListTitle?.textColor = .secondaryLabelColor
+        itemListTitle?.translatesAutoresizingMaskIntoConstraints = false
+        itemList?.translatesAutoresizingMaskIntoConstraints = false
+
         for view in [icon, title, description, enabled, optionsTitle, options] {
             detailPane.addSubview(view)
         }
+        if let itemListTitle, let itemList {
+            detailPane.addSubview(itemListTitle)
+            detailPane.addSubview(itemList)
+            NSLayoutConstraint.activate([
+                itemListTitle.topAnchor.constraint(equalTo: options.bottomAnchor, constant: 14),
+                itemListTitle.leadingAnchor.constraint(equalTo: optionsTitle.leadingAnchor),
+                itemList.topAnchor.constraint(equalTo: itemListTitle.bottomAnchor, constant: 8),
+                itemList.leadingAnchor.constraint(equalTo: options.leadingAnchor),
+                itemList.trailingAnchor.constraint(equalTo: options.trailingAnchor),
+                itemList.bottomAnchor.constraint(equalTo: detailPane.bottomAnchor, constant: -22),
+            ])
+            coordinator.loadConfigurationItems(for: plugin.id) { [weak self, weak itemList] items in
+                guard let self, self.selectedPlugin?.id == plugin.id else { return }
+                let hidden = PluginItemPreference.hiddenItemIds(for: plugin.id)
+                itemList?.configure(items: items, hiddenItemIds: hidden) { [weak self] itemId, visible in
+                    PluginItemPreference.setVisible(visible, itemId: itemId, pluginId: plugin.id)
+                    self?.coordinator.reloadSettings(for: plugin.id)
+                }
+            }
+        }
+        let compactLayout = plugin.id == "io.clipkeep.clipboard" || hasItemConfiguration
         NSLayoutConstraint.activate([
             icon.topAnchor.constraint(
                 equalTo: detailPane.topAnchor,
-                constant: plugin.id == "io.clipkeep.clipboard" ? 28 : 76
+                constant: compactLayout ? 28 : 76
             ),
             icon.centerXAnchor.constraint(equalTo: detailPane.centerXAnchor),
             icon.widthAnchor.constraint(equalToConstant: 64),
@@ -453,7 +489,7 @@ final class SettingsWindowController: NSWindowController,
             enabled.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -24),
             optionsTitle.topAnchor.constraint(
                 equalTo: description.bottomAnchor,
-                constant: plugin.id == "io.clipkeep.clipboard" ? 16 : 30
+                constant: compactLayout ? 16 : 30
             ),
             optionsTitle.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 30),
             options.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
@@ -639,6 +675,148 @@ final class SettingsWindowController: NSWindowController,
         guard choices.indices.contains(sender.indexOfSelectedItem) else { return }
         UserDefaults.standard.set(choices[sender.indexOfSelectedItem], forKey: CalendarPreference.futureDays)
         coordinator.reloadSettings(for: "io.clipkeep.calendar")
+    }
+}
+
+private final class PluginConfigurationItemsView: NSView {
+    private let scrollView = NSScrollView()
+    private let documentView = FlippedSettingsView()
+    private let stack = NSStackView()
+    private let emptyLabel = NSTextField(labelWithString: "Loading items…")
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.055).cgColor
+        layer?.cornerRadius = 14
+        layer?.cornerCurve = .continuous
+
+        scrollView.documentView = documentView
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(scrollView)
+
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .vertical
+        stack.spacing = 0
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        documentView.addSubview(stack)
+
+        emptyLabel.textColor = .secondaryLabelColor
+        emptyLabel.alignment = .center
+        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(emptyLabel)
+
+        NSLayoutConstraint.activate([
+            scrollView.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            scrollView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
+            documentView.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            documentView.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            stack.topAnchor.constraint(equalTo: documentView.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
+            documentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            emptyLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
+            emptyLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func configure(
+        items: [PluginConfigurationItem],
+        hiddenItemIds: Set<String>,
+        onVisibilityChanged: @escaping (String, Bool) -> Void
+    ) {
+        stack.arrangedSubviews.forEach {
+            stack.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        emptyLabel.stringValue = items.isEmpty ? "No configurable items" : ""
+        emptyLabel.isHidden = !items.isEmpty
+        for item in items {
+            let row = PluginConfigurationItemRow(
+                item: item,
+                visible: !hiddenItemIds.contains(item.id),
+                onVisibilityChanged: onVisibilityChanged
+            )
+            stack.addArrangedSubview(row)
+            row.heightAnchor.constraint(equalToConstant: 48).isActive = true
+            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+    }
+}
+
+private final class FlippedSettingsView: NSView {
+    override var isFlipped: Bool { true }
+}
+
+private final class PluginConfigurationItemRow: NSView {
+    private let itemId: String
+    private let onVisibilityChanged: (String, Bool) -> Void
+
+    init(
+        item: PluginConfigurationItem,
+        visible: Bool,
+        onVisibilityChanged: @escaping (String, Bool) -> Void
+    ) {
+        itemId = item.id
+        self.onVisibilityChanged = onVisibilityChanged
+        super.init(frame: .zero)
+
+        let icon = NSImageView()
+        if let symbolName = item.metadata["symbol_name"] {
+            icon.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: item.title)
+            icon.contentTintColor = .labelColor
+        } else if let path = item.metadata["path"] {
+            icon.image = NSWorkspace.shared.icon(forFile: path)
+        }
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.translatesAutoresizingMaskIntoConstraints = false
+
+        let title = NSTextField(labelWithString: item.title)
+        title.font = .systemFont(ofSize: 13, weight: .medium)
+        title.lineBreakMode = .byTruncatingTail
+        title.translatesAutoresizingMaskIntoConstraints = false
+
+        let subtitle = NSTextField(labelWithString: item.subtitle)
+        subtitle.font = .systemFont(ofSize: 11)
+        subtitle.textColor = .secondaryLabelColor
+        subtitle.lineBreakMode = .byTruncatingMiddle
+        subtitle.translatesAutoresizingMaskIntoConstraints = false
+
+        let toggle = NSSwitch()
+        toggle.state = visible ? .on : .off
+        toggle.target = self
+        toggle.action = #selector(changeVisibility(_:))
+        toggle.translatesAutoresizingMaskIntoConstraints = false
+
+        for view in [icon, title, subtitle, toggle] { addSubview(view) }
+        NSLayoutConstraint.activate([
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 28),
+            icon.heightAnchor.constraint(equalToConstant: 28),
+            title.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
+            title.topAnchor.constraint(equalTo: topAnchor, constant: 7),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: toggle.leadingAnchor, constant: -12),
+            subtitle.leadingAnchor.constraint(equalTo: title.leadingAnchor),
+            subtitle.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
+            subtitle.trailingAnchor.constraint(lessThanOrEqualTo: toggle.leadingAnchor, constant: -12),
+            toggle.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            toggle.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    @objc private func changeVisibility(_ sender: NSSwitch) {
+        onVisibilityChanged(itemId, sender.state == .on)
     }
 }
 

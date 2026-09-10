@@ -4,6 +4,7 @@ final class PluginProcess {
     enum Event {
         case initialized(pluginId: String, protocolVersion: Int)
         case searchResults(queryId: UInt64, items: [SearchResult])
+        case configurationItems(requestId: UInt64, items: [PluginConfigurationItem])
         case catalogChanged
         case actionFinished(requestId: UInt64, success: Bool, message: String?)
         case error(String)
@@ -24,6 +25,7 @@ final class PluginProcess {
         let type: String
         let queryId: UInt64?
         let items: [SearchResult]?
+        let configurationItems: [PluginConfigurationItem]?
         let requestId: UInt64?
         let success: Bool?
         let message: String?
@@ -36,6 +38,7 @@ final class PluginProcess {
             case requestId = "request_id"
             case pluginId = "plugin_id"
             case protocolVersion = "protocol_version"
+            case configurationItems = "configuration_items"
         }
     }
 
@@ -95,6 +98,13 @@ final class PluginProcess {
         ])
     }
 
+    func listConfigurationItems(requestId: UInt64) {
+        send([
+            "type": "list_configuration_items",
+            "request_id": requestId,
+        ])
+    }
+
     func configure(settings: [String: String]) {
         send(["type": "configure", "settings": settings])
     }
@@ -141,6 +151,10 @@ final class PluginProcess {
         case "search_results":
             guard let queryId = envelope.queryId, let items = envelope.items else { return }
             event = .searchResults(queryId: queryId, items: items)
+        case "configuration_items":
+            guard let requestId = envelope.requestId,
+                  let items = envelope.configurationItems else { return }
+            event = .configurationItems(requestId: requestId, items: items)
         case "catalog_changed":
             event = .catalogChanged
         case "action_finished":
@@ -175,6 +189,9 @@ final class SearchCoordinator {
     private var queryId: UInt64 = 0
     private var requestId: UInt64 = 0
     private var actionCompletions: [UInt64: (pluginId: String, completion: (Bool) -> Void)] = [:]
+    private var configurationCompletions: [
+        UInt64: (pluginId: String, completion: ([PluginConfigurationItem]) -> Void)
+    ] = [:]
     private var restartAttempts: [String: Int] = [:]
     private var pendingSearches: [String: UInt64] = [:]
 
@@ -367,6 +384,27 @@ final class SearchCoordinator {
         processes[pluginId]?.configure(settings: settings(for: pluginId))
     }
 
+    func loadConfigurationItems(
+        for pluginId: String,
+        completion: @escaping ([PluginConfigurationItem]) -> Void
+    ) {
+        guard let process = processes[pluginId] else {
+            completion([])
+            return
+        }
+        requestId += 1
+        let sentRequestId = requestId
+        configurationCompletions[sentRequestId] = (pluginId, completion)
+        process.listConfigurationItems(requestId: sentRequestId)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak process] in
+            guard let self, let process,
+                  self.processes[pluginId] === process,
+                  let pending = self.configurationCompletions.removeValue(forKey: sentRequestId)
+            else { return }
+            pending.completion([])
+        }
+    }
+
     private func start(_ descriptor: PluginDescriptor) {
         guard processes[descriptor.id] == nil else { return }
         let executable = descriptor.executableURL
@@ -392,6 +430,8 @@ final class SearchCoordinator {
         switch pluginId {
         case "io.clipkeep.clipboard": ClipboardPreference.pluginSettings
         case "io.clipkeep.calendar": CalendarPreference.pluginSettings
+        case "io.clipkeep.applications", "io.clipkeep.system-commands":
+            PluginItemPreference.pluginSettings(for: pluginId)
         default: [:]
         }
     }
@@ -415,6 +455,11 @@ final class SearchCoordinator {
             if pendingSearches.isEmpty {
                 commitStagedResults(queryId: eventQueryId)
             }
+        case let .configurationItems(requestId, items):
+            guard let pending = configurationCompletions[requestId],
+                  pending.pluginId == pluginId else { break }
+            configurationCompletions[requestId] = nil
+            pending.completion(items)
         case .catalogChanged where currentPluginIds.contains(pluginId):
             repeatCurrentSearch()
         case let .actionFinished(requestId, success, message):
@@ -428,6 +473,9 @@ final class SearchCoordinator {
             let failedActions = actionCompletions.filter { $0.value.pluginId == pluginId }
             failedActions.keys.forEach { actionCompletions[$0] = nil }
             failedActions.values.forEach { $0.completion(false) }
+            let failedConfigurations = configurationCompletions.filter { $0.value.pluginId == pluginId }
+            failedConfigurations.keys.forEach { configurationCompletions[$0] = nil }
+            failedConfigurations.values.forEach { $0.completion([]) }
             processes[pluginId] = nil
             resultsByPlugin[pluginId] = nil
             stagedResultsByPlugin[pluginId] = nil

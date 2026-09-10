@@ -151,6 +151,40 @@ struct SearchResult: Codable {
     }
 }
 
+struct PluginConfigurationItem: Codable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let metadata: [String: String]
+}
+
+enum PluginItemPreference {
+    static func hiddenItemIds(for pluginId: String) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: key(for: pluginId)) ?? [])
+    }
+
+    static func setVisible(_ visible: Bool, itemId: String, pluginId: String) {
+        var hidden = hiddenItemIds(for: pluginId)
+        if visible {
+            hidden.remove(itemId)
+        } else {
+            hidden.insert(itemId)
+        }
+        UserDefaults.standard.set(hidden.sorted(), forKey: key(for: pluginId))
+    }
+
+    static func pluginSettings(for pluginId: String) -> [String: String] {
+        let items = hiddenItemIds(for: pluginId).sorted()
+        guard let data = try? JSONSerialization.data(withJSONObject: items),
+              let json = String(data: data, encoding: .utf8) else { return [:] }
+        return ["hidden_items": json]
+    }
+
+    private static func key(for pluginId: String) -> String {
+        "plugin.hiddenItems.\(pluginId)"
+    }
+}
+
 struct PluginDescriptor: Equatable {
     let id: String
     let name: String

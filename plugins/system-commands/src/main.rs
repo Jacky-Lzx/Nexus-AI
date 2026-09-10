@@ -1,7 +1,7 @@
 use clipkeep_plugin_sdk::{Plugin, run_plugin};
-use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
+use clipkeep_protocol::{ConfigurationItem, ResultAction, ResultKind, SearchResult};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     io,
     process::{Command, ExitStatus},
 };
@@ -9,10 +9,13 @@ use std::{
 const PLUGIN_ID: &str = "io.clipkeep.system-commands";
 
 fn main() -> io::Result<()> {
-    run_plugin(SystemCommandsPlugin)
+    run_plugin(SystemCommandsPlugin::default())
 }
 
-struct SystemCommandsPlugin;
+#[derive(Default)]
+struct SystemCommandsPlugin {
+    hidden_items: HashSet<String>,
+}
 
 #[derive(Clone, Copy)]
 struct SystemCommand {
@@ -98,6 +101,7 @@ impl Plugin for SystemCommandsPlugin {
         let query = query.trim().to_lowercase();
         Ok(COMMANDS
             .iter()
+            .filter(|command| !self.hidden_items.contains(command.id))
             .filter(|command| matches_query(command, &query))
             .take(limit)
             .enumerate()
@@ -128,6 +132,33 @@ impl Plugin for SystemCommandsPlugin {
             return Err(format!("system command failed with {status}"));
         }
         Ok(Some("System command sent".into()))
+    }
+
+    fn configure(&mut self, settings: &BTreeMap<String, String>) -> Result<bool, String> {
+        let hidden_items = settings
+            .get("hidden_items")
+            .map(|value| serde_json::from_str(value))
+            .transpose()
+            .map_err(|error| format!("invalid hidden system command list: {error}"))?
+            .unwrap_or_default();
+        let changed = hidden_items != self.hidden_items;
+        self.hidden_items = hidden_items;
+        Ok(changed)
+    }
+
+    fn configuration_items(&self) -> Vec<ConfigurationItem> {
+        COMMANDS
+            .iter()
+            .map(|command| ConfigurationItem {
+                id: command.id.into(),
+                title: command.title.into(),
+                subtitle: command.subtitle.into(),
+                metadata: BTreeMap::from([(
+                    "symbol_name".into(),
+                    command_symbol(command.id).into(),
+                )]),
+            })
+            .collect()
     }
 }
 
@@ -193,6 +224,19 @@ mod tests {
         assert!(matches_query(&COMMANDS[0], "lock"));
         assert!(matches_query(&COMMANDS[0], "锁屏"));
         assert!(!matches_query(&COMMANDS[0], "restart"));
+    }
+
+    #[test]
+    fn configured_hidden_commands_are_excluded_from_search() {
+        let mut plugin = SystemCommandsPlugin::default();
+        let settings = BTreeMap::from([(
+            "hidden_items".into(),
+            serde_json::to_string(&["lock"]).unwrap(),
+        )]);
+
+        assert!(plugin.configure(&settings).unwrap());
+        assert!(plugin.search("lock", 10).unwrap().is_empty());
+        assert_eq!(plugin.configuration_items().len(), COMMANDS.len());
     }
 
     #[test]

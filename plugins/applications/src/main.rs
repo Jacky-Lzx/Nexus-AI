@@ -1,8 +1,8 @@
 use clipkeep_plugin_sdk::{Plugin, run_plugin};
-use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
+use clipkeep_protocol::{ConfigurationItem, ResultAction, ResultKind, SearchResult};
 use directories::UserDirs;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     fs, io,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -17,6 +17,7 @@ fn main() -> io::Result<()> {
 
 struct ApplicationsPlugin {
     applications: Vec<Application>,
+    hidden_items: HashSet<String>,
     last_scan: Instant,
 }
 
@@ -24,6 +25,7 @@ impl ApplicationsPlugin {
     fn new() -> Self {
         Self {
             applications: scan_applications(),
+            hidden_items: HashSet::new(),
             last_scan: Instant::now(),
         }
     }
@@ -39,6 +41,11 @@ impl Plugin for ApplicationsPlugin {
         let mut matches: Vec<_> = self
             .applications
             .iter()
+            .filter(|application| {
+                !self
+                    .hidden_items
+                    .contains(application.path.to_string_lossy().as_ref())
+            })
             .filter_map(|application| {
                 application
                     .search_score(&query)
@@ -67,6 +74,33 @@ impl Plugin for ApplicationsPlugin {
             .ok_or_else(|| "invalid application result id".to_owned())?;
         open_application(Path::new(path))?;
         Ok(Some("Application opened".to_owned()))
+    }
+
+    fn configure(&mut self, settings: &BTreeMap<String, String>) -> Result<bool, String> {
+        let hidden_items = settings
+            .get("hidden_items")
+            .map(|value| serde_json::from_str(value))
+            .transpose()
+            .map_err(|error| format!("invalid hidden application list: {error}"))?
+            .unwrap_or_default();
+        let changed = hidden_items != self.hidden_items;
+        self.hidden_items = hidden_items;
+        Ok(changed)
+    }
+
+    fn configuration_items(&self) -> Vec<ConfigurationItem> {
+        self.applications
+            .iter()
+            .map(|application| {
+                let path = application.path.to_string_lossy().into_owned();
+                ConfigurationItem {
+                    id: path.clone(),
+                    title: application.name.clone(),
+                    subtitle: path.clone(),
+                    metadata: BTreeMap::from([("path".into(), path)]),
+                }
+            })
+            .collect()
     }
 
     fn tick(&mut self) -> Result<bool, String> {
@@ -469,6 +503,31 @@ mod tests {
         assert!(fuzzy_score("Visual Studio Code", "vsc").is_some());
         assert!(fuzzy_score("Safari", "xyz").is_none());
         assert!(fuzzy_score("Safari", "saf").unwrap() > fuzzy_score("Safari", "sfr").unwrap());
+    }
+
+    #[test]
+    fn configured_hidden_applications_are_excluded_from_search() {
+        let path = PathBuf::from("/Applications/Hidden.app");
+        let mut plugin = ApplicationsPlugin {
+            applications: vec![Application {
+                name: "Hidden".into(),
+                bundle_name: "Hidden".into(),
+                pinyin: String::new(),
+                pinyin_initials: String::new(),
+                pinyin_variants: Vec::new(),
+                path: path.clone(),
+            }],
+            hidden_items: HashSet::new(),
+            last_scan: Instant::now(),
+        };
+        let settings = BTreeMap::from([(
+            "hidden_items".into(),
+            serde_json::to_string(&[path.to_string_lossy()]).unwrap(),
+        )]);
+
+        assert!(plugin.configure(&settings).unwrap());
+        assert!(plugin.search("hidden", 10).unwrap().is_empty());
+        assert_eq!(plugin.configuration_items().len(), 1);
     }
 
     #[test]

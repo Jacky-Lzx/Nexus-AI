@@ -18,6 +18,9 @@ pub enum HostRequest {
         query: String,
         limit: usize,
     },
+    ListConfigurationItems {
+        request_id: u64,
+    },
     Execute {
         request_id: u64,
         result_id: String,
@@ -39,6 +42,10 @@ pub enum PluginEvent {
         query_id: u64,
         items: Vec<SearchResult>,
     },
+    ConfigurationItems {
+        request_id: u64,
+        configuration_items: Vec<ConfigurationItem>,
+    },
     CatalogChanged,
     ActionFinished {
         request_id: u64,
@@ -48,6 +55,16 @@ pub enum PluginEvent {
     Error {
         message: String,
     },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConfigurationItem {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub subtitle: String,
+    #[serde(default)]
+    pub metadata: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -131,6 +148,23 @@ mod tests {
                 settings: BTreeMap::from([("retention_days".into(), "30".into())]),
             }
         );
+    }
+
+    #[test]
+    fn configuration_items_have_a_stable_wire_shape() {
+        let event = PluginEvent::ConfigurationItems {
+            request_id: 11,
+            configuration_items: vec![ConfigurationItem {
+                id: "lock".into(),
+                title: "Lock Screen".into(),
+                subtitle: String::new(),
+                metadata: BTreeMap::new(),
+            }],
+        };
+        let json = serde_json::to_value(event).unwrap();
+        assert_eq!(json["type"], "configuration_items");
+        assert_eq!(json["request_id"], 11);
+        assert_eq!(json["configuration_items"][0]["id"], "lock");
     }
 
     #[test]
