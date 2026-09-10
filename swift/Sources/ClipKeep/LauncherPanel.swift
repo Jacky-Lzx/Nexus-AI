@@ -177,6 +177,7 @@ final class LauncherPanelController: NSWindowController,
     private var activeActionInput: ActiveActionInput?
     private var resetScrollOnNextResults = false
     private var detailImageGeneration: UInt64 = 0
+    private var expansionAnimationGeneration: UInt64 = 0
 
     private static let detailImageCache = NSCache<NSString, NSImage>()
     private static let thumbnailImageCache = NSCache<NSString, NSImage>()
@@ -1426,40 +1427,67 @@ final class LauncherPanelController: NSWindowController,
         guard expanded != shouldExpand || !animated else { return }
         expanded = shouldExpand
         guard let panel = window else { return }
-        root.layoutSubtreeIfNeeded()
-        contentTopConstraint?.constant = shouldExpand ? Layout.contentSpacing : 0
-        footerHeightConstraint?.constant = shouldExpand ? 46 : 0
-        if shouldExpand {
-            content.isHidden = false
-        }
+        expansionAnimationGeneration &+= 1
+        let generation = expansionAnimationGeneration
         var frame = panel.frame
         let newHeight = shouldExpand ? Layout.expandedHeight : Layout.collapsedHeight
         frame.origin.y += frame.height - newHeight
         frame.size.height = newHeight
-        let changes = {
-            panel.animator().setFrame(frame, display: true)
-            self.root.animator().layoutSubtreeIfNeeded()
-            self.content.animator().alphaValue = shouldExpand ? 1 : 0
-            self.presentationContainer.animator().alphaValue = shouldExpand ? 1 : 0
-        }
-        if animated {
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.24
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                changes()
-            }, completionHandler: { [weak self] in
-                if shouldExpand == false {
-                    self?.content.isHidden = true
-                }
-                self?.updateScrollerVisibility()
-            })
-        } else {
+
+        guard animated else {
+            contentTopConstraint?.constant = shouldExpand ? Layout.contentSpacing : 0
+            footerHeightConstraint?.constant = shouldExpand ? 46 : 0
             content.alphaValue = shouldExpand ? 1 : 0
             presentationContainer.alphaValue = shouldExpand ? 1 : 0
             content.isHidden = !shouldExpand
             panel.setFrame(frame, display: true)
             root.layoutSubtreeIfNeeded()
             updateScrollerVisibility()
+            return
+        }
+
+        if shouldExpand {
+            // Keep result views out of the live glass resize. AppKit otherwise lays
+            // out the table while NSGlassEffectView is resampling its background,
+            // which produces a visible one-frame jump on the first character.
+            content.alphaValue = 0
+            content.isHidden = true
+            presentationContainer.alphaValue = 0
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.24
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(frame, display: true)
+            }, completionHandler: { [weak self] in
+                guard let self, self.expansionAnimationGeneration == generation else { return }
+                self.contentTopConstraint?.constant = Layout.contentSpacing
+                self.footerHeightConstraint?.constant = 46
+                self.root.layoutSubtreeIfNeeded()
+                self.content.isHidden = false
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.10
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    self.content.animator().alphaValue = 1
+                    self.presentationContainer.animator().alphaValue = 1
+                }, completionHandler: { [weak self] in
+                    guard let self, self.expansionAnimationGeneration == generation else { return }
+                    self.updateScrollerVisibility()
+                })
+            })
+        } else {
+            content.alphaValue = 0
+            presentationContainer.alphaValue = 0
+            content.isHidden = true
+            contentTopConstraint?.constant = 0
+            footerHeightConstraint?.constant = 0
+            root.layoutSubtreeIfNeeded()
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.24
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(frame, display: true)
+            }, completionHandler: { [weak self] in
+                guard let self, self.expansionAnimationGeneration == generation else { return }
+                self.updateScrollerVisibility()
+            })
         }
     }
 
