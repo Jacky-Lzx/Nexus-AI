@@ -447,9 +447,21 @@ final class LauncherPanelController: NSWindowController,
         cell.configure(
             result,
             pluginName: pluginNamesById[result.pluginId] ?? result.pluginId,
+            showsPluginName: showsPluginNameInCurrentMode,
             selected: row == tableView.selectedRow
         )
         return cell
+    }
+
+    private var showsPluginNameInCurrentMode: Bool {
+        switch searchMode {
+        case .clipboard:
+            false
+        case let .plugin(plugin):
+            plugin.id != "io.clipkeep.kill-process"
+        case .global:
+            true
+        }
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
@@ -981,7 +993,12 @@ private final class ResultCellView: NSTableCellView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func configure(_ result: SearchResult, pluginName: String, selected: Bool) {
+    func configure(
+        _ result: SearchResult,
+        pluginName: String,
+        showsPluginName: Bool,
+        selected: Bool
+    ) {
         let image = Self.artworkImage(for: result)
         artwork.image = image
         artwork.isHidden = image == nil
@@ -1003,8 +1020,8 @@ private final class ResultCellView: NSTableCellView {
         multilineIndicator.isHidden = !hasMultipleLines
         multilineIndicatorSpacingConstraint?.constant = hasMultipleLines ? 4 : 0
         subtitleLabel.stringValue = result.subtitle
-        pluginLabel.stringValue = pluginName
-        pluginLabel.isHidden = false
+        pluginLabel.stringValue = showsPluginName ? pluginName : ""
+        pluginLabel.isHidden = !showsPluginName
         layer?.backgroundColor = selected
             ? NSColor.white.withAlphaComponent(0.12).cgColor
             : NSColor.clear.cgColor
