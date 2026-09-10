@@ -51,14 +51,23 @@ final class ExternalTextEditor {
 
             let process = Process()
             process.executableURL = terminal
-            process.arguments = [
+            var editorArguments = [
                 "--start-as=normal",
                 "--title=nvim_edit",
                 editor.path,
-                "-c",
-                "setlocal nofixeol",
-                file.path,
             ]
+            if text.hasSuffix("\n") {
+                editorArguments += ["-c", "setlocal nofixeol"]
+            } else {
+                // Run after user BufWritePre hooks so Vim cannot synthesize an EOL.
+                // A user-added empty final line is still serialized as a real newline.
+                editorArguments += [
+                    "-c", "setlocal noendofline nofixeol",
+                    "-c", "autocmd BufWritePre <buffer> setlocal noendofline nofixeol",
+                ]
+            }
+            editorArguments.append(file.path)
+            process.arguments = editorArguments
             process.terminationHandler = { [weak self] process in
                 let result: Result<String, Error>
                 if process.terminationStatus == 0 {
