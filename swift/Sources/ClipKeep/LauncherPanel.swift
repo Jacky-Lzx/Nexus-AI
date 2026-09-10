@@ -968,7 +968,10 @@ private final class ResultCellView: NSTableCellView {
                 constant: -16
             ),
             subtitleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            subtitleLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: pluginLabel.leadingAnchor,
+                constant: -12
+            ),
         ]
         NSLayoutConstraint.activate(stackedTextConstraints)
     }
@@ -996,15 +999,9 @@ private final class ResultCellView: NSTableCellView {
         multilineIndicator.stringValue = hasMultipleLines ? "↩" : ""
         multilineIndicator.isHidden = !hasMultipleLines
         multilineIndicatorSpacingConstraint?.constant = hasMultipleLines ? 4 : 0
-        if result.kind == .application {
-            subtitleLabel.stringValue = "\(result.subtitle) · \(pluginName)"
-            pluginLabel.stringValue = ""
-            pluginLabel.isHidden = true
-        } else {
-            subtitleLabel.stringValue = result.subtitle
-            pluginLabel.stringValue = pluginName
-            pluginLabel.isHidden = false
-        }
+        subtitleLabel.stringValue = result.subtitle
+        pluginLabel.stringValue = pluginName
+        pluginLabel.isHidden = false
         layer?.backgroundColor = selected
             ? NSColor.white.withAlphaComponent(0.12).cgColor
             : NSColor.clear.cgColor
