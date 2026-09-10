@@ -55,6 +55,8 @@ final class ExternalTextEditor {
                 "--start-as=normal",
                 "--title=nvim_edit",
                 editor.path,
+                "-c",
+                "setlocal nofixeol",
                 file.path,
             ]
             process.terminationHandler = { [weak self] process in
