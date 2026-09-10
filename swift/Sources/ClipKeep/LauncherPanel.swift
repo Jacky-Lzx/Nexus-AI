@@ -650,7 +650,11 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    private func beginActionInputForm(for result: SearchResult, action: ResultAction) {
+    private func beginActionInputForm(
+        for result: SearchResult,
+        action: ResultAction,
+        focusLastField: Bool = false
+    ) {
         endActionInputForm(restoreSearchFocus: false)
         searchIcon.isHidden = true
         searchField.isHidden = true
@@ -685,8 +689,8 @@ final class LauncherPanelController: NSWindowController,
             controls[index].1.nextKeyView = controls[controls.index(after: index) % controls.count].1
         }
         activeActionInput = ActiveActionInput(result: result, action: action, fields: controls)
-        if let first = controls.first?.1 {
-            window?.makeFirstResponder(first)
+        if let field = focusLastField ? controls.last?.1 : controls.first?.1 {
+            window?.makeFirstResponder(field)
         }
     }
 
@@ -1053,6 +1057,39 @@ final class LauncherPanelController: NSWindowController,
 
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
+        if event.keyCode == 48,
+           relevantModifiers.subtracting(.shift).isEmpty {
+            let offset = relevantModifiers.contains(.shift) ? -1 : 1
+            if let activeActionInput {
+                let currentEditor = window?.firstResponder
+                if let current = activeActionInput.fields.firstIndex(where: {
+                    $0.1.currentEditor() === currentEditor
+                }) {
+                    let count = activeActionInput.fields.count
+                    let next = (current + offset + count) % count
+                    window?.makeFirstResponder(activeActionInput.fields[next].1)
+                } else if let field = offset < 0
+                    ? activeActionInput.fields.last?.1
+                    : activeActionInput.fields.first?.1 {
+                    window?.makeFirstResponder(field)
+                }
+                return true
+            }
+
+            if searchField.currentEditor() === window?.firstResponder {
+                if let result = selectedResult,
+                   let action = result.actions.first(where: { $0.default && !$0.inputFields.isEmpty })
+                    ?? result.actions.first(where: { !$0.inputFields.isEmpty }) {
+                    beginActionInputForm(
+                        for: result,
+                        action: action,
+                        focusLastField: offset < 0
+                    )
+                }
+                // Keep focus in the launcher when the selected result has no arguments.
+                return true
+            }
+        }
         if searchMode == .clipboard,
            relevantModifiers == [.command],
            event.charactersIgnoringModifiers == "\r",
