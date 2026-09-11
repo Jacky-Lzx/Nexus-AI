@@ -127,12 +127,10 @@ impl Plugin for CaffeinatePlugin {
         ) {
             results.push(start_result(self.active.as_ref()));
         }
-        if self.active.is_some()
+        if let Some(active) = self.active.as_ref()
             && matches_query(&query, &["decaffeinate", "stop", "cancel", "停止", "取消"])
         {
-            results.push(stop_result(
-                self.active.as_ref().expect("active state checked"),
-            ));
+            results.push(stop_result(active));
         }
         results.truncate(limit);
         Ok(results)
@@ -287,7 +285,7 @@ fn remaining_duration(active: &ActiveCaffeination) -> String {
 
 fn format_duration(seconds: u64) -> String {
     let hours = seconds / 3_600;
-    let minutes = (seconds % 3_600 + 59) / 60;
+    let minutes = (seconds % 3_600).div_ceil(60);
     match (hours, minutes) {
         (0, minutes) => format!("{minutes}m"),
         (hours, 0) => format!("{hours}h"),
