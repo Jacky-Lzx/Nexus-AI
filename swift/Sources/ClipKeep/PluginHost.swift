@@ -205,6 +205,8 @@ final class SearchCoordinator {
     private var currentSearchIsGlobal = true
     private var currentShowsAllPluginItems = false
     private var queryId: UInt64 = 0
+    private let searchActivation = SearchActivation()
+    private var activationGeneration: UInt64 = 0
     private var requestId: UInt64 = 0
     private var actionCompletions: [UInt64: (pluginId: String, completion: (Bool) -> Void)] = [:]
     private var configurationCompletions: [
@@ -332,6 +334,7 @@ final class SearchCoordinator {
         currentSearchIsGlobal = isGlobal
         currentShowsAllPluginItems = showsAllPluginItems
         queryId += 1
+        searchActivation.begin(queryId: queryId)
         pendingSearches.removeAll()
         stagedResultsByPlugin.removeAll()
         if targetChanged {
@@ -343,6 +346,7 @@ final class SearchCoordinator {
         guard !availablePluginIds.isEmpty else {
             resultsByPlugin.removeAll()
             publishResults()
+            searchActivation.finish(queryId: queryId)
             return
         }
         let sentQueryId = queryId
@@ -356,6 +360,7 @@ final class SearchCoordinator {
                       self.pendingSearches[pluginId] == sentQueryId else { return }
                 let name = self.descriptors.first(where: { $0.id == pluginId })?.name ?? pluginId
                 self.onStatusChanged?("\(name) is taking longer than expected…")
+                self.cancelPendingActivation()
                 if targetChanged, preservingPublishedResults {
                     self.publishResults()
                 }
@@ -365,6 +370,24 @@ final class SearchCoordinator {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
             self?.commitStagedResults(queryId: sentQueryId)
         }
+    }
+
+    func activateWhenSearchSettles(_ action: @escaping () -> Void) {
+        activationGeneration += 1
+        let expectedGeneration = activationGeneration
+        let expectedQueryId = queryId
+        searchActivation.request(action)
+        // A hung plugin must not cause an unexpected action much later.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, self.queryId == expectedQueryId,
+                  self.activationGeneration == expectedGeneration else { return }
+            self.cancelPendingActivation()
+        }
+    }
+
+    func cancelPendingActivation() {
+        activationGeneration += 1
+        searchActivation.cancel()
     }
 
     func execute(
@@ -516,6 +539,7 @@ final class SearchCoordinator {
             presentationItemsByPlugin[pluginId] = presentationItems
             if pendingSearches.isEmpty {
                 commitStagedResults(queryId: eventQueryId)
+                searchActivation.finish(queryId: eventQueryId)
             }
         case let .configurationItems(requestId, items):
             guard let pending = configurationCompletions[requestId],
@@ -545,6 +569,7 @@ final class SearchCoordinator {
             onStatusChanged?(message)
         case .terminated:
             guard processes[pluginId] === process else { return }
+            cancelPendingActivation()
             let failedActions = actionCompletions.filter { $0.value.pluginId == pluginId }
             failedActions.keys.forEach { actionCompletions[$0] = nil }
             failedActions.values.forEach { $0.completion(false) }

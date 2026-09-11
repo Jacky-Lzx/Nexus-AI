@@ -273,6 +273,7 @@ final class LauncherPanelController: NSWindowController,
         pasteAfterRestore: Bool = false,
         completion: (() -> Void)? = nil
     ) {
+        coordinator.cancelPendingActivation()
         guard let panel = window, panel.isVisible, !hiding else {
             completion?()
             return
@@ -558,7 +559,11 @@ final class LauncherPanelController: NSWindowController,
         case #selector(NSResponder.moveUp(_:)):
             moveSelection(-1); return true
         case #selector(NSResponder.insertNewline(_:)):
-            openSelected(); return true
+            coordinator.activateWhenSearchSettles { [weak self] in
+                guard let self, self.isPresented else { return }
+                self.openSelected()
+            }
+            return true
         case #selector(NSResponder.cancelOperation(_:)):
             hide(restorePreviousApplication: true); return true
         default:
@@ -613,6 +618,7 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func perform(_ action: ResultAction, on result: SearchResult) {
+        coordinator.cancelPendingActivation()
         if !action.inputFields.isEmpty {
             beginActionInputForm(for: result, action: action)
             return
@@ -1054,6 +1060,7 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func moveSelection(_ delta: Int) {
+        coordinator.cancelPendingActivation()
         guard !results.isEmpty else { return }
         let current = max(tableView.selectedRow, 0)
         let next = min(max(current + delta, 0), results.count - 1)
@@ -1468,7 +1475,7 @@ final class LauncherPanelController: NSWindowController,
             content.isHidden = true
             presentationContainer.alphaValue = 0
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.24
+                context.duration = 0.18
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 panel.animator().setFrame(frame, display: true)
             }, completionHandler: { [weak self] in
@@ -1478,7 +1485,7 @@ final class LauncherPanelController: NSWindowController,
                 self.root.layoutSubtreeIfNeeded()
                 self.content.isHidden = false
                 NSAnimationContext.runAnimationGroup({ context in
-                    context.duration = 0.10
+                    context.duration = 0.08
                     context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                     self.content.animator().alphaValue = 1
                     self.presentationContainer.animator().alphaValue = 1
