@@ -435,7 +435,10 @@ impl ClipItem {
     }
 
     fn as_result(&self, index: usize, query: &str, preview_cache_dir: &Path) -> SearchResult {
-        let mut metadata = BTreeMap::new();
+        let mut metadata = BTreeMap::from([
+            ("host_action.edit".into(), "text.edit".into()),
+            ("edit_submit_action".into(), "apply_edit".into()),
+        ]);
         metadata.insert("format".into(), self.kind.label().into());
         metadata.insert("size".into(), byte_size(self.byte_len()));
         metadata.insert("copied".into(), age_label(self.created_at));

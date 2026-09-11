@@ -193,6 +193,7 @@ fn new_reminder_result() -> SearchResult {
         score: 4_000.0,
         metadata: BTreeMap::from([
             ("input_form".into(), "reminder".into()),
+            ("host_action.create".into(), "form.reminder".into()),
             ("symbol_name".into(), "bell.badge".into()),
         ]),
         actions: vec![ResultAction {

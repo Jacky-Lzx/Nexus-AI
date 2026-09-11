@@ -279,6 +279,16 @@ fn matches_query(command: &SystemCommand, query: &str) -> bool {
 }
 
 fn as_result(command: SystemCommand, index: usize) -> SearchResult {
+    let mut metadata = BTreeMap::from([
+        ("command".into(), command.id.into()),
+        ("symbol_name".into(), command_symbol(command.id).into()),
+    ]);
+    if matches!(
+        command.id,
+        "mute" | "volume-up" | "volume-down" | "play-pause" | "next-track" | "previous-track"
+    ) {
+        metadata.insert("host_action.run".into(), "system.media".into());
+    }
     SearchResult {
         plugin_id: PLUGIN_ID.into(),
         id: format!("system-command:{}", command.id),
@@ -287,10 +297,7 @@ fn as_result(command: SystemCommand, index: usize) -> SearchResult {
         preview: command.subtitle.into(),
         kind: ResultKind::Command,
         score: 2_000.0 - index as f32,
-        metadata: BTreeMap::from([
-            ("command".into(), command.id.into()),
-            ("symbol_name".into(), command_symbol(command.id).into()),
-        ]),
+        metadata,
         actions: vec![ResultAction {
             id: "run".into(),
             title: command.title.into(),

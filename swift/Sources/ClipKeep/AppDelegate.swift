@@ -6,6 +6,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var settingsWindow: SettingsWindowController?
     private var plugins: [PluginDescriptor] = []
+    private var pluginMonitor: PluginDirectoryMonitor?
+    private var discoveryErrors: [String] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -15,10 +17,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationPresenter.shared.deliver(notification)
         }
         launcher = LauncherPanelController(coordinator: coordinator)
+        launcher.onShowSettings = { [weak self] in self?.showSettings() }
         GlobalHotKey.migrateLegacyApplicationShortcut()
         launcher.onPluginStateChanged = { [weak self] in
-            self?.refreshHotKeys()
-            self?.settingsWindow?.refresh()
+            guard let self else { return }
+            self.plugins = self.coordinator.descriptors
+            self.launcher.refreshPlugins()
+            self.refreshHotKeys()
+            self.settingsWindow?.refresh()
         }
         configureStatusItem()
 
@@ -37,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         refreshHotKeys()
         launcher.show(mode: initialMode(), query: initialQuery())
+        pluginMonitor = PluginDirectoryMonitor { [weak self] in self?.reloadPlugins() }
+        reloadPlugins()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
@@ -117,7 +125,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindow = SettingsWindowController(
                 coordinator: coordinator,
                 launcher: launcher,
-                onShortcutChanged: { [weak self] in self?.refreshHotKeys() }
+                onShortcutChanged: { [weak self] in self?.refreshHotKeys() },
+                onPluginsChanged: { [weak self] in self?.reloadPlugins() }
             )
         }
         settingsWindow?.showWindow(nil)
@@ -155,6 +164,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
         rebuildMenu()
+    }
+
+    private func reloadPlugins() {
+        let discovery = PluginRegistry.scan()
+        coordinator.updatePlugins(discovery.descriptors)
+        if discovery.errors != discoveryErrors {
+            discoveryErrors = discovery.errors
+            if !discovery.errors.isEmpty {
+                coordinator.onStatusChanged?(discovery.errors.joined(separator: "; "))
+            }
+        }
     }
 
     private func initialQuery() -> String {

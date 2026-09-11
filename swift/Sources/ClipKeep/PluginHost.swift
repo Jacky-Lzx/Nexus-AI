@@ -17,6 +17,7 @@ final class PluginProcess {
     }
 
     let descriptor: PluginDescriptor
+    let instanceId = UUID().uuidString
     var onEvent: ((Event) -> Void)?
 
     private let process = Process()
@@ -74,13 +75,20 @@ final class PluginProcess {
         send(["type": "initialize", "protocol_version": 1])
     }
 
-    deinit {
+    func stop() {
+        onEvent = nil
         output.fileHandleForReading.readabilityHandler = nil
         if process.isRunning {
             send(["type": "shutdown"])
             process.terminate()
+            let retiringProcess = process
+            DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
+                if retiringProcess.isRunning { kill(retiringProcess.processIdentifier, SIGKILL) }
+            }
         }
     }
+
+    deinit { stop() }
 
     private static func makeLogHandle(pluginId: String) -> FileHandle? {
         guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
@@ -194,7 +202,7 @@ final class SearchCoordinator {
     var onStatusChanged: ((String) -> Void)?
     var onPluginStateChanged: (() -> Void)?
     var onNotification: ((PluginNotification) -> Void)?
-    let descriptors: [PluginDescriptor]
+    private(set) var descriptors: [PluginDescriptor]
 
     private var processes: [String: PluginProcess] = [:]
     private var resultsByPlugin: [String: [SearchResult]] = [:]
@@ -226,7 +234,38 @@ final class SearchCoordinator {
         searchGlobal("")
     }
 
+    func updatePlugins(_ updated: [PluginDescriptor]) {
+        guard descriptors != updated else { return }
+        cancelPendingActivation()
+        let changed = descriptors.filter { old in !updated.contains(old) }.map(\.id)
+        descriptors = updated
+        for id in changed {
+            stopPlugin(id)
+            restartAttempts[id] = nil
+        }
+        for plugin in updated where isEnabled(plugin.id) { start(plugin) }
+        currentPluginIds = currentPluginIds.intersection(Set(updated.map(\.id)))
+        repeatCurrentSearch()
+        onPluginStateChanged?()
+    }
+
+    private func stopPlugin(_ id: String) {
+        let process = processes.removeValue(forKey: id)
+        process?.stop()
+        pendingSearches[id] = nil
+        resultsByPlugin[id] = nil
+        stagedResultsByPlugin[id] = nil
+        presentationItemsByPlugin[id] = nil
+        let actions = actionCompletions.filter { $0.value.pluginId == id }
+        actions.keys.forEach { actionCompletions[$0] = nil }
+        let configurations = configurationCompletions.filter { $0.value.pluginId == id }
+        configurations.keys.forEach { configurationCompletions[$0] = nil }
+        actions.values.forEach { $0.completion(false) }
+        configurations.values.forEach { $0.completion([]) }
+    }
+
     func isEnabled(_ id: String) -> Bool {
+        guard descriptors.contains(where: { $0.id == id }) else { return false }
         let key = "plugin.enabled.\(id)"
         let defaultEnabled = descriptors.first(where: { $0.id == id })?.defaultEnabled ?? false
         return UserDefaults.standard.object(forKey: key) == nil
@@ -243,10 +282,7 @@ final class SearchCoordinator {
         if enabled {
             start(descriptor)
         } else {
-            processes[descriptor.id] = nil
-            resultsByPlugin[descriptor.id] = nil
-            stagedResultsByPlugin[descriptor.id] = nil
-            presentationItemsByPlugin[descriptor.id] = nil
+            stopPlugin(descriptor.id)
         }
         repeatCurrentSearch()
         onPluginStateChanged?()
@@ -390,12 +426,39 @@ final class SearchCoordinator {
         searchActivation.cancel()
     }
 
+    func canExecute(_ result: SearchResult) -> Bool {
+        guard isEnabled(result.pluginId), let process = processes[result.pluginId] else { return false }
+        return result.metadata["_nexus_process"] == process.instanceId
+    }
+
     func execute(
         _ result: SearchResult,
         actionId: String,
         input: String? = nil,
         completion: ((Bool) -> Void)? = nil
     ) {
+        guard let descriptor = descriptors.first(where: { $0.id == result.pluginId }),
+              canExecute(result) else { completion?(false); return }
+        do {
+            if try PluginHostAction.resolve(result: result, actionId: actionId, descriptor: descriptor) == .media {
+                guard let command = SystemMediaController.command(for: result.metadata["command"] ?? "") else {
+                    throw PluginInstallationError.invalid("Unknown media command")
+                }
+                let success = SystemMediaController.perform(command)
+                onStatusChanged?(success ? command.confirmation : "Allow Accessibility access to control media playback")
+                if success {
+                    onNotification?(PluginNotification(
+                        id: "system-media:\(UUID().uuidString)", title: descriptor.name, body: command.confirmation
+                    ))
+                }
+                completion?(success)
+                return
+            }
+        } catch {
+            onStatusChanged?(error.localizedDescription)
+            completion?(false)
+            return
+        }
         execute(
             pluginId: result.pluginId,
             resultId: result.id,
@@ -422,24 +485,6 @@ final class SearchCoordinator {
         input: String?,
         completion: ((Bool) -> Void)?
     ) {
-        if pluginId == "io.clipkeep.system-commands",
-           actionId == "run",
-           let command = SystemMediaController.command(for: resultId) {
-            let success = SystemMediaController.perform(command)
-            let message = success
-                ? command.confirmation
-                : "Enable Accessibility in System Settings to control media playback"
-            onStatusChanged?(message)
-            if success {
-                onNotification?(PluginNotification(
-                    id: "system-media:\(resultId):\(Date().timeIntervalSince1970)",
-                    title: "System Commands",
-                    body: message
-                ))
-            }
-            completion?(success)
-            return
-        }
         guard let process = processes[pluginId] else { completion?(false); return }
         requestId += 1
         let sentRequestId = requestId
@@ -516,16 +561,17 @@ final class SearchCoordinator {
         case "io.clipkeep.clash": ClashPreference.pluginSettings
         case "io.clipkeep.applications", "io.clipkeep.system-commands":
             PluginItemPreference.pluginSettings(for: pluginId)
-        default: [:]
+        default: PluginItemPreference.pluginSettings(for: pluginId)
         }
     }
 
     private func handle(_ event: PluginProcess.Event, from pluginId: String, process: PluginProcess) {
+        guard processes[pluginId] === process else { return }
         switch event {
         case let .initialized(actualPluginId, protocolVersion):
             guard actualPluginId == pluginId, protocolVersion == 1 else {
                 onStatusChanged?("Rejected incompatible plugin: \(pluginId)")
-                processes[pluginId] = nil
+                stopPlugin(pluginId)
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self, weak process] in
@@ -535,7 +581,11 @@ final class SearchCoordinator {
         case let .searchResults(eventQueryId, items, presentationItems)
             where eventQueryId == queryId && currentPluginIds.contains(pluginId):
             pendingSearches[pluginId] = nil
-            stagedResultsByPlugin[pluginId] = items
+            stagedResultsByPlugin[pluginId] = items.filter { $0.pluginId == pluginId }.map { item in
+                var item = item
+                item.metadata["_nexus_process"] = process.instanceId
+                return item
+            }
             presentationItemsByPlugin[pluginId] = presentationItems
             if pendingSearches.isEmpty {
                 commitStagedResults(queryId: eventQueryId)
@@ -588,6 +638,7 @@ final class SearchCoordinator {
 
     private func scheduleRestart(pluginId: String) {
         guard isEnabled(pluginId), let descriptor = descriptors.first(where: { $0.id == pluginId }) else { return }
+        let expectedDescriptor = descriptor
         let attempt = (restartAttempts[pluginId] ?? 0) + 1
         restartAttempts[pluginId] = attempt
         guard attempt <= 3 else {
@@ -596,7 +647,8 @@ final class SearchCoordinator {
         }
         onStatusChanged?("Restarting \(descriptor.name)…")
         DispatchQueue.main.asyncAfter(deadline: .now() + Double(attempt)) { [weak self] in
-            guard let self, self.isEnabled(pluginId), self.processes[pluginId] == nil else { return }
+            guard let self, self.isEnabled(pluginId), self.processes[pluginId] == nil,
+                  self.descriptors.contains(expectedDescriptor) else { return }
             self.start(descriptor)
             if self.currentSearchIsGlobal && self.isIncludedInGlobalSearch(pluginId) {
                 self.searchGlobal(self.currentQuery)

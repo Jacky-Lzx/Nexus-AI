@@ -1,0 +1,10 @@
+id = "com.example.nexus.hello"
+name = "Hello Plugin"
+description = "An independently built example plugin"
+icon = "hand.wave"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "nexus-plugin-hello"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["search"]

@@ -27,28 +27,27 @@ final class SettingsWindowController: NSWindowController,
     private let searchField = NSSearchField()
     private let tableView = NSTableView()
     private let detailPane = NSView()
-    private let allPanes: [SettingsPaneItem]
-    private var visiblePanes: [SettingsPaneItem]
+    private let onPluginsChanged: () -> Void
+    private let installation = PluginInstallation()
+    private var allPanes: [SettingsPaneItem] {
+        [SettingsPaneItem(id: "key-mappings", name: "Key Mappings", symbolName: "keyboard", plugin: nil),
+         SettingsPaneItem(id: "plugin-manager", name: "Plugins", symbolName: "puzzlepiece.extension", plugin: nil)]
+        + coordinator.descriptors.map {
+            SettingsPaneItem(id: $0.id, name: $0.name, symbolName: $0.symbolName, plugin: $0)
+        }
+    }
+    private var visiblePanes: [SettingsPaneItem] = []
 
     init(
         coordinator: SearchCoordinator,
         launcher: LauncherPanelController,
-        onShortcutChanged: @escaping () -> Void
+        onShortcutChanged: @escaping () -> Void,
+        onPluginsChanged: @escaping () -> Void
     ) {
         self.coordinator = coordinator
         self.launcher = launcher
         self.onShortcutChanged = onShortcutChanged
-        allPanes = [SettingsPaneItem(
-            id: "key-mappings", name: "Key Mappings", symbolName: "keyboard", plugin: nil
-        )] + coordinator.descriptors.map { plugin in
-            SettingsPaneItem(
-                id: plugin.id,
-                name: plugin.name,
-                symbolName: plugin.symbolName,
-                plugin: plugin
-            )
-        }
-        visiblePanes = allPanes
+        self.onPluginsChanged = onPluginsChanged
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: SettingsLayout.windowSize),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -56,6 +55,7 @@ final class SettingsWindowController: NSWindowController,
             defer: false
         )
         super.init(window: window)
+        visiblePanes = allPanes
         configure(window)
         buildInterface()
     }
@@ -64,6 +64,8 @@ final class SettingsWindowController: NSWindowController,
 
     func refresh() {
         let selectedId = selectedPane?.id
+        let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        visiblePanes = allPanes.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
         tableView.reloadData()
         let row = selectedId.flatMap { id in
             visiblePanes.firstIndex(where: { $0.id == id })
@@ -222,7 +224,7 @@ final class SettingsWindowController: NSWindowController,
             return
         }
         guard let plugin = pane.plugin else {
-            showKeyMappings()
+            if pane.id == "plugin-manager" { showPluginManager() } else { showKeyMappings() }
             return
         }
 
@@ -264,7 +266,7 @@ final class SettingsWindowController: NSWindowController,
         default:
             pluginDescription = "Rust plugin \(plugin.id) · version \(plugin.version)"
         }
-        let description = NSTextField(labelWithString: pluginDescription)
+        let description = NSTextField(labelWithString: plugin.summary ?? pluginDescription)
         description.font = .systemFont(ofSize: 14)
         description.textColor = .secondaryLabelColor
         description.translatesAutoresizingMaskIntoConstraints = false
@@ -493,7 +495,7 @@ final class SettingsWindowController: NSWindowController,
             ))
         }
 
-        let hasItemConfiguration = [
+        let hasItemConfiguration = plugin.capabilities.contains("configuration.items") || [
             "io.clipkeep.applications",
             "io.clipkeep.system-commands",
         ].contains(plugin.id)
@@ -531,6 +533,16 @@ final class SettingsWindowController: NSWindowController,
                 }
             }
         }
+        if installation.isUserInstalled(plugin) {
+            let uninstall = NSButton(title: "Uninstall…", target: self, action: #selector(uninstallSelectedPlugin))
+            uninstall.bezelStyle = .rounded
+            uninstall.translatesAutoresizingMaskIntoConstraints = false
+            detailPane.addSubview(uninstall)
+            NSLayoutConstraint.activate([
+                uninstall.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 20),
+                uninstall.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 24),
+            ])
+        }
         let compactLayout = plugin.id == "io.clipkeep.clipboard" || hasItemConfiguration
         NSLayoutConstraint.activate([
             icon.topAnchor.constraint(
@@ -556,6 +568,77 @@ final class SettingsWindowController: NSWindowController,
             options.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -24),
             options.topAnchor.constraint(equalTo: optionsTitle.bottomAnchor, constant: 10),
         ])
+    }
+
+    private func showPluginManager() {
+        let title = NSTextField(labelWithString: "Plugins")
+        title.font = .systemFont(ofSize: 28, weight: .bold)
+        let summary = NSTextField(wrappingLabelWithString:
+            "Install a .clipkeepplugin package to add or update a plugin. Changes take effect without restarting Nexus. Only install plugins from sources you trust.\n\nInstalled plugins appear in the sidebar. Uninstalling moves the package to Trash and keeps its data and preferences. Bundled plugins can be disabled.")
+        summary.textColor = .secondaryLabelColor
+        let install = NSButton(title: "Install Plugin…", target: self, action: #selector(installPlugin))
+        let folder = NSButton(title: "Open Plugins Folder", target: self, action: #selector(openPluginsFolder))
+        let buttons = NSStackView(views: [install, folder])
+        buttons.spacing = 12
+        let stack = NSStackView(views: [title, summary, buttons])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 24
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        detailPane.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 76),
+            stack.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 30),
+            stack.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -30),
+            summary.widthAnchor.constraint(equalTo: stack.widthAnchor),
+        ])
+    }
+
+    @objc private func installPlugin() {
+        let panel = NSOpenPanel()
+        panel.title = "Install Plugin"
+        panel.prompt = "Install"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.treatsFilePackagesAsDirectories = false
+        guard panel.runModal() == .OK, let source = panel.url else { return }
+        do {
+            let incoming = try PluginRegistry.load(source)
+            if coordinator.descriptors.contains(where: { $0.id == incoming.id }) {
+                let alert = NSAlert()
+                alert.messageText = "Update \(incoming.name)?"
+                alert.informativeText = "Install version \(incoming.version). Plugin data and preferences will be kept."
+                alert.addButton(withTitle: "Update")
+                alert.addButton(withTitle: "Cancel")
+                guard alert.runModal() == .alertFirstButtonReturn else { return }
+            }
+            try installation.install(from: source)
+            onPluginsChanged()
+            refresh()
+        } catch { NSAlert(error: error).runModal() }
+    }
+
+    @objc private func openPluginsFolder() {
+        do {
+            try FileManager.default.createDirectory(at: installation.directory, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(installation.directory)
+        } catch { NSAlert(error: error).runModal() }
+    }
+
+    @objc private func uninstallSelectedPlugin() {
+        guard let plugin = selectedPlugin else { return }
+        let alert = NSAlert()
+        alert.messageText = "Uninstall \(plugin.name)?"
+        alert.informativeText = "The plugin package will move to Trash. Its data and preferences will be kept. If this overrides a bundled plugin, the bundled version will become available again."
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            try installation.uninstall(plugin)
+            onPluginsChanged()
+            refresh()
+        } catch { NSAlert(error: error).runModal() }
     }
 
     private func showKeyMappings() {

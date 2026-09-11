@@ -86,6 +86,7 @@ impl MenuBarItem {
             kind: ResultKind::Command,
             score,
             metadata: BTreeMap::from([
+                ("host_action.press".into(), "menu.press".into()),
                 ("menu_item_id".into(), self.id.clone()),
                 (
                     "menu_path".into(),

@@ -180,36 +180,123 @@ search results.
 
 ## Plugin bundles
 
-A plugin bundle is a directory ending in `.clipkeepplugin` that contains a Rust
-executable and `plugin.toml`. Nexus scans both `Contents/PlugIns` inside the
-application and:
+Plugins run as separate executables and exchange newline-delimited JSON with Nexus
+on stdin/stdout. Rust plugins can use `clipkeep-plugin-sdk`; other languages can
+implement the same protocol. No dynamic linking or host rebuild is required.
+
+### Install, update, and remove
+
+Press **Command+,** in the launcher, then open **Plugins → Install Plugin…** and select a `.clipkeepplugin`
+package. Select a newer package with the same ID to update it. User-installed
+packages override bundled packages with the same ID, regardless of version;
+installing an older version is also allowed. Updates preserve preferences and data.
+
+Select an installed plugin in the settings sidebar and choose **Uninstall…** to
+move its package to Trash. Data and preferences remain intact. If an override is
+removed, the bundled version becomes available again. Bundled packages are part
+of the signed application and can be disabled with their enable switch.
+
+Nexus also scans this directory every second while running:
 
 ```text
 ~/Library/Application Support/io.clipkeep.ClipKeep/Plugins
 ```
 
-Example manifest:
+You can add/remove complete plugin directories there. For manual updates, stage
+the complete package outside this directory and move it in; do not copy files
+into a running plugin piecemeal. The installer uses an atomic directory exchange.
+New, changed, and removed plugins update running processes, search results,
+shortcuts, status menus, and settings without restarting Nexus. Actions captured
+from retired processes are rejected. An empty plugin directory stays empty.
+
+The application also discovers bundled plugins in `Contents/PlugIns`. Invalid
+manifests, missing executables, unsupported protocol versions, and duplicate IDs
+within a directory are reported in launcher status. Within one directory the
+first valid package by filename wins duplicate-ID conflicts. Executables must
+resolve inside their own bundle.
+
+Plugins are native programs running with the user's privileges. Capability names
+select host integrations; they are not an operating-system sandbox or a security
+review. Install only packages you trust.
+
+### Build a plugin independently
+
+The app release script still builds the bundled plugins. To build just one plugin
+without rebuilding or re-signing Nexus (Python 3.11+ and Rust required):
+
+```sh
+./scripts/package-plugin.py plugins/calculator
+./scripts/package-plugin.py examples/hello-plugin
+```
+
+Packages are written to `dist/plugins/`. Use `--output <artifact-directory>` to
+choose a different output folder and `--identity "Your Signing Identity"` (or
+`CLIPKEEP_CODESIGN_IDENTITY`) to sign with your certificate. Otherwise packages
+receive an ad-hoc signature for local development. Public distribution needs the
+appropriate Developer ID signing/notarization. The output directory is for build
+artifacts; install the completed package using Nexus rather than building into
+the live plugin directory. If dependencies are cached, `CARGO_NET_OFFLINE=true`
+can be used for an offline build.
+
+`examples/hello-plugin` is a separate Cargo workspace, intentionally absent from
+Nexus's workspace members. It demonstrates independent compilation and an action
+that returns a notification. Copy this structure for a new plugin, choose a unique
+ID, and point its SDK dependencies at your Nexus source checkout. After installing
+it, search for `hello` to verify it works.
+
+A package can be a flat directory with `plugin.toml` and its executable, or a macOS
+bundle containing `Contents/Resources/plugin.toml` and `Contents/MacOS/<entrypoint>`.
+Optional source files under `resources/` are included by the packaging script.
+
+Example manifest (flat scalar fields, double-quoted strings, single-line arrays):
 
 ```toml
-id = "com.example.clipkeep.plugin"
-name = "Example"
+id = "com.example.nexus.hello"
+name = "Hello Plugin"
+description = "An independently built example plugin"
+icon = "hand.wave"
 version = "0.1.0"
 protocol_version = 1
-entrypoint = "clipkeep-plugin-example"
+entrypoint = "nexus-plugin-hello"
 default_enabled = true
 include_in_global_search = true
 capabilities = ["search"]
 ```
 
-Discovered plugins automatically receive a settings pane, enable switch,
-configurable shortcut, main-search item name, global-search inclusion switch,
-status-menu entry, and isolated process lifecycle. An enabled plugin excluded
-from Global Search receives a searchable item in the main page that opens its
-dedicated search window. That item is always hidden while the plugin participates
-in Global Search. Clipboard History is deliberately excluded from the combined
-search regardless of its manifest and is only opened explicitly.
-Plugins can optionally implement the SDK's `configuration_items` catalog and
-consume the host-provided `hidden_items` setting to offer the same per-item
-visibility controls.
-Run `Nexus --list-plugins` against a built app to validate discovery. Plugin
-stderr logs are written under the app-support `Logs` directory.
+The manifest's entrypoint must match a Cargo binary target. `description` and
+`icon` (an SF Symbol name) are optional. Strings/arrays use JSON-compatible quoted
+syntax; TOML tables, literal strings, and multiline arrays are not supported.
+
+Discovered plugins receive an enable switch, configurable shortcut, main-search
+item name, global-search inclusion switch, menu entry, and isolated process
+lifecycle. Plugins excluded from Global Search receive searchable route items
+that open dedicated search windows. Clipboard History remains a dedicated mode.
+Declare `configuration.items` and implement `configuration_items` in the SDK to
+show a per-item visibility list; consume the `hidden_items` configure setting.
+
+### Host services
+
+Most actions are sent to the plugin's `execute` method. An action can instead
+request a host integration by adding `host_action.<action-id>` to its result's
+`metadata`. Declare the corresponding capability in `plugin.toml`:
+
+| Metadata value | Required capability | Additional result metadata / behavior |
+| --- | --- | --- |
+| `system.media` | `system.control` | `command`: `mute`, `volume-up`, `volume-down`, `play-pause`, `next-track`, or `previous-track` |
+| `menu.press` | `accessibility.press` | `target_pid`, `menu_path` (JSON array), `menu_item_id`; performs the selected application's menu command |
+| `text.edit` | `clipboard.write` | Opens the external text editor using `preview`; submits edited text to `edit_submit_action` (defaults to `apply_edit`) |
+| `form.reminder` | `notifications` | Shows a content/date form, then calls the original action with JSON `content` and `due_at` input |
+
+For example, `metadata = {"host_action.toggle": "system.media", "command": "mute"}`
+requests a host media action for an action whose ID is `toggle`. New plugin IDs
+need no host code changes. Unknown services or missing capability declarations
+fail explicitly. Old bundled protocol-v1 actions retain a compatibility adapter.
+Plugins with `accessibility.read` receive `target_pid` and serialized menu `items`
+through runtime configure messages when their search context is opened.
+
+The built-in Clipboard, Calendar, and Clash settings retain their specialized
+settings pages. Generic plugins use manifest presentation, action input fields,
+and optional configuration item lists.
+
+Run `dist/Nexus.app/Contents/MacOS/Nexus --list-plugins` to inspect discovery.
+Plugin stderr logs are written under the app-support `Logs` directory.

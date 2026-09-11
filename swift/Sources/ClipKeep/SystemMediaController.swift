@@ -6,19 +6,19 @@ enum SystemMediaController {
         let confirmation: String
     }
 
-    static func command(for resultId: String) -> Command? {
-        switch resultId {
-        case "system-command:mute":
+    static func command(for commandId: String) -> Command? {
+        switch commandId {
+        case "mute":
             Command(keyCode: 7, confirmation: "Mute toggled")
-        case "system-command:volume-up":
+        case "volume-up":
             Command(keyCode: 0, confirmation: "Volume increased")
-        case "system-command:volume-down":
+        case "volume-down":
             Command(keyCode: 1, confirmation: "Volume decreased")
-        case "system-command:play-pause":
+        case "play-pause":
             Command(keyCode: 16, confirmation: "Play/pause sent")
-        case "system-command:next-track":
+        case "next-track":
             Command(keyCode: 17, confirmation: "Next track sent")
-        case "system-command:previous-track":
+        case "previous-track":
             Command(keyCode: 18, confirmation: "Previous track sent")
         default:
             nil

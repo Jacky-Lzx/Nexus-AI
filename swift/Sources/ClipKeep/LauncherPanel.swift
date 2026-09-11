@@ -27,6 +27,9 @@ final class LauncherPanel: NSPanel {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if event.modifierFlags.contains(.command) {
+            if event.charactersIgnoringModifiers == ",", handleCommand?(NSSelectorFromString("showSettings:")) == true {
+                return true
+            }
             if event.charactersIgnoringModifiers == "k", handleCommand?(NSSelectorFromString("showActions:")) == true {
                 return true
             }
@@ -140,7 +143,7 @@ final class LauncherPanelController: NSWindowController,
     NSTableViewDelegate {
 
     private let coordinator: SearchCoordinator
-    private let pluginNamesById: [String: String]
+    private var pluginNamesById: [String: String]
     private let root = NSView()
     private let searchContainer = NSView()
     private let searchIcon = NSImageView()
@@ -183,6 +186,7 @@ final class LauncherPanelController: NSWindowController,
     private static let thumbnailImageCache = NSCache<NSString, NSImage>()
 
     var onPluginStateChanged: (() -> Void)?
+    var onShowSettings: (() -> Void)?
 
     var imagePreviewQuality: ImagePreviewQuality {
         get {
@@ -225,6 +229,31 @@ final class LauncherPanelController: NSWindowController,
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     var isPresented: Bool { window?.isVisible == true && !hiding }
+
+    func refreshPlugins() {
+        pluginNamesById = Dictionary(uniqueKeysWithValues: coordinator.descriptors.map { ($0.id, $0.name) })
+        pluginNamesById["io.clipkeep.plugins"] = "Nexus"
+        if let input = activeActionInput,
+           !coordinator.canExecute(input.result) {
+            endActionInputForm(restoreSearchFocus: true)
+        }
+        switch searchMode {
+        case let .plugin(plugin):
+            guard let updated = coordinator.descriptors.first(where: { $0.id == plugin.id }),
+                  coordinator.isEnabled(plugin.id) else {
+                switchSearchMode(to: .global)
+                return
+            }
+            searchMode = .plugin(updated)
+            searchField.placeholderString = searchMode.placeholder
+            statusLabel.stringValue = searchMode.title
+        case .clipboard where !coordinator.isEnabled("io.clipkeep.clipboard"):
+            switchSearchMode(to: .global)
+        default: break
+        }
+        if isPresented { refreshMenuBarPlugin(for: searchMode) }
+        tableView.reloadData()
+    }
 
     func toggle(mode: SearchMode) {
         if isPresented {
@@ -619,20 +648,28 @@ final class LauncherPanelController: NSWindowController,
 
     private func perform(_ action: ResultAction, on result: SearchResult) {
         coordinator.cancelPendingActivation()
+        guard coordinator.canExecute(result) else { return }
         if !action.inputFields.isEmpty {
             beginActionInputForm(for: result, action: action)
             return
         }
-        if result.pluginId == "io.clipkeep.clipboard", action.id == "edit" {
-            performClipboardEdit(on: result)
-            return
-        }
-        if result.pluginId == "io.clipkeep.reminders", action.id == "create" {
-            performReminderCreation(on: result)
-            return
-        }
-        if result.pluginId == "io.clipkeep.menu-bar", action.id == "press" {
-            performMenuBarPress(on: result)
+        guard let descriptor = coordinator.descriptors.first(where: { $0.id == result.pluginId }),
+              coordinator.isEnabled(result.pluginId) else { return }
+        do {
+            switch try PluginHostAction.resolve(result: result, actionId: action.id, descriptor: descriptor) {
+            case .editText:
+                performClipboardEdit(on: result)
+                return
+            case .reminderForm:
+                performReminderCreation(on: result, actionId: action.id)
+                return
+            case .menuPress:
+                performMenuBarPress(on: result)
+                return
+            case .media, nil: break
+            }
+        } catch {
+            coordinator.onStatusChanged?(error.localizedDescription)
             return
         }
         if action.destructive {
@@ -811,7 +848,7 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    private func performReminderCreation(on result: SearchResult) {
+    private func performReminderCreation(on result: SearchResult, actionId: String) {
         let form = ReminderFormView()
         let alert = NSAlert()
         alert.messageText = "Add Reminder"
@@ -850,7 +887,7 @@ final class LauncherPanelController: NSWindowController,
                     self.coordinator.onStatusChanged?("Allow notifications in System Settings to create reminders")
                     return
                 }
-                self.coordinator.execute(result, actionId: "create", input: input)
+                self.coordinator.execute(result, actionId: actionId, input: input)
             }
         }
     }
@@ -971,7 +1008,7 @@ final class LauncherPanelController: NSWindowController,
                     coordinator.onStatusChanged?(error.localizedDescription)
                     applicationToRestore?.activate()
                 case let .success(editedText):
-                    coordinator.execute(result, actionId: "apply_edit", input: editedText) { success in
+                    coordinator.execute(result, actionId: result.metadata["edit_submit_action"] ?? "apply_edit", input: editedText) { success in
                         applicationToRestore?.activate()
                         guard success, canPaste, let applicationToRestore else { return }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
@@ -1032,26 +1069,25 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func refreshMenuBarPlugin(for mode: SearchMode) {
-        let pluginId = "io.clipkeep.menu-bar"
-        let needsMenuBar: Bool
-        switch mode {
-        case .global:
-            needsMenuBar = coordinator.isEnabled(pluginId)
-                && coordinator.isIncludedInGlobalSearch(pluginId)
-        case let .plugin(plugin):
-            needsMenuBar = plugin.id == pluginId && coordinator.isEnabled(pluginId)
-        case .plugins, .clipboard:
-            needsMenuBar = false
+        let targets = coordinator.descriptors.filter { plugin in
+            guard plugin.capabilities.contains("accessibility.read"), coordinator.isEnabled(plugin.id) else { return false }
+            switch mode {
+            case .global: return coordinator.isIncludedInGlobalSearch(plugin.id)
+            case let .plugin(selected): return selected.id == plugin.id
+            case .plugins, .clipboard: return false
+            }
         }
-        guard needsMenuBar, ensureAccessibilityPermission(), let previousApplication else { return }
+        guard !targets.isEmpty, ensureAccessibilityPermission(), let previousApplication else { return }
         let items = menuBarProvider.items(for: previousApplication)
         guard let data = try? JSONEncoder().encode(items),
               let encodedItems = String(data: data, encoding: .utf8)
         else { return }
-        coordinator.configureRuntimeSettings([
-            "target_pid": String(previousApplication.processIdentifier),
-            "items": encodedItems,
-        ], for: pluginId)
+        for plugin in targets {
+            coordinator.configureRuntimeSettings([
+                "target_pid": String(previousApplication.processIdentifier),
+                "items": encodedItems,
+            ], for: plugin.id)
+        }
     }
 
     private var selectedResult: SearchResult? {
@@ -1137,6 +1173,10 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func handle(_ selector: Selector) -> Bool {
+        if selector == NSSelectorFromString("showSettings:") {
+            onShowSettings?()
+            return true
+        }
         guard let result = selectedResult else { return false }
         if selector == NSSelectorFromString("showActions:") {
             showActionsMenu()
@@ -1176,7 +1216,8 @@ final class LauncherPanelController: NSWindowController,
         ]
         for (key, value) in result.metadata
             .filter({
-                ![
+                !$0.key.hasPrefix("_nexus_") && !$0.key.hasPrefix("host_action.") && ![
+                    "edit_submit_action",
                     "route",
                     "thumbnail_png",
                     "thumbnail_image_path",

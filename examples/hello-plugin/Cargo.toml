@@ -1,0 +1,11 @@
+[package]
+name = "nexus-plugin-hello"
+version = "0.1.0"
+edition = "2024"
+
+# A separate workspace: this plugin does not need to be added to Nexus's workspace.
+[workspace]
+
+[dependencies]
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol = { path = "../../crates/clipkeep-protocol" }
