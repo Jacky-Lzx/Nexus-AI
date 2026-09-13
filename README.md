@@ -325,3 +325,38 @@ For example, Caffeinate returns `hours` (label `hour`, integer 0–8760) and `mi
 90 minutes. The plugin receives `{"hours":1,"minutes":30}`. A zero total is rejected.
 See `plugins/caffeinate/src/main.rs` for the complete reusable action declaration
 and execution handler; no plugin-specific host UI is needed.
+
+
+### OCR clipboard images
+
+Copy an image (for example, take a macOS screenshot to the clipboard), search
+`ocr`, and press Return on **OCR Clipboard Image**. Recognition runs locally in
+the independent plugin using Apple's Vision framework, with Chinese and English
+recognition and automatic language detection. Search remains available while it
+runs. Select **OCR Result** to read the full text in a scrollable preview; Return
+copies it. Select **OCR Clipboard Image** again to recognize a new image.
+
+No image, unreadable images, and images with no recognized text produce a visible
+message. Inputs are limited to 64 MB and 80 megapixels. Results are held in memory
+until replaced or the plugin exits. This first version accepts PNG/TIFF clipboard
+images; image-file selection, screen-region capture, and table reconstruction are
+not included.
+
+Plugins may set result metadata `preview_style = "text"` to display a selectable,
+scrollable plain-text `preview`, including in global search. Copy remains a normal
+plugin action.
+
+OCR is a native Swift protocol-v1 plugin in `plugins/ocr`. The packaging script
+accepts either a Rust `Cargo.toml` or native Swift `main.swift`:
+
+```sh
+python3 scripts/package-plugin.py plugins/ocr
+swiftc -module-cache-path target/swift/module-cache plugins/ocr/tests/integration.swift -o /tmp/nexus-ocr-integration
+/tmp/nexus-ocr-integration "$PWD/target/swift-plugins/clipkeep-plugin-ocr"
+```
+
+The integration test temporarily replaces and restores the clipboard, checking
+missing-image errors, responsive searches during OCR, Chinese/English recognition,
+copying, query filtering, and shutdown. Run in a normal macOS session so Vision and
+the pasteboard are available. The binary also supports `--recognize-file <path>`
+for read-only recognizer diagnostics.

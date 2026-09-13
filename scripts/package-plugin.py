@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build one Rust plugin and produce an independently installable macOS bundle."""
+"""Build one Rust or Swift plugin and produce an independently installable macOS bundle."""
 import argparse
 import json
 import os
@@ -12,7 +12,7 @@ import tempfile
 import tomllib
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("source", type=Path, help="Plugin source directory (Cargo.toml and plugin.toml)")
+parser.add_argument("source", type=Path, help="Plugin source directory (Cargo.toml or main.swift, plus plugin.toml)")
 parser.add_argument("--output", type=Path, default=Path("dist/plugins"))
 parser.add_argument("--identity", default=os.environ.get("CLIPKEEP_CODESIGN_IDENTITY"), help="Optional code signing identity")
 args = parser.parse_args()
@@ -26,16 +26,24 @@ if not entrypoint or "/" in entrypoint or ".." in entrypoint:
     parser.error("Entrypoint must be a filename")
 if manifest.get("protocol_version") != 1:
     parser.error("Unsupported protocol version")
-cargo_manifest = source / "Cargo.toml"
-metadata = json.loads(subprocess.check_output([
-    "cargo", "metadata", "--no-deps", "--format-version", "1", "--manifest-path", str(cargo_manifest)
-]))
-package = next(p for p in metadata["packages"] if Path(p["manifest_path"]).resolve() == cargo_manifest)
-if not any(t["name"] == entrypoint and "bin" in t["kind"] for t in package["targets"]):
-    parser.error("Entrypoint must match a Cargo binary target")
 env = dict(os.environ, MACOSX_DEPLOYMENT_TARGET="26.0")
-subprocess.run(["cargo", "build", "--release", "--manifest-path", str(cargo_manifest),
-                "--package", package["name"], "--bin", entrypoint], env=env, check=True)
+if (source / "Cargo.toml").exists():
+    cargo_manifest = source / "Cargo.toml"
+    metadata = json.loads(subprocess.check_output([
+        "cargo", "metadata", "--no-deps", "--format-version", "1", "--manifest-path", str(cargo_manifest)
+    ]))
+    package = next(p for p in metadata["packages"] if Path(p["manifest_path"]).resolve() == cargo_manifest)
+    if not any(t["name"] == entrypoint and "bin" in t["kind"] for t in package["targets"]):
+        parser.error("Entrypoint must match a Cargo binary target")
+    subprocess.run(["cargo", "build", "--release", "--manifest-path", str(cargo_manifest),
+                    "--package", package["name"], "--bin", entrypoint], env=env, check=True)
+    binary = Path(metadata["target_directory"]) / "release" / entrypoint
+elif (source / "main.swift").exists():
+    project = Path(__file__).resolve().parent.parent
+    subprocess.run(["sh", str(project / "scripts/build-swift-plugin.sh"), str(source), entrypoint], env=env, check=True)
+    binary = project / "target/swift-plugins" / entrypoint
+else:
+    parser.error("Plugin needs Cargo.toml or main.swift")
 output = args.output.resolve()
 output.mkdir(parents=True, exist_ok=True)
 destination = output / (plugin_id + ".clipkeepplugin")
@@ -44,7 +52,7 @@ with tempfile.TemporaryDirectory(prefix=".package-", dir=output) as temp:
     contents = bundle / "Contents"
     (contents / "MacOS").mkdir(parents=True)
     (contents / "Resources").mkdir()
-    shutil.copy2(Path(metadata["target_directory"]) / "release" / entrypoint, contents / "MacOS" / entrypoint)
+    shutil.copy2(binary, contents / "MacOS" / entrypoint)
     if (source / "resources").is_dir():
         shutil.copytree(source / "resources", contents / "Resources", dirs_exist_ok=True)
     shutil.copy2(source / "plugin.toml", contents / "Resources" / "plugin.toml")

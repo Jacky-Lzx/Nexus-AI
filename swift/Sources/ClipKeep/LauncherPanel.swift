@@ -157,6 +157,8 @@ final class LauncherPanelController: NSWindowController,
     private let detailPane = NSView()
     private let tableView = ResultsTableView()
     private let scrollView = NSScrollView()
+    private let textPreviewScroll = NSScrollView()
+    private let textPreview = NSTextView()
     private let detailText = NSTextField(wrappingLabelWithString: "")
     private let detailImage = PreviewImageView()
     private let detailInfo = NSStackView()
@@ -492,6 +494,26 @@ final class LauncherPanelController: NSWindowController,
         detailPane.addSubview(detailText)
         detailPane.addSubview(detailImage)
         detailPane.addSubview(detailInfo)
+        textPreview.isEditable = false
+        textPreview.isSelectable = true
+        textPreview.font = .systemFont(ofSize: 15)
+        textPreview.drawsBackground = false
+        textPreview.textContainerInset = NSSize(width: 12, height: 12)
+        textPreview.isVerticallyResizable = true
+        textPreview.autoresizingMask = [.width]
+        textPreview.textContainer?.widthTracksTextView = true
+        textPreviewScroll.documentView = textPreview
+        textPreviewScroll.hasVerticalScroller = true
+        textPreviewScroll.drawsBackground = false
+        textPreviewScroll.isHidden = true
+        textPreviewScroll.translatesAutoresizingMaskIntoConstraints = false
+        detailPane.addSubview(textPreviewScroll)
+        NSLayoutConstraint.activate([
+            textPreviewScroll.leadingAnchor.constraint(equalTo: detailPane.leadingAnchor, constant: 8),
+            textPreviewScroll.trailingAnchor.constraint(equalTo: detailPane.trailingAnchor, constant: -8),
+            textPreviewScroll.topAnchor.constraint(equalTo: detailPane.topAnchor, constant: 8),
+            textPreviewScroll.bottomAnchor.constraint(equalTo: detailPane.bottomAnchor, constant: -8),
+        ])
 
         let footer = NSView()
         footer.translatesAutoresizingMaskIntoConstraints = false
@@ -648,6 +670,7 @@ final class LauncherPanelController: NSWindowController,
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         tableView.reloadData(forRowIndexes: IndexSet(integersIn: 0..<results.count), columnIndexes: IndexSet(integer: 0))
+        updateModeLayout()
         updateDetails()
         updateInlineArguments()
     }
@@ -1263,6 +1286,20 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func updateDetails() {
+        let hasTextPreview = selectedResult?.metadata["preview_style"] == "text"
+        textPreviewScroll.isHidden = !hasTextPreview
+        detailInfo.isHidden = hasTextPreview
+        if hasTextPreview {
+            detailImageGeneration += 1
+            detailText.isHidden = true
+            detailImage.isHidden = true
+            let text = selectedResult?.preview ?? ""
+            if textPreview.string != text {
+                textPreview.string = text
+                textPreview.scrollToBeginningOfDocument(nil)
+            }
+            return
+        }
         guard searchMode == .clipboard else { return }
         detailImageGeneration += 1
         let generation = detailImageGeneration
@@ -1329,9 +1366,13 @@ final class LauncherPanelController: NSWindowController,
         return output
     }
 
+    private var showsResultDetails: Bool {
+        searchMode.showsDetails || selectedResult?.metadata["preview_style"] == "text"
+    }
+
     private func updateModeLayout() {
         enforcePanelWidth()
-        let showsDetails = searchMode.showsDetails
+        let showsDetails = showsResultDetails
         splitView.showsDivider = showsDetails
         detailPane.isHidden = !showsDetails
         listWidthConstraint?.isActive = showsDetails
@@ -1394,11 +1435,11 @@ final class LauncherPanelController: NSWindowController,
         forDrawnRect drawnRect: NSRect,
         ofDividerAt dividerIndex: Int
     ) -> NSRect {
-        searchMode.showsDetails ? proposedEffectiveRect : .zero
+        showsResultDetails ? proposedEffectiveRect : .zero
     }
 
     func splitView(_ splitView: NSSplitView, shouldHideDividerAt dividerIndex: Int) -> Bool {
-        !searchMode.showsDetails
+        !showsResultDetails
     }
 
     private func updateDetailInfo(_ items: [(String, String)]) {

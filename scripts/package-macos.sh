@@ -75,6 +75,8 @@ rm -f "$bundle_dir/Contents/MacOS/clipkeep-plugin-applications"
 rm -f "$bundle_dir/Contents/MacOS/clipkeep-plugin-clipboard"
 install -m 644 packaging/macos/Info.plist "$bundle_dir/Contents/Info.plist"
 
+python3 "$project_dir/scripts/package-plugin.py" "$project_dir/plugins/ocr" --output "$bundle_dir/Contents/PlugIns"
+
 signing_identity=${CLIPKEEP_CODESIGN_IDENTITY:-}
 if [ -z "$signing_identity" ]; then
     signing_identity=$(security find-identity -v -p codesigning 2>/dev/null \
@@ -111,6 +113,8 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.system-commands \
         "$system_commands_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        "$bundle_dir/Contents/PlugIns/io.clipkeep.ocr.clipkeepplugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep "$bundle_dir"
     codesign --verify --deep --strict "$bundle_dir"
