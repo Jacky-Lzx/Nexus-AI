@@ -178,6 +178,11 @@ final class LauncherPanelController: NSWindowController,
     private var presentationValueLabels: [(NSTextField, PluginPresentationItem)] = []
     private var presentationTimer: Timer?
     private var activeActionInput: ActiveActionInput?
+    private var inlineActionInput = false
+    private var searchTrailingConstraint: NSLayoutConstraint!
+    private var inputLeadingConstraint: NSLayoutConstraint!
+    private var inlineInputConstraints: [NSLayoutConstraint] = []
+    private var inlineQueryWidthConstraint: NSLayoutConstraint!
     private var resetScrollOnNextResults = false
     private var detailImageGeneration: UInt64 = 0
     private var expansionAnimationGeneration: UInt64 = 0
@@ -396,6 +401,14 @@ final class LauncherPanelController: NSWindowController,
         )
         presentationHeightConstraint = presentationContainer.heightAnchor.constraint(equalToConstant: 0)
         contentTopConstraint = content.topAnchor.constraint(equalTo: presentationContainer.bottomAnchor)
+        searchTrailingConstraint = searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -12)
+        inputLeadingConstraint = actionInputStack.leadingAnchor.constraint(equalTo: searchContainer.leadingAnchor, constant: 17)
+        inlineQueryWidthConstraint = searchField.widthAnchor.constraint(equalToConstant: 1)
+        inlineQueryWidthConstraint.priority = .defaultHigh
+        inlineInputConstraints = [
+            searchField.trailingAnchor.constraint(equalTo: actionInputStack.leadingAnchor, constant: -12),
+            inlineQueryWidthConstraint,
+        ]
         NSLayoutConstraint.activate([
             searchContainer.topAnchor.constraint(equalTo: root.topAnchor, constant: Layout.outerInset),
             searchContainer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
@@ -406,9 +419,9 @@ final class LauncherPanelController: NSWindowController,
             searchIcon.widthAnchor.constraint(equalToConstant: 20),
             searchIcon.heightAnchor.constraint(equalToConstant: 20),
             searchField.leadingAnchor.constraint(equalTo: searchIcon.trailingAnchor, constant: 11),
-            searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -12),
+            searchTrailingConstraint,
             searchField.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
-            actionInputStack.leadingAnchor.constraint(equalTo: searchContainer.leadingAnchor, constant: 17),
+            inputLeadingConstraint,
             actionInputStack.trailingAnchor.constraint(lessThanOrEqualTo: searchContainer.trailingAnchor, constant: -12),
             actionInputStack.centerYAnchor.constraint(equalTo: searchContainer.centerYAnchor),
             actionInputStack.heightAnchor.constraint(equalToConstant: 38),
@@ -551,6 +564,7 @@ final class LauncherPanelController: NSWindowController,
             }
             self.updateDetails()
             self.updatePresentationItems()
+            self.updateInlineArguments()
         }
         coordinator.onStatusChanged = { [weak self] status in self?.statusLabel.stringValue = status }
         coordinator.onPluginStateChanged = { [weak self] in self?.onPluginStateChanged?() }
@@ -559,12 +573,13 @@ final class LauncherPanelController: NSWindowController,
     func controlTextDidChange(_ obj: Notification) {
         guard let changedField = obj.object as? NSTextField, changedField === searchField else { return }
         let query = searchField.stringValue
+        endActionInputForm(restoreSearchFocus: false)
         requestSearch(query)
         setExpanded(shouldExpand(for: query), animated: true)
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        if activeActionInput != nil {
+        if activeActionInput != nil, control !== searchField {
             switch commandSelector {
             case #selector(NSResponder.insertTab(_:)):
                 moveActionInputFocus(from: control, offset: 1)
@@ -583,6 +598,10 @@ final class LauncherPanelController: NSWindowController,
             }
         }
         switch commandSelector {
+        case #selector(NSResponder.insertTab(_:)):
+            requestActionInputForm(focusLastField: false); return true
+        case #selector(NSResponder.insertBacktab(_:)):
+            requestActionInputForm(focusLastField: true); return true
         case #selector(NSResponder.moveDown(_:)):
             moveSelection(1); return true
         case #selector(NSResponder.moveUp(_:)):
@@ -630,6 +649,7 @@ final class LauncherPanelController: NSWindowController,
     func tableViewSelectionDidChange(_ notification: Notification) {
         tableView.reloadData(forRowIndexes: IndexSet(integersIn: 0..<results.count), columnIndexes: IndexSet(integer: 0))
         updateDetails()
+        updateInlineArguments()
     }
 
     @objc private func openSelected() {
@@ -702,31 +722,54 @@ final class LauncherPanelController: NSWindowController,
     private func beginActionInputForm(
         for result: SearchResult,
         action: ResultAction,
-        focusLastField: Bool = false
+        focusLastField: Bool = false,
+        inline: Bool = false,
+        takeFocus: Bool = true
     ) {
+        if let activeActionInput, activeActionInput.result.id == result.id,
+           activeActionInput.result.pluginId == result.pluginId,
+           activeActionInput.action.id == action.id {
+            if takeFocus, let field = focusLastField ? activeActionInput.fields.last?.1 : activeActionInput.fields.first?.1 {
+                window?.makeFirstResponder(field)
+            }
+            return
+        }
         endActionInputForm(restoreSearchFocus: false)
-        searchIcon.isHidden = true
-        searchField.isHidden = true
+        inlineActionInput = inline
+        searchIcon.isHidden = !inline
+        searchField.isHidden = !inline
         actionInputStack.isHidden = false
+        if inline {
+            let textWidth = (searchField.stringValue as NSString).size(withAttributes: [
+                .font: searchField.font ?? NSFont.systemFont(ofSize: 24),
+            ]).width
+            // Account for the text field's inset while keeping arguments beside the query.
+            inlineQueryWidthConstraint.constant = ceil(textWidth) + 6
+            searchTrailingConstraint.isActive = false
+            inputLeadingConstraint.isActive = false
+            NSLayoutConstraint.activate(inlineInputConstraints)
+        }
 
-        let icon = NSImageView()
-        icon.image = NSImage(
-            systemSymbolName: result.metadata["symbol_name"] ?? "command",
-            accessibilityDescription: result.title
-        )
-        icon.contentTintColor = .secondaryLabelColor
-        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .medium)
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.widthAnchor.constraint(equalToConstant: 24).isActive = true
-        icon.heightAnchor.constraint(equalToConstant: 24).isActive = true
-        actionInputStack.addArrangedSubview(icon)
+        if !inline {
+            let icon = NSImageView()
+            icon.image = NSImage(
+                systemSymbolName: result.metadata["symbol_name"] ?? "command",
+                accessibilityDescription: result.title
+            )
+            icon.contentTintColor = .secondaryLabelColor
+            icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .medium)
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            icon.widthAnchor.constraint(equalToConstant: 24).isActive = true
+            icon.heightAnchor.constraint(equalToConstant: 24).isActive = true
+            actionInputStack.addArrangedSubview(icon)
 
-        let title = NSTextField(labelWithString: result.title)
-        title.font = .systemFont(ofSize: 16, weight: .semibold)
-        title.textColor = .labelColor
-        title.lineBreakMode = .byTruncatingTail
-        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        actionInputStack.addArrangedSubview(title)
+            let title = NSTextField(labelWithString: result.title)
+            title.font = .systemFont(ofSize: 16, weight: .semibold)
+            title.textColor = .labelColor
+            title.lineBreakMode = .byTruncatingTail
+            title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            actionInputStack.addArrangedSubview(title)
+        }
 
         var controls: [(ActionInputField, NSTextField)] = []
         for definition in action.inputFields {
@@ -738,7 +781,7 @@ final class LauncherPanelController: NSWindowController,
             controls[index].1.nextKeyView = controls[controls.index(after: index) % controls.count].1
         }
         activeActionInput = ActiveActionInput(result: result, action: action, fields: controls)
-        if let field = focusLastField ? controls.last?.1 : controls.first?.1 {
+        if takeFocus, let field = focusLastField ? controls.last?.1 : controls.first?.1 {
             window?.makeFirstResponder(field)
         }
     }
@@ -774,6 +817,12 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func endActionInputForm(restoreSearchFocus: Bool) {
+        if inlineActionInput {
+            NSLayoutConstraint.deactivate(inlineInputConstraints)
+            searchTrailingConstraint.isActive = true
+            inputLeadingConstraint.isActive = true
+        }
+        inlineActionInput = false
         activeActionInput = nil
         for view in actionInputStack.arrangedSubviews {
             actionInputStack.removeArrangedSubview(view)
@@ -1110,11 +1159,44 @@ final class LauncherPanelController: NSWindowController,
         moveSelection(direction * max(visibleRows / 2, 1))
     }
 
+    /// Preview the first command's arguments without taking focus from the query.
+    private func updateInlineArguments() {
+        guard activeActionInput == nil || inlineActionInput else { return }
+        guard searchMode == .global, !searchField.stringValue.isEmpty,
+              tableView.selectedRow == 0, let result = results.first,
+              coordinator.canExecute(result),
+              let action = result.actions.first(where: { $0.default }) ?? result.actions.first,
+              !action.inputFields.isEmpty else {
+            if inlineActionInput { endActionInputForm(restoreSearchFocus: true) }
+            return
+        }
+        if let activeActionInput, !coordinator.canExecute(activeActionInput.result) {
+            endActionInputForm(restoreSearchFocus: true)
+        }
+        beginActionInputForm(for: result, action: action, inline: true, takeFocus: false)
+    }
+
+    /// Uses the same settled-search gate as Return so Tab cannot bind stale arguments.
+    private func requestActionInputForm(focusLastField: Bool) {
+        coordinator.activateWhenSearchSettles { [weak self] in
+            guard let self, self.isPresented,
+                  let result = self.selectedResult,
+                  self.coordinator.canExecute(result),
+                  let action = result.actions.first(where: { $0.default }) ?? result.actions.first,
+                  !action.inputFields.isEmpty else { return }
+            self.beginActionInputForm(for: result, action: action, focusLastField: focusLastField)
+        }
+    }
+
     private func handleKeyEvent(_ event: NSEvent) -> Bool {
         let relevantModifiers = event.modifierFlags.intersection([.command, .option, .control, .shift])
         if event.keyCode == 48,
            relevantModifiers.subtracting(.shift).isEmpty {
             let offset = relevantModifiers.contains(.shift) ? -1 : 1
+            if searchField.currentEditor() === window?.firstResponder {
+                requestActionInputForm(focusLastField: offset < 0)
+                return true
+            }
             if let activeActionInput {
                 let currentEditor = window?.firstResponder
                 if let current = activeActionInput.fields.firstIndex(where: {
@@ -1131,19 +1213,6 @@ final class LauncherPanelController: NSWindowController,
                 return true
             }
 
-            if searchField.currentEditor() === window?.firstResponder {
-                if let result = selectedResult,
-                   let action = result.actions.first(where: { $0.default && !$0.inputFields.isEmpty })
-                    ?? result.actions.first(where: { !$0.inputFields.isEmpty }) {
-                    beginActionInputForm(
-                        for: result,
-                        action: action,
-                        focusLastField: offset < 0
-                    )
-                }
-                // Keep focus in the launcher when the selected result has no arguments.
-                return true
-            }
         }
         if searchMode == .clipboard,
            relevantModifiers == [.command],

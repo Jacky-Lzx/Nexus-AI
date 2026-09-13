@@ -210,9 +210,8 @@ fn start_result(active: Option<&ActiveCaffeination>) -> SearchResult {
             closes_window: true,
             paste_to_previous: false,
             input_fields: vec![
-                duration_field("hours", "Hours", 8_760),
-                duration_field("minutes", "Minutes", 59),
-                duration_field("seconds", "Seconds", 59),
+                duration_field("hours", "hour", 8_760),
+                duration_field("minutes", "min", 59),
             ],
         }],
     }
@@ -256,6 +255,9 @@ fn duration_field(id: &str, label: &str, maximum: i64) -> ActionInputField {
 fn parse_duration(input: &str) -> Result<u64, String> {
     let input: CaffeinateInput =
         serde_json::from_str(input).map_err(|error| format!("invalid duration: {error}"))?;
+    if input.hours > 8_760 || input.minutes > 59 || input.seconds > 59 {
+        return Err("duration must use hours 0–8760 and minutes/seconds 0–59".into());
+    }
     input
         .hours
         .checked_mul(3_600)
@@ -296,6 +298,30 @@ fn format_duration(seconds: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inline_arguments_match_duration_input() {
+        let result = start_result(None);
+        let fields = &result.actions[0].input_fields;
+        assert_eq!(fields.len(), 2);
+        assert_eq!((&*fields[0].id, &*fields[0].label), ("hours", "hour"));
+        assert_eq!((&*fields[1].id, &*fields[1].label), ("minutes", "min"));
+        assert_eq!(
+            parse_duration(r#"{"hours":1,"minutes":30}"#).unwrap(),
+            5_400
+        );
+        assert_eq!(parse_duration(r#"{"minutes":15}"#).unwrap(), 900);
+        for invalid in [
+            r#"{"hours":8761}"#,
+            r#"{"minutes":60}"#,
+            r#"{"hours":-1}"#,
+            r#"{"minutes":1.5}"#,
+            r#"{"hours":"one"}"#,
+        ] {
+            assert!(parse_duration(invalid).is_err(), "{invalid}");
+        }
+        assert!(CaffeinatePlugin::default().start("{}").is_err());
+    }
 
     #[test]
     fn formats_durations() {

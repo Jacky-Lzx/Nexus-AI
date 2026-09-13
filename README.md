@@ -300,3 +300,28 @@ and optional configuration item lists.
 
 Run `dist/Nexus.app/Contents/MacOS/Nexus --list-plugins` to inspect discovery.
 Plugin stderr logs are written under the app-support `Logs` directory.
+
+### Inline command arguments
+
+Include a plugin in global search (`include_in_global_search = true`) and return a
+command whose default action declares `input_fields`. On the main page, when this
+command is the first selected result for a nonempty query, its argument fields
+appear beside the query without taking focus. Press Tab to enter the first field.
+Editing the query or selecting another result updates the argument preview. Tab and
+Shift-Tab cycle through fields, Return submits, and Escape restores the query.
+Tab waits for the current search to finish, just like Return. Users can override
+Global Search inclusion in Settings.
+
+Each `ActionInputField` declares a unique `id`, `label`, optional `placeholder`,
+`kind` (`text` or `integer`), `required`, and optional integer `minimum`/`maximum`.
+The host validates the fields and passes a JSON object **encoded as a string** in
+`HostRequest::Execute.input`; implement the SDK's `execute_with_input` to consume
+it. Optional empty integer fields become `0`; empty text fields become `""`.
+Plugins must also validate input themselves and report errors without starting an
+invalid operation. Existing actions without fields keep their normal behavior.
+
+For example, Caffeinate returns `hours` (label `hour`, integer 0–8760) and `minutes`
+(label `min`, integer 0–59). Type `caffeinate`, Tab, `1`, Tab, `30`, Return to start
+90 minutes. The plugin receives `{"hours":1,"minutes":30}`. A zero total is rejected.
+See `plugins/caffeinate/src/main.rs` for the complete reusable action declaration
+and execution handler; no plugin-specific host UI is needed.
