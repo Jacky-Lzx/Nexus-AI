@@ -696,9 +696,13 @@ final class SearchCoordinator {
             results.append(contentsOf: pluginEntryResults(includeGlobalSearchPlugins: true))
         }
 
-        results.sort {
-            if $0.score == $1.score { return $0.title < $1.title }
-            return $0.score > $1.score
+        if currentSearchIsGlobal {
+            results = SearchRanking.sorted(results, query: currentQuery)
+        } else {
+            results.sort {
+                if $0.score == $1.score { return $0.title < $1.title }
+                return $0.score > $1.score
+            }
         }
         onResultsChanged?(results)
     }
