@@ -207,20 +207,24 @@ fn fuzzy_score(name: &str, query: &str) -> Option<f32> {
 fn scan_applications() -> Vec<Application> {
     #[cfg(target_os = "macos")]
     {
-        let mut roots = vec![
-            PathBuf::from("/Applications"),
-            PathBuf::from("/System/Applications"),
-        ];
-        if let Some(user_dirs) = UserDirs::new() {
-            roots.push(user_dirs.home_dir().join("Applications"));
-        }
-        let mut applications = Vec::new();
-        for root in roots {
-            scan_macos_directory(&root, 3, &mut applications);
-        }
-        applications.sort_by(|left, right| left.name.cmp(&right.name));
-        applications.dedup_by(|left, right| left.path == right.path);
-        applications
+        // The Rust plugin loop does not drain Cocoa autoreleased objects. Release
+        // temporary localization objects after every scan, including the first one.
+        objc2::rc::autoreleasepool(|_| {
+            let mut roots = vec![
+                PathBuf::from("/Applications"),
+                PathBuf::from("/System/Applications"),
+            ];
+            if let Some(user_dirs) = UserDirs::new() {
+                roots.push(user_dirs.home_dir().join("Applications"));
+            }
+            let mut applications = Vec::new();
+            for root in roots {
+                scan_macos_directory(&root, 3, &mut applications);
+            }
+            applications.sort_by(|left, right| left.name.cmp(&right.name));
+            applications.dedup_by(|left, right| left.path == right.path);
+            applications
+        })
     }
     #[cfg(not(target_os = "macos"))]
     {
