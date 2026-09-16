@@ -54,15 +54,86 @@ final class PluginInstallation {
     }
 }
 
-/// Re-scan on a low-frequency timer, including changes inside existing bundles.
-/// File metadata avoids reloading unchanged plugins and catches atomic executable replacement.
+/// Re-scan only when a plugin directory changes, including files inside existing bundles.
 final class PluginDirectoryMonitor {
-    private var timer: Timer?
+    private let roots: [URL]
+    private let onChange: () -> Void
+    private var sources: [DispatchSourceFileSystemObject] = []
+    private var pendingReload: DispatchWorkItem?
 
-    init(onChange: @escaping () -> Void) {
-        timer = Timer(timeInterval: 1, repeats: true) { _ in onChange() }
-        if let timer { RunLoop.main.add(timer, forMode: .common) }
+    init(roots: [URL] = PluginRegistry.roots, onChange: @escaping () -> Void) {
+        self.roots = roots
+        self.onChange = onChange
+        let userDirectory = PluginRegistry.userDirectory.standardizedFileURL
+        if roots.contains(where: { $0.standardizedFileURL == userDirectory }) {
+            try? FileManager.default.createDirectory(
+                at: PluginRegistry.userDirectory,
+                withIntermediateDirectories: true
+            )
+        }
+        rebuildWatches()
     }
 
-    deinit { timer?.invalidate() }
+    deinit {
+        pendingReload?.cancel()
+        sources.forEach { $0.cancel() }
+    }
+
+    private func rebuildWatches() {
+        sources.forEach { $0.cancel() }
+        sources.removeAll()
+
+        for directory in watchedDirectories() {
+            let descriptor = open(directory.path, O_EVTONLY | O_CLOEXEC)
+            guard descriptor >= 0 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: descriptor,
+                eventMask: [.write, .extend, .attrib, .rename, .delete],
+                queue: .main
+            )
+            source.setEventHandler { [weak self] in self?.scheduleReload() }
+            source.setCancelHandler { close(descriptor) }
+            sources.append(source)
+            source.resume()
+        }
+    }
+
+    private func watchedDirectories() -> [URL] {
+        var directories: [URL] = []
+        for root in roots {
+            guard (try? root.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
+                continue
+            }
+            directories.append(root)
+            guard let children = try? FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            ) else { continue }
+            for bundle in children where bundle.pathExtension == "clipkeepplugin" {
+                directories.append(bundle)
+                guard let enumerator = FileManager.default.enumerator(
+                    at: bundle,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                ) else { continue }
+                for case let url as URL in enumerator
+                    where (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                    directories.append(url)
+                }
+            }
+        }
+        return directories
+    }
+
+    private func scheduleReload() {
+        pendingReload?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.onChange()
+            self.rebuildWatches()
+        }
+        pendingReload = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: work)
+    }
 }

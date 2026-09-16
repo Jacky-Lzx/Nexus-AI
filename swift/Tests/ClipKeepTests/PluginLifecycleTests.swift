@@ -93,6 +93,20 @@ private func fixture(_ root: URL, id: String = "com.example.test", version: Stri
     #expect(PluginRegistry.scan(roots: [root]).errors.count == 1)
 }
 
+@Test @MainActor func pluginMonitorDetectsNestedExecutableReplacement() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    var reloads = 0
+    let monitor = PluginDirectoryMonitor(roots: [root]) { reloads += 1 }
+    let executable = bundle.appendingPathComponent("plugin")
+
+    try "#!/bin/sh\nexit 0\n".write(to: executable, atomically: true, encoding: .utf8)
+
+    #expect(await eventually { reloads > 0 })
+    withExtendedLifetime(monitor) {}
+}
+
 @MainActor
 private func eventually(_ predicate: () -> Bool) async -> Bool {
     for _ in 0..<150 {
