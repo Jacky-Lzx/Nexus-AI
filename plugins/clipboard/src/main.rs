@@ -61,6 +61,8 @@ impl ClipboardPlugin {
         let history_path = history_path()
             .ok_or_else(|| io::Error::other("could not determine clipboard data directory"))?;
         let history_items_dir = history_items_dir(&history_path);
+        let encrypted_legacy_path = encrypted_legacy_history_path()
+            .ok_or_else(|| io::Error::other("could not determine legacy clipboard history path"))?;
         let preview_cache_dir = preview_cache_dir()
             .ok_or_else(|| io::Error::other("could not determine clipboard cache directory"))?;
         let encryption_key = history_encryption_key()?;
@@ -68,6 +70,7 @@ impl ClipboardPlugin {
         let loaded = load_history(
             &history_path,
             &history_items_dir,
+            Some(&encrypted_legacy_path),
             legacy_path.as_deref(),
             &encryption_key,
         )
@@ -96,6 +99,14 @@ impl ClipboardPlugin {
             || legacy_path.as_ref().is_some_and(|path| path.is_file())
         {
             plugin.save_all().map_err(io::Error::other)?;
+            if loaded.needs_legacy_snapshot {
+                write_encrypted_json(
+                    &encrypted_legacy_path,
+                    &plugin.items,
+                    &plugin.encryption_key,
+                )
+                .map_err(io::Error::other)?;
+            }
             if let Some(path) = legacy_path {
                 let _ = fs::remove_file(path);
             }
@@ -954,11 +965,19 @@ fn make_thumbnail(representations: &[Representation]) -> Option<String> {
 
 fn history_path() -> Option<PathBuf> {
     ProjectDirs::from("io", "clipkeep", "ClipKeep")
+        .map(|dirs| dirs.data_local_dir().join("history-v2.ckh"))
+}
+
+fn encrypted_legacy_history_path() -> Option<PathBuf> {
+    ProjectDirs::from("io", "clipkeep", "ClipKeep")
         .map(|dirs| dirs.data_local_dir().join("history.ckh"))
 }
 
 fn history_items_dir(history_path: &Path) -> PathBuf {
-    history_path.with_extension("items")
+    history_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("history.items")
 }
 
 fn history_item_path(items_dir: &Path, id: u64) -> PathBuf {
@@ -984,55 +1003,41 @@ struct HistoryIndex {
 struct LoadedHistory {
     items: Vec<ClipItem>,
     needs_migration: bool,
+    needs_legacy_snapshot: bool,
 }
 
 fn load_history(
     path: &Path,
     items_dir: &Path,
+    encrypted_legacy_path: Option<&Path>,
     legacy_path: Option<&Path>,
     key: &[u8; 32],
 ) -> Result<LoadedHistory, String> {
+    if let Some(legacy_path) = encrypted_legacy_path
+        && file_is_newer(legacy_path, path)
+        && let Some(history) = load_encrypted_legacy(legacy_path, items_dir, key)?
+    {
+        return Ok(history);
+    }
     match fs::read(path) {
         Ok(bytes) => {
             let plaintext = decrypt_history(&bytes, key)?;
-            if let Ok(index) = serde_json::from_slice::<HistoryIndex>(&plaintext) {
-                if index.version != HISTORY_INDEX_VERSION {
-                    return Err(format!(
-                        "unsupported clipboard history version {}",
-                        index.version
-                    ));
-                }
-                let mut seen = HashSet::new();
-                let mut items = Vec::with_capacity(index.item_ids.len());
-                for id in index.item_ids {
-                    if !seen.insert(id) {
-                        return Err(format!("duplicate clipboard history item {id}"));
-                    }
-                    let bytes = fs::read(history_item_path(items_dir, id)).map_err(|error| {
-                        format!("could not read clipboard history item {id}: {error}")
-                    })?;
-                    let plaintext = decrypt_history(&bytes, key)?;
-                    let item: ClipItem = serde_json::from_slice(&plaintext)
-                        .map_err(|error| format!("invalid clipboard history item {id}: {error}"))?;
-                    if item.id != id {
-                        return Err(format!("clipboard history item {id} has the wrong ID"));
-                    }
-                    items.push(item);
-                }
-                return Ok(LoadedHistory {
-                    items,
-                    needs_migration: false,
-                });
-            }
-            let items = serde_json::from_slice(&plaintext)
-                .map_err(|error| format!("invalid clipboard history: {error}"))?;
+            let index = serde_json::from_slice::<HistoryIndex>(&plaintext)
+                .map_err(|_| "invalid clipboard history index")?;
+            let items = load_indexed_history(index, items_dir, key)?;
             return Ok(LoadedHistory {
                 items,
-                needs_migration: true,
+                needs_migration: false,
+                needs_legacy_snapshot: false,
             });
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("could not read clipboard history: {error}")),
+    }
+    if let Some(legacy_path) = encrypted_legacy_path
+        && let Some(history) = load_encrypted_legacy(legacy_path, items_dir, key)?
+    {
+        return Ok(history);
     }
     let items: Vec<ClipItem> = legacy_path
         .and_then(|path| fs::read(path).ok())
@@ -1040,8 +1045,79 @@ fn load_history(
         .unwrap_or_default();
     Ok(LoadedHistory {
         needs_migration: !items.is_empty(),
+        needs_legacy_snapshot: !items.is_empty(),
         items,
     })
+}
+
+fn file_is_newer(candidate: &Path, baseline: &Path) -> bool {
+    let modified = |path: &Path| {
+        fs::metadata(path)
+            .and_then(|metadata| metadata.modified())
+            .ok()
+    };
+    match (modified(candidate), modified(baseline)) {
+        (Some(candidate), Some(baseline)) => candidate > baseline,
+        _ => false,
+    }
+}
+
+fn load_encrypted_legacy(
+    path: &Path,
+    items_dir: &Path,
+    key: &[u8; 32],
+) -> Result<Option<LoadedHistory>, String> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(format!("could not read legacy clipboard history: {error}")),
+    };
+    let plaintext = decrypt_history(&bytes, key)?;
+    if let Ok(index) = serde_json::from_slice::<HistoryIndex>(&plaintext) {
+        let items = load_indexed_history(index, items_dir, key)?;
+        return Ok(Some(LoadedHistory {
+            items,
+            needs_migration: true,
+            needs_legacy_snapshot: true,
+        }));
+    }
+    let items = serde_json::from_slice(&plaintext)
+        .map_err(|error| format!("invalid clipboard history: {error}"))?;
+    Ok(Some(LoadedHistory {
+        items,
+        needs_migration: true,
+        needs_legacy_snapshot: false,
+    }))
+}
+
+fn load_indexed_history(
+    index: HistoryIndex,
+    items_dir: &Path,
+    key: &[u8; 32],
+) -> Result<Vec<ClipItem>, String> {
+    if index.version != HISTORY_INDEX_VERSION {
+        return Err(format!(
+            "unsupported clipboard history version {}",
+            index.version
+        ));
+    }
+    let mut seen = HashSet::new();
+    let mut items = Vec::with_capacity(index.item_ids.len());
+    for id in index.item_ids {
+        if !seen.insert(id) {
+            return Err(format!("duplicate clipboard history item {id}"));
+        }
+        let bytes = fs::read(history_item_path(items_dir, id))
+            .map_err(|error| format!("could not read clipboard history item {id}: {error}"))?;
+        let plaintext = decrypt_history(&bytes, key)?;
+        let item: ClipItem = serde_json::from_slice(&plaintext)
+            .map_err(|error| format!("invalid clipboard history item {id}: {error}"))?;
+        if item.id != id {
+            return Err(format!("clipboard history item {id} has the wrong ID"));
+        }
+        items.push(item);
+    }
+    Ok(items)
 }
 
 fn write_encrypted_json<T: Serialize>(
@@ -1322,18 +1398,20 @@ mod tests {
                 .as_nanos()
         ));
         fs::create_dir_all(&root).unwrap();
-        let history = root.join("history.ckh");
+        let history = root.join("history-v2.ckh");
+        let legacy_history = root.join("history.ckh");
         let items_dir = history_items_dir(&history);
         let key = [11u8; 32];
         let items = vec![
             test_item(1, "first", 10),
             test_item(2, &"large".repeat(10_000), 20),
         ];
-        write_encrypted_json(&history, &items, &key).unwrap();
-        let legacy_size = fs::metadata(&history).unwrap().len();
+        write_encrypted_json(&legacy_history, &items, &key).unwrap();
+        let legacy_size = fs::metadata(&legacy_history).unwrap().len();
 
-        let loaded = load_history(&history, &items_dir, None, &key).unwrap();
+        let loaded = load_history(&history, &items_dir, Some(&legacy_history), None, &key).unwrap();
         assert!(loaded.needs_migration);
+        assert!(!loaded.needs_legacy_snapshot);
         for item in &loaded.items {
             write_encrypted_json(&history_item_path(&items_dir, item.id), item, &key).unwrap();
         }
@@ -1347,7 +1425,8 @@ mod tests {
         )
         .unwrap();
 
-        let reloaded = load_history(&history, &items_dir, None, &key).unwrap();
+        let reloaded =
+            load_history(&history, &items_dir, Some(&legacy_history), None, &key).unwrap();
         assert!(!reloaded.needs_migration);
         assert_eq!(
             reloaded
@@ -1359,9 +1438,55 @@ mod tests {
         );
         assert_eq!(reloaded.items[1].text, items[1].text);
         assert!(fs::metadata(&history).unwrap().len() < legacy_size);
+        assert_eq!(fs::metadata(&legacy_history).unwrap().len(), legacy_size);
         assert!(history_item_path(&items_dir, 1).is_file());
         assert!(history_item_path(&items_dir, 2).is_file());
 
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let downgraded_items = vec![test_item(3, "copied by an older version", 30)];
+        write_encrypted_json(&legacy_history, &downgraded_items, &key).unwrap();
+        let upgraded =
+            load_history(&history, &items_dir, Some(&legacy_history), None, &key).unwrap();
+        assert!(upgraded.needs_migration);
+        assert_eq!(upgraded.items[0].id, 3);
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn interim_index_is_recovered_and_marked_for_legacy_snapshot() {
+        let root = std::env::temp_dir().join(format!(
+            "clipkeep-history-index-relocation-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let history = root.join("history-v2.ckh");
+        let interim_history = root.join("history.ckh");
+        let items_dir = history_items_dir(&history);
+        let key = [13u8; 32];
+        let item = test_item(7, "preserved", 70);
+        write_encrypted_json(&history_item_path(&items_dir, item.id), &item, &key).unwrap();
+        write_encrypted_json(
+            &interim_history,
+            &HistoryIndex {
+                version: HISTORY_INDEX_VERSION,
+                item_ids: vec![item.id],
+            },
+            &key,
+        )
+        .unwrap();
+
+        let loaded =
+            load_history(&history, &items_dir, Some(&interim_history), None, &key).unwrap();
+
+        assert!(loaded.needs_migration);
+        assert!(loaded.needs_legacy_snapshot);
+        assert_eq!(loaded.items.len(), 1);
+        assert_eq!(loaded.items[0].text, "preserved");
         fs::remove_dir_all(root).unwrap();
     }
 
