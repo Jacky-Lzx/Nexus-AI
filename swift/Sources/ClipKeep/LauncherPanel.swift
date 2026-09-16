@@ -231,6 +231,12 @@ final class LauncherPanelController: NSWindowController,
             name: NSWindow.didResignKeyNotification,
             object: panel
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshSearchCaret),
+            name: NSWindow.didBecomeKeyNotification,
+            object: panel
+        )
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -297,6 +303,7 @@ final class LauncherPanelController: NSWindowController,
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKey()
         panel.makeFirstResponder(searchField)
+        refreshSearchCaret()
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -1761,6 +1768,21 @@ final class LauncherPanelController: NSWindowController,
         let x = visible.midX - Layout.width / 2
         let top = visible.midY + Layout.expandedHeight / 2
         panel.setFrameOrigin(NSPoint(x: x, y: top - panel.frame.height))
+    }
+
+    func controlTextDidBeginEditing(_ notification: Notification) {
+        guard notification.object as? NSTextField === searchField else { return }
+        refreshSearchCaret()
+    }
+
+    @objc private func refreshSearchCaret() {
+        guard window?.isKeyWindow == true,
+              let editor = searchField.currentEditor() as? NSTextView,
+              window?.firstResponder === editor else { return }
+        // Use AppKit's insertion point so blinking follows keyboard focus,
+        // selection, and input-method composition rather than a separate timer.
+        editor.insertionPointColor = .labelColor
+        editor.updateInsertionPointStateAndRestartTimer(true)
     }
 
     @objc private func windowResignedKey() {
