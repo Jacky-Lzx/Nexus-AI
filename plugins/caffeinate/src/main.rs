@@ -111,6 +111,10 @@ impl Plugin for CaffeinatePlugin {
         PLUGIN_ID
     }
 
+    fn poll_interval(&self) -> Option<Duration> {
+        self.active.as_ref().map(|_| Duration::from_secs(1))
+    }
+
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
         self.refresh();
         let query = query.trim().to_lowercase();

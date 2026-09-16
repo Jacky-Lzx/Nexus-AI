@@ -193,6 +193,10 @@ impl Plugin for ClipboardPlugin {
         PLUGIN_ID
     }
 
+    fn poll_interval(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_millis(250))
+    }
+
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
         let query = query.to_lowercase();
         Ok(self

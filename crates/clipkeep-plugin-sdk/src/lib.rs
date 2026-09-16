@@ -5,9 +5,9 @@ use clipkeep_protocol::{
 use std::{
     collections::BTreeMap,
     io::{self, BufRead, BufReader, BufWriter, Write},
-    sync::mpsc::{self, Receiver},
+    sync::mpsc::{self, Receiver, RecvError, RecvTimeoutError},
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 pub trait Plugin {
@@ -42,6 +42,10 @@ pub trait Plugin {
         Ok(Vec::new())
     }
 
+    fn poll_interval(&self) -> Option<Duration> {
+        None
+    }
+
     fn tick(&mut self) -> Result<bool, String> {
         Ok(false)
     }
@@ -52,24 +56,40 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
     let stdout = io::stdout();
     let mut output = BufWriter::new(stdout.lock());
     let mut running = true;
+    let mut poll_interval = plugin.poll_interval();
+    let mut next_poll = poll_interval.map(|interval| Instant::now() + interval);
 
     while running {
-        while let Ok(message) = requests.try_recv() {
+        let message = match next_poll {
+            Some(deadline) => {
+                match requests.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                    Ok(message) => Some(message),
+                    Err(RecvTimeoutError::Timeout) => None,
+                    Err(RecvTimeoutError::Disconnected) => return Ok(()),
+                }
+            }
+            None => match requests.recv() {
+                Ok(message) => Some(message),
+                Err(RecvError) => return Ok(()),
+            },
+        };
+
+        if let Some(message) = message {
             match message {
                 ReaderMessage::Request(request) => {
                     running = handle_request(&mut plugin, request, &mut output)?;
-                    if !running {
-                        break;
-                    }
                 }
                 ReaderMessage::Invalid(message) => {
                     send(&mut output, &PluginEvent::Error { message })?;
                 }
                 ReaderMessage::Closed => return Ok(()),
             }
-        }
-
-        if running {
+            let updated_interval = plugin.poll_interval();
+            if updated_interval != poll_interval {
+                poll_interval = updated_interval;
+                next_poll = poll_interval.map(|interval| Instant::now() + interval);
+            }
+        } else if running {
             match plugin.tick() {
                 Ok(true) => send(&mut output, &PluginEvent::CatalogChanged)?,
                 Ok(false) => {}
@@ -83,7 +103,8 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
                 }
                 Err(message) => send(&mut output, &PluginEvent::Error { message })?,
             }
-            thread::sleep(Duration::from_millis(100));
+            poll_interval = plugin.poll_interval();
+            next_poll = poll_interval.map(|interval| Instant::now() + interval);
         }
     }
     Ok(())

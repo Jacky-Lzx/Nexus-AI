@@ -36,6 +36,10 @@ impl Plugin for ApplicationsPlugin {
         PLUGIN_ID
     }
 
+    fn poll_interval(&self) -> Option<Duration> {
+        Some(Duration::from_secs(60))
+    }
+
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
         let query = query.trim().to_lowercase();
         let mut matches: Vec<_> = self

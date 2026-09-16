@@ -186,6 +186,14 @@ impl Plugin for CalendarPlugin {
         PLUGIN_ID
     }
 
+    fn poll_interval(&self) -> Option<Duration> {
+        Some(if self.permission.is_some() {
+            Duration::from_millis(250)
+        } else {
+            Duration::from_secs(60)
+        })
+    }
+
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
         match Self::authorization_status() {
             status if status == EKAuthorizationStatus::FullAccess => Ok(self.events(query, limit)),
