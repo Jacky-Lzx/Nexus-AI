@@ -8,7 +8,7 @@ use ring::{
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
-    collections::{BTreeMap, hash_map::DefaultHasher},
+    collections::{BTreeMap, HashSet, hash_map::DefaultHasher},
     fs,
     hash::{Hash, Hasher},
     io,
@@ -22,6 +22,7 @@ const MAX_HISTORY: usize = 500;
 const MAX_ITEM_BYTES: usize = 25 * 1024 * 1024;
 const MAX_TOTAL_BYTES: usize = 250 * 1024 * 1024;
 const HISTORY_MAGIC: &[u8; 4] = b"CKH1";
+const HISTORY_INDEX_VERSION: u32 = 2;
 
 #[derive(Clone, Debug)]
 struct ClipboardSettings {
@@ -49,6 +50,7 @@ struct ClipboardPlugin {
     items: Vec<ClipItem>,
     next_id: u64,
     history_path: PathBuf,
+    history_items_dir: PathBuf,
     preview_cache_dir: PathBuf,
     encryption_key: [u8; 32],
     settings: ClipboardSettings,
@@ -58,13 +60,19 @@ impl ClipboardPlugin {
     fn new() -> io::Result<Self> {
         let history_path = history_path()
             .ok_or_else(|| io::Error::other("could not determine clipboard data directory"))?;
+        let history_items_dir = history_items_dir(&history_path);
         let preview_cache_dir = preview_cache_dir()
             .ok_or_else(|| io::Error::other("could not determine clipboard cache directory"))?;
         let encryption_key = history_encryption_key()?;
         let legacy_path = legacy_history_path();
-        let mut items: Vec<ClipItem> =
-            load_history(&history_path, legacy_path.as_deref(), &encryption_key)
-                .unwrap_or_default();
+        let loaded = load_history(
+            &history_path,
+            &history_items_dir,
+            legacy_path.as_deref(),
+            &encryption_key,
+        )
+        .map_err(io::Error::other)?;
+        let mut items = loaded.items;
         let mut added_thumbnails = false;
         for item in &mut items {
             if item.kind == ClipKind::Image && item.thumbnail.is_none() {
@@ -78,12 +86,16 @@ impl ClipboardPlugin {
             items,
             next_id,
             history_path,
+            history_items_dir,
             preview_cache_dir,
             encryption_key,
             settings: ClipboardSettings::default(),
         };
-        if added_thumbnails || legacy_path.as_ref().is_some_and(|path| path.is_file()) {
-            plugin.save().map_err(io::Error::other)?;
+        if loaded.needs_migration
+            || added_thumbnails
+            || legacy_path.as_ref().is_some_and(|path| path.is_file())
+        {
+            plugin.save_all().map_err(io::Error::other)?;
             if let Some(path) = legacy_path {
                 let _ = fs::remove_file(path);
             }
@@ -91,15 +103,52 @@ impl ClipboardPlugin {
         Ok(plugin)
     }
 
-    fn save(&self) -> Result<(), String> {
-        if let Some(parent) = self.history_path.parent() {
-            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    fn save_index(&self) -> Result<(), String> {
+        let index = HistoryIndex {
+            version: HISTORY_INDEX_VERSION,
+            item_ids: self.items.iter().map(|item| item.id).collect(),
+        };
+        write_encrypted_json(&self.history_path, &index, &self.encryption_key)
+    }
+
+    fn save_item(&self, item: &ClipItem) -> Result<(), String> {
+        write_encrypted_json(
+            &history_item_path(&self.history_items_dir, item.id),
+            item,
+            &self.encryption_key,
+        )
+    }
+
+    fn remove_item(&self, id: u64) -> Result<(), String> {
+        let path = history_item_path(&self.history_items_dir, id);
+        match fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.to_string()),
         }
-        let temp = self.history_path.with_extension("json.tmp");
-        let plaintext = serde_json::to_vec(&self.items).map_err(|error| error.to_string())?;
-        let bytes = encrypt_history(&plaintext, &self.encryption_key)?;
-        fs::write(&temp, bytes).map_err(|error| error.to_string())?;
-        fs::rename(temp, &self.history_path).map_err(|error| error.to_string())
+    }
+
+    fn save_all(&self) -> Result<(), String> {
+        for item in &self.items {
+            self.save_item(item)?;
+        }
+        self.save_index()?;
+        let live_ids: HashSet<_> = self.items.iter().map(|item| item.id).collect();
+        if let Ok(entries) = fs::read_dir(&self.history_items_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let id = path
+                    .file_stem()
+                    .and_then(|value| value.to_str())
+                    .and_then(|value| value.parse::<u64>().ok());
+                if path.extension().and_then(|value| value.to_str()) == Some("ckh")
+                    && id.is_some_and(|id| !live_ids.contains(&id))
+                {
+                    fs::remove_file(path).map_err(|error| error.to_string())?;
+                }
+            }
+        }
+        Ok(())
     }
 
     fn item_id(raw: &str) -> Result<u64, String> {
@@ -133,7 +182,8 @@ impl ClipboardPlugin {
         let edited_item = self.items[position].clone();
         self.clipboard.restore(&edited_item)?;
         promote_item(&mut self.items, position, now_secs());
-        self.save()?;
+        self.save_item(&self.items[0])?;
+        self.save_index()?;
         Ok(Some("Edited text ready to paste".into()))
     }
 }
@@ -164,15 +214,23 @@ impl Plugin for ClipboardPlugin {
                 _ => return Err(format!("unknown clipboard action: {action_id}")),
             };
             let cache = &self.preview_cache_dir;
-            self.items.retain(|item| {
-                let remove =
-                    !item.favorite && cutoff.is_none_or(|cutoff| item.created_at >= cutoff);
-                if remove {
-                    item.remove_image_preview_files(cache);
-                }
-                !remove
-            });
-            self.save()?;
+            let removed_ids: Vec<_> = self
+                .items
+                .iter()
+                .filter_map(|item| {
+                    let remove =
+                        !item.favorite && cutoff.is_none_or(|cutoff| item.created_at >= cutoff);
+                    if remove {
+                        item.remove_image_preview_files(cache);
+                    }
+                    remove.then_some(item.id)
+                })
+                .collect();
+            self.items.retain(|item| !removed_ids.contains(&item.id));
+            self.save_index()?;
+            for id in removed_ids {
+                self.remove_item(id)?;
+            }
             return Ok(Some("Clipboard history cleared".into()));
         }
         let id = Self::item_id(result_id)?;
@@ -186,20 +244,22 @@ impl Plugin for ClipboardPlugin {
                 let item = self.items[position].clone();
                 self.clipboard.restore(&item)?;
                 promote_item(&mut self.items, position, now_secs());
-                self.save()?;
+                self.save_item(&self.items[0])?;
+                self.save_index()?;
                 Ok(Some(format!("{} ready to paste", item.kind.label())))
             }
             "favorite" => {
+                let position = self
+                    .items
+                    .iter()
+                    .position(|item| item.id == id)
+                    .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
                 let favorite = {
-                    let item = self
-                        .items
-                        .iter_mut()
-                        .find(|item| item.id == id)
-                        .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
+                    let item = &mut self.items[position];
                     item.favorite = !item.favorite;
                     item.favorite
                 };
-                self.save()?;
+                self.save_item(&self.items[position])?;
                 Ok(Some(
                     if favorite { "Favorited" } else { "Unfavorited" }.to_owned(),
                 ))
@@ -212,7 +272,8 @@ impl Plugin for ClipboardPlugin {
                     .ok_or_else(|| "clipboard entry no longer exists".to_owned())?;
                 let item = self.items.remove(position);
                 item.remove_image_preview_files(&self.preview_cache_dir);
-                self.save()?;
+                self.save_index()?;
+                self.remove_item(item.id)?;
                 Ok(Some("Deleted".to_owned()))
             }
             _ => Err(format!("unknown clipboard action: {action_id}")),
@@ -240,18 +301,27 @@ impl Plugin for ClipboardPlugin {
         if content.byte_len() > MAX_ITEM_BYTES {
             return Ok(false);
         }
-        if let Some(position) = self
+        let changed_id = if let Some(position) = self
             .items
             .iter()
             .position(|item| item.fingerprint == content.fingerprint)
         {
             promote_item(&mut self.items, position, now_secs());
+            self.items[0].id
         } else {
-            self.items.insert(0, ClipItem::new(self.next_id, content));
+            let id = self.next_id;
+            self.items.insert(0, ClipItem::new(id, content));
             self.next_id += 1;
+            id
+        };
+        let removed_ids = trim_history(&mut self.items, &self.preview_cache_dir);
+        if let Some(item) = self.items.iter().find(|item| item.id == changed_id) {
+            self.save_item(item)?;
         }
-        trim_history(&mut self.items, &self.preview_cache_dir);
-        self.save()?;
+        self.save_index()?;
+        for id in removed_ids {
+            self.remove_item(id)?;
+        }
         Ok(true)
     }
 
@@ -277,15 +347,23 @@ impl Plugin for ClipboardPlugin {
         let cutoff = now_secs().saturating_sub(self.settings.retention_days * 86_400);
         let cache = &self.preview_cache_dir;
         let before = self.items.len();
-        self.items.retain(|item| {
-            let keep = item.favorite || item.created_at >= cutoff;
-            if !keep {
-                item.remove_image_preview_files(cache);
-            }
-            keep
-        });
+        let removed_ids: Vec<_> = self
+            .items
+            .iter()
+            .filter_map(|item| {
+                let keep = item.favorite || item.created_at >= cutoff;
+                if !keep {
+                    item.remove_image_preview_files(cache);
+                }
+                (!keep).then_some(item.id)
+            })
+            .collect();
+        self.items.retain(|item| !removed_ids.contains(&item.id));
         if self.items.len() != before {
-            self.save()?;
+            self.save_index()?;
+            for id in removed_ids {
+                self.remove_item(id)?;
+            }
         }
         Ok(self.items.len() != before)
     }
@@ -875,6 +953,14 @@ fn history_path() -> Option<PathBuf> {
         .map(|dirs| dirs.data_local_dir().join("history.ckh"))
 }
 
+fn history_items_dir(history_path: &Path) -> PathBuf {
+    history_path.with_extension("items")
+}
+
+fn history_item_path(items_dir: &Path, id: u64) -> PathBuf {
+    items_dir.join(format!("{id}.ckh"))
+}
+
 fn legacy_history_path() -> Option<PathBuf> {
     ProjectDirs::from("io", "clipkeep", "ClipKeep")
         .map(|dirs| dirs.data_local_dir().join("history.json"))
@@ -885,14 +971,93 @@ fn preview_cache_dir() -> Option<PathBuf> {
         .map(|dirs| dirs.cache_dir().join("image-previews"))
 }
 
-fn load_history(path: &Path, legacy_path: Option<&Path>, key: &[u8; 32]) -> Option<Vec<ClipItem>> {
-    if let Ok(bytes) = fs::read(path) {
-        let plaintext = decrypt_history(&bytes, key).ok()?;
-        return serde_json::from_slice(&plaintext).ok();
+#[derive(Debug, Deserialize, Serialize)]
+struct HistoryIndex {
+    version: u32,
+    item_ids: Vec<u64>,
+}
+
+struct LoadedHistory {
+    items: Vec<ClipItem>,
+    needs_migration: bool,
+}
+
+fn load_history(
+    path: &Path,
+    items_dir: &Path,
+    legacy_path: Option<&Path>,
+    key: &[u8; 32],
+) -> Result<LoadedHistory, String> {
+    match fs::read(path) {
+        Ok(bytes) => {
+            let plaintext = decrypt_history(&bytes, key)?;
+            if let Ok(index) = serde_json::from_slice::<HistoryIndex>(&plaintext) {
+                if index.version != HISTORY_INDEX_VERSION {
+                    return Err(format!(
+                        "unsupported clipboard history version {}",
+                        index.version
+                    ));
+                }
+                let mut seen = HashSet::new();
+                let mut items = Vec::with_capacity(index.item_ids.len());
+                for id in index.item_ids {
+                    if !seen.insert(id) {
+                        return Err(format!("duplicate clipboard history item {id}"));
+                    }
+                    let bytes = fs::read(history_item_path(items_dir, id)).map_err(|error| {
+                        format!("could not read clipboard history item {id}: {error}")
+                    })?;
+                    let plaintext = decrypt_history(&bytes, key)?;
+                    let item: ClipItem = serde_json::from_slice(&plaintext)
+                        .map_err(|error| format!("invalid clipboard history item {id}: {error}"))?;
+                    if item.id != id {
+                        return Err(format!("clipboard history item {id} has the wrong ID"));
+                    }
+                    items.push(item);
+                }
+                return Ok(LoadedHistory {
+                    items,
+                    needs_migration: false,
+                });
+            }
+            let items = serde_json::from_slice(&plaintext)
+                .map_err(|error| format!("invalid clipboard history: {error}"))?;
+            return Ok(LoadedHistory {
+                items,
+                needs_migration: true,
+            });
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("could not read clipboard history: {error}")),
     }
-    legacy_path
+    let items: Vec<ClipItem> = legacy_path
         .and_then(|path| fs::read(path).ok())
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default();
+    Ok(LoadedHistory {
+        needs_migration: !items.is_empty(),
+        items,
+    })
+}
+
+fn write_encrypted_json<T: Serialize>(
+    path: &Path,
+    value: &T,
+    key: &[u8; 32],
+) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let temp = path.with_extension(format!(
+        "{}.tmp",
+        path.extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or("ckh")
+    ));
+    let plaintext = serde_json::to_vec(value).map_err(|error| error.to_string())?;
+    let bytes = encrypt_history(&plaintext, key)?;
+    fs::write(&temp, bytes).map_err(|error| error.to_string())?;
+    fs::rename(temp, path).map_err(|error| error.to_string())
 }
 
 fn encrypt_history(plaintext: &[u8], key: &[u8; 32]) -> Result<Vec<u8>, String> {
@@ -1000,17 +1165,20 @@ fn history_encryption_key() -> io::Result<[u8; 32]> {
     Ok(key)
 }
 
-fn trim_history(items: &mut Vec<ClipItem>, preview_cache_dir: &Path) {
+fn trim_history(items: &mut Vec<ClipItem>, preview_cache_dir: &Path) -> Vec<u64> {
     let mut total_bytes: usize = items.iter().map(ClipItem::byte_len).sum();
     let mut index = items.len();
+    let mut removed_ids = Vec::new();
     while (items.len() > MAX_HISTORY || total_bytes > MAX_TOTAL_BYTES) && index > 0 {
         index -= 1;
         if !items[index].favorite {
             total_bytes = total_bytes.saturating_sub(items[index].byte_len());
             let item = items.remove(index);
             item.remove_image_preview_files(preview_cache_dir);
+            removed_ids.push(item.id);
         }
     }
+    removed_ids
 }
 
 fn promote_item(items: &mut Vec<ClipItem>, position: usize, created_at: u64) {
@@ -1140,18 +1308,79 @@ mod tests {
     }
 
     #[test]
-    fn promoting_an_existing_item_moves_it_to_the_front() {
-        let item = |id, created_at| ClipItem {
+    fn legacy_history_migrates_to_incremental_encrypted_items() {
+        let root = std::env::temp_dir().join(format!(
+            "clipkeep-history-migration-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let history = root.join("history.ckh");
+        let items_dir = history_items_dir(&history);
+        let key = [11u8; 32];
+        let items = vec![
+            test_item(1, "first", 10),
+            test_item(2, &"large".repeat(10_000), 20),
+        ];
+        write_encrypted_json(&history, &items, &key).unwrap();
+        let legacy_size = fs::metadata(&history).unwrap().len();
+
+        let loaded = load_history(&history, &items_dir, None, &key).unwrap();
+        assert!(loaded.needs_migration);
+        for item in &loaded.items {
+            write_encrypted_json(&history_item_path(&items_dir, item.id), item, &key).unwrap();
+        }
+        write_encrypted_json(
+            &history,
+            &HistoryIndex {
+                version: HISTORY_INDEX_VERSION,
+                item_ids: loaded.items.iter().map(|item| item.id).collect(),
+            },
+            &key,
+        )
+        .unwrap();
+
+        let reloaded = load_history(&history, &items_dir, None, &key).unwrap();
+        assert!(!reloaded.needs_migration);
+        assert_eq!(
+            reloaded
+                .items
+                .iter()
+                .map(|item| item.id)
+                .collect::<Vec<_>>(),
+            [1, 2]
+        );
+        assert_eq!(reloaded.items[1].text, items[1].text);
+        assert!(fs::metadata(&history).unwrap().len() < legacy_size);
+        assert!(history_item_path(&items_dir, 1).is_file());
+        assert!(history_item_path(&items_dir, 2).is_file());
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn test_item(id: u64, text: &str, created_at: u64) -> ClipItem {
+        ClipItem {
             id,
-            text: format!("item {id}"),
+            text: text.into(),
             created_at,
             favorite: false,
             kind: ClipKind::Text,
             representations: Vec::new(),
             fingerprint: id,
             thumbnail: None,
-        };
-        let mut items = vec![item(1, 10), item(2, 20), item(3, 30)];
+        }
+    }
+
+    #[test]
+    fn promoting_an_existing_item_moves_it_to_the_front() {
+        let mut items = vec![
+            test_item(1, "item 1", 10),
+            test_item(2, "item 2", 20),
+            test_item(3, "item 3", 30),
+        ];
 
         promote_item(&mut items, 2, 40);
 
