@@ -1,0 +1,10 @@
+id = "io.clipkeep.path-tools"
+name = "Path Tools"
+description = "Inspect and transform POSIX paths lexically without filesystem access"
+icon = "point.bottomleft.forward.to.point.topright.scurvepath"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-path-tools"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

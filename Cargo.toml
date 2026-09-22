@@ -36,6 +36,7 @@ members = [
     "plugins/network-calculator",
     "plugins/number-statistics",
     "plugins/password-generator",
+    "plugins/path-tools",
     "plugins/permission-calculator",
     "plugins/port-inspector",
     "plugins/query-string",

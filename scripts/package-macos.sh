@@ -51,6 +51,7 @@ menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugi
 network_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.network-calculator.clipkeepplugin"
 number_statistics_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.number-statistics.clipkeepplugin"
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
+path_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.path-tools.clipkeepplugin"
 permission_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.permission-calculator.clipkeepplugin"
 port_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.port-inspector.clipkeepplugin"
 query_string_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.query-string.clipkeepplugin"
@@ -202,6 +203,10 @@ install -d "$password_generator_plugin/Contents/MacOS" "$password_generator_plug
 install -m 755 target/release/clipkeep-plugin-password-generator "$password_generator_plugin/Contents/MacOS/clipkeep-plugin-password-generator"
 install -m 644 plugins/password-generator/plugin.toml "$password_generator_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-PasswordGenerator-Info.plist "$password_generator_plugin/Contents/Info.plist"
+install -d "$path_tools_plugin/Contents/MacOS" "$path_tools_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-path-tools "$path_tools_plugin/Contents/MacOS/clipkeep-plugin-path-tools"
+install -m 644 plugins/path-tools/plugin.toml "$path_tools_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-PathTools-Info.plist "$path_tools_plugin/Contents/Info.plist"
 install -d "$permission_calculator_plugin/Contents/MacOS" "$permission_calculator_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-permission-calculator "$permission_calculator_plugin/Contents/MacOS/clipkeep-plugin-permission-calculator"
 install -m 644 plugins/permission-calculator/plugin.toml "$permission_calculator_plugin/Contents/Resources/plugin.toml"
@@ -382,6 +387,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.password-generator \
         "$password_generator_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.path-tools \
+        "$path_tools_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.permission-calculator \
         "$permission_calculator_plugin"

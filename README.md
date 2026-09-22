@@ -53,6 +53,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   ASCII-only Unicode escapes, and strictly decodes JSON escape sequences
 - Creates stable Markdown anchor slugs, safely escaped text, links, images,
   collision-free fenced code blocks, and multiline block quotes
+- Inspects and transforms POSIX paths lexically, including normalization,
+  joining, relative paths, and filename-extension replacement
 - Converts HEX, RGB, HSL, alpha, and common named colors entirely locally
 - Generates UUID v4, time-ordered UUID v7, ULID, and configurable Nano ID values
   using the system secure random source
@@ -281,6 +283,13 @@ with `mdescape :: # [text]`, or build a link with
 or `mdcode rust :: fn main() {}` for images, block quotes, and fenced code blocks;
 code fences automatically grow when their contents already contain backticks.
 
+Normalize a path without touching the filesystem with
+`pathnorm :: /tmp/project/../report.md`, inspect its lexical components with
+`pathinfo :: ./archive.tar.gz`, or calculate a path from one directory to another
+with `pathrelative /Users/alice/work :: /Users/alice/docs/readme.md`. Use
+`pathjoin <base> :: <relative-child>` and `pathext md :: <path>` for composition
+and extension replacement; `pathext none` removes the final extension.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -366,6 +375,7 @@ identifier in Settings.
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
 - `plugins/number-statistics`: bounded local descriptive statistics for numeric datasets
 - `plugins/password-generator`: secure local password and PIN generation
+- `plugins/path-tools`: local lexical POSIX path inspection and transformation
 - `plugins/permission-calculator`: local Unix chmod conversion and explanation
 - `plugins/port-inspector`: read-only local TCP listener and UDP binding inspection
 - `plugins/query-string`: local query-string normalization and JSON conversion
