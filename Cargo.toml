@@ -9,6 +9,7 @@ members = [
     "plugins/calendar",
     "plugins/clash",
     "plugins/clipboard",
+    "plugins/color-tools",
     "plugins/files",
     "plugins/kill-process",
     "plugins/menu-bar",

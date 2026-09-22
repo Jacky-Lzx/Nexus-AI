@@ -23,6 +23,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
   contacting an external service
 - Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
   actions
+- Converts HEX, RGB, HSL, alpha, and common named colors entirely locally
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -165,6 +166,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/applications`: installed application index and launcher
 - `plugins/caffeinate`: timed display and system sleep prevention with cancellation
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
+- `plugins/color-tools`: local CSS color parsing and format conversion
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching

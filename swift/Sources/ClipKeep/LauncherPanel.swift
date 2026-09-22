@@ -1928,6 +1928,7 @@ private final class ResultCellView: NSTableCellView {
     ) {
         let image = Self.artworkImage(for: result)
         artwork.image = image
+        artwork.contentTintColor = resultSymbolColor(from: result.metadata["symbol_color"]) ?? .labelColor
         artwork.isHidden = image == nil
         symbol.isHidden = image != nil
         let artworkSize: CGFloat = Self.usesFlatClipboardIcon(result) ? 18 : 36
@@ -2009,4 +2010,23 @@ private final class ResultCellView: NSTableCellView {
             false
         }
     }
+}
+
+func resultSymbolColor(from value: String?) -> NSColor? {
+    guard let value, value.hasPrefix("#") else { return nil }
+    let hex = String(value.dropFirst())
+    guard (hex.count == 6 || hex.count == 8), let number = UInt64(hex, radix: 16) else {
+        return nil
+    }
+    let hasAlpha = hex.count == 8
+    let red = hasAlpha ? (number >> 24) & 0xff : (number >> 16) & 0xff
+    let green = hasAlpha ? (number >> 16) & 0xff : (number >> 8) & 0xff
+    let blue = hasAlpha ? (number >> 8) & 0xff : number & 0xff
+    let alpha = hasAlpha ? number & 0xff : 0xff
+    return NSColor(
+        srgbRed: CGFloat(red) / 255,
+        green: CGFloat(green) / 255,
+        blue: CGFloat(blue) / 255,
+        alpha: CGFloat(alpha) / 255
+    )
 }

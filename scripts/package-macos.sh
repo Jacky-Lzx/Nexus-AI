@@ -21,6 +21,7 @@ install -m 755 target/swift/Nexus "$bundle_dir/Contents/MacOS/Nexus"
 applications_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.applications.clipkeepplugin"
 caffeinate_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.caffeinate.clipkeepplugin"
 clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplugin"
+color_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.color-tools.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
 clash_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clash.clipkeepplugin"
@@ -49,6 +50,10 @@ install -m 644 packaging/macos/Plugin-Caffeinate-Info.plist "$caffeinate_plugin/
 install -m 755 target/release/clipkeep-plugin-clipboard "$clipboard_plugin/Contents/MacOS/clipkeep-plugin-clipboard"
 install -m 644 plugins/clipboard/plugin.toml "$clipboard_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Clipboard-Info.plist "$clipboard_plugin/Contents/Info.plist"
+install -d "$color_tools_plugin/Contents/MacOS" "$color_tools_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-color-tools "$color_tools_plugin/Contents/MacOS/clipkeep-plugin-color-tools"
+install -m 644 plugins/color-tools/plugin.toml "$color_tools_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-ColorTools-Info.plist "$color_tools_plugin/Contents/Info.plist"
 install -d "$calculator_plugin/Contents/MacOS" "$calculator_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-calculator "$calculator_plugin/Contents/MacOS/clipkeep-plugin-calculator"
 install -m 644 plugins/calculator/plugin.toml "$calculator_plugin/Contents/Resources/plugin.toml"
@@ -127,6 +132,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.clipboard \
         "$clipboard_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.color-tools \
+        "$color_tools_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.calculator \
         "$calculator_plugin"
