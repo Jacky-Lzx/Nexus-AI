@@ -31,6 +31,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   compares two ISO dates with explicit weekend-only business-day semantics;
   try `datecalc 2026-01-31 + 1 month`, `datecalc today + 10 weekdays`, or
   `datecalc diff 2026-01-01 2026-12-31`
+- Calculates SHA-256 and SHA-512 checksums for local files with streaming reads,
+  verifies expected digests, and offers explicitly labeled legacy SHA-1 support
 - Reads local battery, disk, memory, CPU, uptime, and network status without
   contacting an external service
 - Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
@@ -173,6 +175,11 @@ with `diff words hello, world :: hello world!`, or use `diff chars` for a
 Unicode-scalar comparison. The report marks unchanged, removed, and added units
 and can be copied or pasted into the previously focused application.
 
+Hash a local file with `checksum ~/Downloads/archive.zip`, request one algorithm
+with `checksum sha256 <absolute-path>`, or verify a published digest with
+`checksum verify sha256 <digest> <absolute-path>`. SHA-1 remains available only
+for compatibility and is labeled as a legacy algorithm in every result.
+
 Convert integers with `base 0xff`, `base 16:deadbeef to 2`, or
 `base z from 36 to decimal`. Without a target, Nexus shows binary, octal,
 decimal, hexadecimal, and base-36 results together.
@@ -215,6 +222,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/color-tools`: local CSS color parsing and format conversion
 - `plugins/cron-schedule`: cron validation and upcoming local-run previews
 - `plugins/date-calculator`: local Gregorian date arithmetic and differences
+- `plugins/file-checksum`: streaming local file hashes and digest verification
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching

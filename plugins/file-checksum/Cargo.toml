@@ -1,0 +1,12 @@
+[package]
+name = "clipkeep-plugin-file-checksum"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arboard = "3.6"
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol.workspace = true
+ring = "0.17"
+url = "=2.5.4"

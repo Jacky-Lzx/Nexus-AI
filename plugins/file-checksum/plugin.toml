@@ -1,0 +1,10 @@
+id = "io.clipkeep.file-checksum"
+name = "File Checksum"
+description = "Calculate and verify bounded local file checksums with streaming reads"
+icon = "checkmark.seal"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-file-checksum"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]
