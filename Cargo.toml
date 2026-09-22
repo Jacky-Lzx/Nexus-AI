@@ -22,6 +22,7 @@ members = [
     "plugins/network-calculator",
     "plugins/password-generator",
     "plugins/permission-calculator",
+    "plugins/port-inspector",
     "plugins/quick-notes",
     "plugins/randomizer",
     "plugins/regex-tester",

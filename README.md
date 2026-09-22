@@ -46,6 +46,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   unverified time-claim status without implying signature validation
 - Calculates IPv4 and IPv6 CIDR networks, masks, endpoint ranges, and address
   counts entirely offline
+- Inspects visible local TCP listeners and UDP bindings by port, process, PID,
+  user, endpoint, and socket state without changing or terminating them
 - Tests Rust regular expressions locally with common flags, match positions,
   numbered and named capture groups, and bounded reports
 - Queries local JSON with JSON Pointer or dot/bracket paths, lists immediate
@@ -218,6 +220,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
 - `plugins/password-generator`: secure local password and PIN generation
 - `plugins/permission-calculator`: local Unix chmod conversion and explanation
+- `plugins/port-inspector`: read-only local TCP listener and UDP binding inspection
 - `plugins/quick-notes`: persistent, prefix-triggered local notes and snippets
 - `plugins/randomizer`: secure dice, coin, integer, choice, and shuffle tools
 - `plugins/regex-tester`: bounded local Rust regular-expression testing and captures
