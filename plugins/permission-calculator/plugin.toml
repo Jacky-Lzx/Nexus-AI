@@ -1,0 +1,10 @@
+id = "io.clipkeep.permission-calculator"
+name = "Unix Permissions"
+description = "Convert and explain Unix chmod modes locally"
+icon = "lock.shield"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-permission-calculator"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

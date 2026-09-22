@@ -20,6 +20,7 @@ members = [
     "plugins/menu-bar",
     "plugins/network-calculator",
     "plugins/password-generator",
+    "plugins/permission-calculator",
     "plugins/quick-notes",
     "plugins/randomizer",
     "plugins/regex-tester",

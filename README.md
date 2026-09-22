@@ -15,6 +15,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   common functions, then copies or pastes the result
 - Converts arbitrarily large signed integers between bases 2–36, including
   familiar binary, octal, decimal, hexadecimal, and base-36 forms
+- Converts Unix permission modes between octal and symbolic notation, explains
+  each access class and special bit, and accepts `chmod 755` or `perm rwxr-xr-x`
 - Converts length, mass, temperature, time, and data units with queries such as
   `10 km to mi`, then copies or pastes the result
 - Transforms local text with explicit commands for case conversion, URL and
@@ -210,6 +212,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
 - `plugins/password-generator`: secure local password and PIN generation
+- `plugins/permission-calculator`: local Unix chmod conversion and explanation
 - `plugins/quick-notes`: persistent, prefix-triggered local notes and snippets
 - `plugins/randomizer`: secure dice, coin, integer, choice, and shuffle tools
 - `plugins/regex-tester`: bounded local Rust regular-expression testing and captures

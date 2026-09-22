@@ -35,6 +35,7 @@ kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipk
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 network_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.network-calculator.clipkeepplugin"
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
+permission_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.permission-calculator.clipkeepplugin"
 quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkeepplugin"
 randomizer_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.randomizer.clipkeepplugin"
 regex_tester_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.regex-tester.clipkeepplugin"
@@ -116,6 +117,10 @@ install -d "$password_generator_plugin/Contents/MacOS" "$password_generator_plug
 install -m 755 target/release/clipkeep-plugin-password-generator "$password_generator_plugin/Contents/MacOS/clipkeep-plugin-password-generator"
 install -m 644 plugins/password-generator/plugin.toml "$password_generator_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-PasswordGenerator-Info.plist "$password_generator_plugin/Contents/Info.plist"
+install -d "$permission_calculator_plugin/Contents/MacOS" "$permission_calculator_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-permission-calculator "$permission_calculator_plugin/Contents/MacOS/clipkeep-plugin-permission-calculator"
+install -m 644 plugins/permission-calculator/plugin.toml "$permission_calculator_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-PermissionCalculator-Info.plist "$permission_calculator_plugin/Contents/Info.plist"
 install -d "$quick_notes_plugin/Contents/MacOS" "$quick_notes_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-quick-notes "$quick_notes_plugin/Contents/MacOS/clipkeep-plugin-quick-notes"
 install -m 644 plugins/quick-notes/plugin.toml "$quick_notes_plugin/Contents/Resources/plugin.toml"
@@ -224,6 +229,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.password-generator \
         "$password_generator_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.permission-calculator \
+        "$permission_calculator_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.quick-notes \
         "$quick_notes_plugin"
