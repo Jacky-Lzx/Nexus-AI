@@ -12,6 +12,7 @@ members = [
     "plugins/clipboard",
     "plugins/color-tools",
     "plugins/cron-schedule",
+    "plugins/csv-inspector",
     "plugins/date-calculator",
     "plugins/dns-lookup",
     "plugins/file-checksum",

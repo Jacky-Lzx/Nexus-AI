@@ -24,6 +24,7 @@ caffeinate_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.caffeinate.clipkeepp
 clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplugin"
 color_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.color-tools.clipkeepplugin"
 cron_schedule_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.cron-schedule.clipkeepplugin"
+csv_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.csv-inspector.clipkeepplugin"
 date_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.date-calculator.clipkeepplugin"
 dns_lookup_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.dns-lookup.clipkeepplugin"
 file_checksum_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-checksum.clipkeepplugin"
@@ -82,6 +83,10 @@ install -d "$cron_schedule_plugin/Contents/MacOS" "$cron_schedule_plugin/Content
 install -m 755 target/release/clipkeep-plugin-cron-schedule "$cron_schedule_plugin/Contents/MacOS/clipkeep-plugin-cron-schedule"
 install -m 644 plugins/cron-schedule/plugin.toml "$cron_schedule_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-CronSchedule-Info.plist "$cron_schedule_plugin/Contents/Info.plist"
+install -d "$csv_inspector_plugin/Contents/MacOS" "$csv_inspector_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-csv-inspector "$csv_inspector_plugin/Contents/MacOS/clipkeep-plugin-csv-inspector"
+install -m 644 plugins/csv-inspector/plugin.toml "$csv_inspector_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-CSVInspector-Info.plist "$csv_inspector_plugin/Contents/Info.plist"
 install -d "$date_calculator_plugin/Contents/MacOS" "$date_calculator_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-date-calculator "$date_calculator_plugin/Contents/MacOS/clipkeep-plugin-date-calculator"
 install -m 644 plugins/date-calculator/plugin.toml "$date_calculator_plugin/Contents/Resources/plugin.toml"
@@ -241,6 +246,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.cron-schedule \
         "$cron_schedule_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.csv-inspector \
+        "$csv_inspector_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.date-calculator \
         "$date_calculator_plugin"

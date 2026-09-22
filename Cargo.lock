@@ -238,6 +238,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-csv-inspector"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "serde_json",
+]
+
+[[package]]
 name = "clipkeep-plugin-date-calculator"
 version = "0.1.0"
 dependencies = [

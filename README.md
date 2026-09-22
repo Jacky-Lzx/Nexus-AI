@@ -58,6 +58,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   user, endpoint, and socket state without changing or terminating them
 - Tests Rust regular expressions locally with common flags, match positions,
   numbered and named capture groups, and bounded reports
+- Inspects bounded CSV, TSV, semicolon, and pipe-delimited data locally, profiles
+  column types and irregular records, and converts tables to CSV, TSV, or JSON
 - Compares two text values locally by line, word token, or Unicode scalar and
   produces a bounded, copyable diff with addition and removal counts
 - Queries local JSON with JSON Pointer or dot/bracket paths, lists immediate
@@ -181,6 +183,12 @@ with `diff words hello, world :: hello world!`, or use `diff chars` for a
 Unicode-scalar comparison. The report marks unchanged, removed, and added units
 and can be copied or pasted into the previously focused application.
 
+Inspect delimited data with `csv :: name,age` followed by pasted rows, or use
+`tsv no-header ::` for tab-separated data without a header. Options `comma`,
+`tab`, `semicolon`, and `pipe` select the delimiter. Results profile column types,
+flag inconsistent record widths, preview bounded rows, and convert the parsed
+table to normalized CSV, TSV, or JSON entirely locally.
+
 Hash a local file with `checksum ~/Downloads/archive.zip`, request one algorithm
 with `checksum sha256 <absolute-path>`, or verify a published digest with
 `checksum verify sha256 <digest> <absolute-path>`. SHA-1 remains available only
@@ -249,6 +257,7 @@ identifier in Settings.
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 - `plugins/color-tools`: local CSS color parsing and format conversion
 - `plugins/cron-schedule`: cron validation and upcoming local-run previews
+- `plugins/csv-inspector`: bounded local delimited-data inspection and conversion
 - `plugins/date-calculator`: local Gregorian date arithmetic and differences
 - `plugins/dns-lookup`: explicit DNS record and reverse-address lookups
 - `plugins/file-checksum`: streaming local file hashes and digest verification

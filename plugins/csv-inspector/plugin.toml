@@ -1,0 +1,10 @@
+id = "io.clipkeep.csv-inspector"
+name = "CSV Inspector"
+description = "Inspect bounded CSV and TSV data, detect column shapes, and convert formats locally"
+icon = "tablecells"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-csv-inspector"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]
