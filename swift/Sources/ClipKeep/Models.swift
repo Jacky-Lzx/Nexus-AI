@@ -317,6 +317,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.files": "doc.text.magnifyingglass"
         case "io.clipkeep.kill-process": "xmark.circle"
         case "io.clipkeep.menu-bar": "menubar.rectangle"
+        case "io.clipkeep.quick-notes": "note.text"
         case "io.clipkeep.reminders": "bell.badge"
         case "io.clipkeep.system-commands": "power"
         case "io.clipkeep.system-status": "gauge.with.dots.needle.67percent"

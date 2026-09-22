@@ -228,6 +228,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-quick-notes"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "directories",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "clipkeep-plugin-reminders"
 version = "0.1.0"
 dependencies = [

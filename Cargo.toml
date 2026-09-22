@@ -12,6 +12,7 @@ members = [
     "plugins/files",
     "plugins/kill-process",
     "plugins/menu-bar",
+    "plugins/quick-notes",
     "plugins/reminders",
     "plugins/system-commands",
     "plugins/system-status",

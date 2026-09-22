@@ -261,6 +261,8 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Find running processes and terminate them after confirmation"
         case "io.clipkeep.menu-bar":
             pluginDescription = "Search and open menus from the previously focused application"
+        case "io.clipkeep.quick-notes":
+            pluginDescription = "Save, search, pin, copy, and paste short local notes"
         case "io.clipkeep.reminders":
             pluginDescription = "Create reminders and receive a macOS notification when they are due"
         case "io.clipkeep.system-commands":

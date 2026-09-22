@@ -21,6 +21,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   creates or interprets Unix second and millisecond timestamps
 - Reads local battery, disk, memory, CPU, uptime, and network status without
   contacting an external service
+- Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
+  actions
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -169,6 +171,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
+- `plugins/quick-notes`: persistent, prefix-triggered local notes and snippets
 - `plugins/reminders`: persistent reminders and background notification delivery
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
