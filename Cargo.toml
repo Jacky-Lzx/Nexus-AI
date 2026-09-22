@@ -36,6 +36,7 @@ members = [
     "plugins/password-generator",
     "plugins/permission-calculator",
     "plugins/port-inspector",
+    "plugins/query-string",
     "plugins/quick-notes",
     "plugins/randomizer",
     "plugins/regex-tester",

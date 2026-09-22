@@ -1,0 +1,10 @@
+id = "io.clipkeep.query-string"
+name = "Query String Tools"
+description = "Normalize URL query parameters and convert them to or from JSON"
+icon = "list.bullet.rectangle"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-query-string"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

@@ -470,6 +470,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-query-string"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "serde_json",
+]
+
+[[package]]
 name = "clipkeep-plugin-quick-notes"
 version = "0.1.0"
 dependencies = [

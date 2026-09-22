@@ -47,6 +47,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   contacting an external service
 - Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
   actions
+- Parses form query strings, preserves repeated parameters, emits canonical
+  percent encoding and JSON, and builds query strings from flat JSON objects
 - Converts HEX, RGB, HSL, alpha, and common named colors entirely locally
 - Generates UUID v4, time-ordered UUID v7, ULID, and configurable Nano ID values
   using the system secure random source
@@ -258,6 +260,11 @@ type with `datauri base64 application/json :: {"ready":true}`, or recover text
 with `datauridecode :: data:text/plain;charset=UTF-8,Hello%20world`. Decoding
 validates metadata and UTF-8/US-ASCII declarations and rejects binary payloads.
 
+Normalize form parameters with `querystring :: name=Alice+Smith&tag=rust&tag=mac`;
+the plugin returns both a canonical RFC 3986 query and grouped JSON without
+dropping repeated values. Reverse the conversion with
+`queryjson :: {"name":"Alice Smith","tag":["rust","mac"]}`.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -343,6 +350,7 @@ identifier in Settings.
 - `plugins/password-generator`: secure local password and PIN generation
 - `plugins/permission-calculator`: local Unix chmod conversion and explanation
 - `plugins/port-inspector`: read-only local TCP listener and UDP binding inspection
+- `plugins/query-string`: local query-string normalization and JSON conversion
 - `plugins/quick-notes`: persistent, prefix-triggered local notes and snippets
 - `plugins/randomizer`: secure dice, coin, integer, choice, and shuffle tools
 - `plugins/regex-tester`: bounded local Rust regular-expression testing and captures

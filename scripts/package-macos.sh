@@ -51,6 +51,7 @@ number_statistics_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.number-statis
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
 permission_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.permission-calculator.clipkeepplugin"
 port_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.port-inspector.clipkeepplugin"
+query_string_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.query-string.clipkeepplugin"
 quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkeepplugin"
 randomizer_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.randomizer.clipkeepplugin"
 regex_tester_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.regex-tester.clipkeepplugin"
@@ -199,6 +200,10 @@ install -d "$port_inspector_plugin/Contents/MacOS" "$port_inspector_plugin/Conte
 install -m 755 target/release/clipkeep-plugin-port-inspector "$port_inspector_plugin/Contents/MacOS/clipkeep-plugin-port-inspector"
 install -m 644 plugins/port-inspector/plugin.toml "$port_inspector_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-PortInspector-Info.plist "$port_inspector_plugin/Contents/Info.plist"
+install -d "$query_string_plugin/Contents/MacOS" "$query_string_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-query-string "$query_string_plugin/Contents/MacOS/clipkeep-plugin-query-string"
+install -m 644 plugins/query-string/plugin.toml "$query_string_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-QueryString-Info.plist "$query_string_plugin/Contents/Info.plist"
 install -d "$quick_notes_plugin/Contents/MacOS" "$quick_notes_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-quick-notes "$quick_notes_plugin/Contents/MacOS/clipkeep-plugin-quick-notes"
 install -m 644 plugins/quick-notes/plugin.toml "$quick_notes_plugin/Contents/Resources/plugin.toml"
@@ -367,6 +372,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.port-inspector \
         "$port_inspector_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.query-string \
+        "$query_string_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.quick-notes \
         "$quick_notes_plugin"
