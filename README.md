@@ -33,6 +33,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   `datecalc diff 2026-01-01 2026-12-31`
 - Calculates SHA-256 and SHA-512 checksums for local files with streaming reads,
   verifies expected digests, and offers explicitly labeled legacy SHA-1 support
+- Inspects local file, folder, and symbolic-link metadata, including sizes, Unix
+  modes, ownership IDs, timestamps, allocation, inode, and link target status
 - Reads local battery, disk, memory, CPU, uptime, and network status without
   contacting an external service
 - Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
@@ -94,8 +96,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Discovers versioned plugin bundles from the app bundle and the user plugin
   directory, with manifest validation, per-plugin logs, search timeouts, and
   bounded automatic restart after a crash
-- No analytics or cloud service; network access is limited to explicit plugin
-  requests such as DNS lookups and the configured Clash controller
+- No analytics or cloud service; network access is limited to explicit features
+  such as DNS and HTTP inspection, web search, and the configured Clash controller
 - Configurable history retention, sensitive-content filtering, ignored source
   applications, and time-range clearing (favorites are preserved)
 
@@ -182,6 +184,11 @@ with `checksum sha256 <absolute-path>`, or verify a published digest with
 `checksum verify sha256 <digest> <absolute-path>`. SHA-1 remains available only
 for compatibility and is labeled as a legacy algorithm in every result.
 
+Inspect metadata without reading file contents with `fileinfo ~/Downloads/archive.zip`.
+The result distinguishes files, folders, links, sockets, pipes, and devices; shows
+Unix mode, size/allocation, ownership IDs, timestamps, inode, and link status; and
+offers copy, open, and Finder reveal actions.
+
 Resolve both address families with `dns example.com`, request a specific record
 with `dns mx example.com` or `dns txt _dmarc.example.com`, and perform reverse
 lookup by entering an address such as `dns 1.1.1.1`. Results show the configured
@@ -238,6 +245,7 @@ identifier in Settings.
 - `plugins/date-calculator`: local Gregorian date arithmetic and differences
 - `plugins/dns-lookup`: explicit DNS record and reverse-address lookups
 - `plugins/file-checksum`: streaming local file hashes and digest verification
+- `plugins/file-info`: local file, directory, and symbolic-link metadata inspection
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching

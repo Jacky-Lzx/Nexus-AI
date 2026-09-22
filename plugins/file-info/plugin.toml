@@ -1,0 +1,10 @@
+id = "io.clipkeep.file-info"
+name = "File Info"
+description = "Inspect local file, folder, and symbolic-link metadata without reading contents"
+icon = "doc.text.magnifyingglass"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-file-info"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["files.metadata", "files.open", "clipboard.write"]

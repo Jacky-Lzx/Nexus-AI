@@ -15,6 +15,7 @@ members = [
     "plugins/date-calculator",
     "plugins/dns-lookup",
     "plugins/file-checksum",
+    "plugins/file-info",
     "plugins/files",
     "plugins/http-inspector",
     "plugins/id-generator",

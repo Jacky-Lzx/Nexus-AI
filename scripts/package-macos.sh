@@ -27,6 +27,7 @@ cron_schedule_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.cron-schedule.cli
 date_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.date-calculator.clipkeepplugin"
 dns_lookup_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.dns-lookup.clipkeepplugin"
 file_checksum_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-checksum.clipkeepplugin"
+file_info_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-info.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
 clash_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clash.clipkeepplugin"
@@ -92,6 +93,10 @@ install -d "$file_checksum_plugin/Contents/MacOS" "$file_checksum_plugin/Content
 install -m 755 target/release/clipkeep-plugin-file-checksum "$file_checksum_plugin/Contents/MacOS/clipkeep-plugin-file-checksum"
 install -m 644 plugins/file-checksum/plugin.toml "$file_checksum_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-FileChecksum-Info.plist "$file_checksum_plugin/Contents/Info.plist"
+install -d "$file_info_plugin/Contents/MacOS" "$file_info_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-file-info "$file_info_plugin/Contents/MacOS/clipkeep-plugin-file-info"
+install -m 644 plugins/file-info/plugin.toml "$file_info_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-FileInfo-Info.plist "$file_info_plugin/Contents/Info.plist"
 install -d "$calculator_plugin/Contents/MacOS" "$calculator_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-calculator "$calculator_plugin/Contents/MacOS/clipkeep-plugin-calculator"
 install -m 644 plugins/calculator/plugin.toml "$calculator_plugin/Contents/Resources/plugin.toml"
@@ -240,6 +245,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.file-checksum \
         "$file_checksum_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.file-info \
+        "$file_info_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.calculator \
         "$calculator_plugin"
