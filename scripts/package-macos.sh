@@ -34,6 +34,7 @@ network_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.network-calc
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
 quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkeepplugin"
 randomizer_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.randomizer.clipkeepplugin"
+regex_tester_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.regex-tester.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
 system_status_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-status.clipkeepplugin"
@@ -107,6 +108,10 @@ install -d "$randomizer_plugin/Contents/MacOS" "$randomizer_plugin/Contents/Reso
 install -m 755 target/release/clipkeep-plugin-randomizer "$randomizer_plugin/Contents/MacOS/clipkeep-plugin-randomizer"
 install -m 644 plugins/randomizer/plugin.toml "$randomizer_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Randomizer-Info.plist "$randomizer_plugin/Contents/Info.plist"
+install -d "$regex_tester_plugin/Contents/MacOS" "$regex_tester_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-regex-tester "$regex_tester_plugin/Contents/MacOS/clipkeep-plugin-regex-tester"
+install -m 644 plugins/regex-tester/plugin.toml "$regex_tester_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-RegexTester-Info.plist "$regex_tester_plugin/Contents/Info.plist"
 install -d "$reminders_plugin/Contents/MacOS" "$reminders_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-reminders "$reminders_plugin/Contents/MacOS/clipkeep-plugin-reminders"
 install -m 644 plugins/reminders/plugin.toml "$reminders_plugin/Contents/Resources/plugin.toml"
@@ -196,6 +201,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.randomizer \
         "$randomizer_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.regex-tester \
+        "$regex_tester_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.reminders \
         "$reminders_plugin"

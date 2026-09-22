@@ -1,0 +1,10 @@
+id = "io.clipkeep.regex-tester"
+name = "Regex Tester"
+description = "Test bounded Rust regular expressions with flags, positions, and captures"
+icon = "text.magnifyingglass"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-regex-tester"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]
