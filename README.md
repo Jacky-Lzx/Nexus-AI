@@ -24,6 +24,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
   actions
 - Converts HEX, RGB, HSL, alpha, and common named colors entirely locally
+- Generates UUID v4, time-ordered UUID v7, ULID, and configurable Nano ID values
+  using the system secure random source
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -171,6 +173,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching
 - `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
+- `plugins/id-generator`: secure local UUID, ULID, and Nano ID generation
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/quick-notes`: persistent, prefix-triggered local notes and snippets

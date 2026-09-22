@@ -26,6 +26,7 @@ calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepp
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
 clash_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clash.clipkeepplugin"
 files_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.files.clipkeepplugin"
+id_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-generator.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkeepplugin"
@@ -70,6 +71,10 @@ install -d "$files_plugin/Contents/MacOS" "$files_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-files "$files_plugin/Contents/MacOS/clipkeep-plugin-files"
 install -m 644 plugins/files/plugin.toml "$files_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Files-Info.plist "$files_plugin/Contents/Info.plist"
+install -d "$id_generator_plugin/Contents/MacOS" "$id_generator_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-id-generator "$id_generator_plugin/Contents/MacOS/clipkeep-plugin-id-generator"
+install -m 644 plugins/id-generator/plugin.toml "$id_generator_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-IdGenerator-Info.plist "$id_generator_plugin/Contents/Info.plist"
 install -d "$kill_process_plugin/Contents/MacOS" "$kill_process_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-kill-process "$kill_process_plugin/Contents/MacOS/clipkeep-plugin-kill-process"
 install -m 644 plugins/kill-process/plugin.toml "$kill_process_plugin/Contents/Resources/plugin.toml"
@@ -147,6 +152,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.files \
         "$files_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.id-generator \
+        "$id_generator_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.kill-process \
         "$kill_process_plugin"
