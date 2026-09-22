@@ -40,6 +40,7 @@ id_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-inspector.clipk
 json_query_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.json-query.clipkeepplugin"
 jwt_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.jwt-inspector.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
+line_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.line-tools.clipkeepplugin"
 mac_address_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.mac-address.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 network_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.network-calculator.clipkeepplugin"
@@ -151,6 +152,10 @@ install -d "$kill_process_plugin/Contents/MacOS" "$kill_process_plugin/Contents/
 install -m 755 target/release/clipkeep-plugin-kill-process "$kill_process_plugin/Contents/MacOS/clipkeep-plugin-kill-process"
 install -m 644 plugins/kill-process/plugin.toml "$kill_process_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-KillProcess-Info.plist "$kill_process_plugin/Contents/Info.plist"
+install -d "$line_tools_plugin/Contents/MacOS" "$line_tools_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-line-tools "$line_tools_plugin/Contents/MacOS/clipkeep-plugin-line-tools"
+install -m 644 plugins/line-tools/plugin.toml "$line_tools_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-LineTools-Info.plist "$line_tools_plugin/Contents/Info.plist"
 install -d "$mac_address_plugin/Contents/MacOS" "$mac_address_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-mac-address "$mac_address_plugin/Contents/MacOS/clipkeep-plugin-mac-address"
 install -m 644 plugins/mac-address/plugin.toml "$mac_address_plugin/Contents/Resources/plugin.toml"
@@ -314,6 +319,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.kill-process \
         "$kill_process_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.line-tools \
+        "$line_tools_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.mac-address \
         "$mac_address_plugin"

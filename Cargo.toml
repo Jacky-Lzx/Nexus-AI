@@ -25,6 +25,7 @@ members = [
     "plugins/json-query",
     "plugins/jwt-inspector",
     "plugins/kill-process",
+    "plugins/line-tools",
     "plugins/mac-address",
     "plugins/menu-bar",
     "plugins/network-calculator",

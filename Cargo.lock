@@ -367,6 +367,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-line-tools"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+]
+
+[[package]]
 name = "clipkeep-plugin-mac-address"
 version = "0.1.0"
 dependencies = [

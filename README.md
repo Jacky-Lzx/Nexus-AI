@@ -70,6 +70,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   column types and irregular records, and converts tables to CSV, TSV, or JSON
 - Compares two text values locally by line, word token, or Unicode scalar and
   produces a bounded, copyable diff with addition and removal counts
+- Sorts, reverses, deduplicates, and counts frequencies in bounded multiline
+  text, with optional trimming, blank removal, and lowercase-based matching
 - Queries local JSON with JSON Pointer or dot/bracket paths, lists immediate
   child keys, and enumerates bounded leaf-value paths
 - Inspects and normalizes URLs locally, including credentials, hosts, ports,
@@ -229,6 +231,11 @@ and universal/local bits, provides normalized forms and Modified EUI-64 output,
 and does not guess a vendor without an OUI database. Use `macaddr random` to
 create a cryptographically secure locally administered unicast address.
 
+Clean a pasted list with `linetools sort fold trim nonempty ::` followed by the
+multiline text. Operations `sort`, `unique`, `sort-unique`, `reverse`, and
+`frequency` normalize line endings to LF while preserving a final newline;
+`asc` or `desc` selects ordering, and `fold` uses Unicode lowercase matching.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -303,6 +310,7 @@ identifier in Settings.
 - `plugins/json-query`: local JSON value, child-key, and leaf-path queries
 - `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
+- `plugins/line-tools`: bounded multiline sorting, deduplication, reversal, and frequencies
 - `plugins/mac-address`: local MAC-48 inspection, normalization, EUI-64, and generation
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
