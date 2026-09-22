@@ -35,6 +35,7 @@ calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugi
 case_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.case-converter.clipkeepplugin"
 clash_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clash.clipkeepplugin"
 files_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.files.clipkeepplugin"
+html_entities_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.html-entities.clipkeepplugin"
 http_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.http-inspector.clipkeepplugin"
 id_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-generator.clipkeepplugin"
 id_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-inspector.clipkeepplugin"
@@ -133,6 +134,10 @@ install -d "$files_plugin/Contents/MacOS" "$files_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-files "$files_plugin/Contents/MacOS/clipkeep-plugin-files"
 install -m 644 plugins/files/plugin.toml "$files_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Files-Info.plist "$files_plugin/Contents/Info.plist"
+install -d "$html_entities_plugin/Contents/MacOS" "$html_entities_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-html-entities "$html_entities_plugin/Contents/MacOS/clipkeep-plugin-html-entities"
+install -m 644 plugins/html-entities/plugin.toml "$html_entities_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-HTMLEntities-Info.plist "$html_entities_plugin/Contents/Info.plist"
 install -d "$http_inspector_plugin/Contents/MacOS" "$http_inspector_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-http-inspector "$http_inspector_plugin/Contents/MacOS/clipkeep-plugin-http-inspector"
 install -m 644 plugins/http-inspector/plugin.toml "$http_inspector_plugin/Contents/Resources/plugin.toml"
@@ -309,6 +314,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.files \
         "$files_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.html-entities \
+        "$html_entities_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.http-inspector \
         "$http_inspector_plugin"

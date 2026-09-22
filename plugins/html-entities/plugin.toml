@@ -1,0 +1,10 @@
+id = "io.clipkeep.html-entities"
+name = "HTML Entity Tools"
+description = "Encode HTML-sensitive text and decode common named or Unicode numeric references"
+icon = "chevron.left.forwardslash.chevron.right"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-html-entities"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

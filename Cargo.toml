@@ -20,6 +20,7 @@ members = [
     "plugins/file-checksum",
     "plugins/file-info",
     "plugins/files",
+    "plugins/html-entities",
     "plugins/http-inspector",
     "plugins/id-generator",
     "plugins/id-inspector",

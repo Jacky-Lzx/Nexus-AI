@@ -25,6 +25,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   Base64 encoding, JSON formatting, SHA-256, trimming, and text statistics
 - Converts identifiers and phrases among camelCase, PascalCase, snake_case,
   kebab-case, CONSTANT_CASE, dot.case, title case, and lowercase words
+- Encodes HTML-sensitive characters, optionally emits ASCII-only numeric
+  references, and strictly decodes common named and Unicode numeric entities
 - Inspects Unicode scalars, UTF-8 and UTF-16 encodings, escapes, and invisible
   controls, and decodes sequences such as `unicode U+1F468 U+200D U+1F4BB`
 - Shows local and international times using the macOS time-zone database, and
@@ -243,6 +245,12 @@ Convert a name with `caseconv snake :: XMLHttpRequest2`, or omit the target with
 separator, lowercase-to-uppercase, acronym, and letter/number boundaries while
 retaining Unicode alphanumeric words.
 
+Escape markup with `htmlencode :: <p title="A & B">café</p>`, or use
+`htmlencode ascii :: café` to emit non-ASCII scalars as hexadecimal numeric
+references. `htmldecode :: &lt;p&gt;&#x1F600;&lt;/p&gt;` strictly decodes
+semicolon-terminated numeric references and a documented core of common named
+entities while leaving ordinary literal ampersands intact.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -312,6 +320,7 @@ identifier in Settings.
 - `plugins/case-converter`: local identifier and phrase naming-style conversion
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching
 - `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
+- `plugins/html-entities`: local HTML entity encoding and strict decoding
 - `plugins/http-inspector`: bounded explicit HTTP HEAD requests with redirect and timing details
 - `plugins/id-generator`: secure local UUID, ULID, and Nano ID generation
 - `plugins/id-inspector`: local UUID and ULID validation, normalization, and timestamp decoding

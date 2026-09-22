@@ -317,6 +317,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-html-entities"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+]
+
+[[package]]
 name = "clipkeep-plugin-http-inspector"
 version = "0.1.0"
 dependencies = [
