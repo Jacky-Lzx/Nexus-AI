@@ -13,6 +13,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   global palette with explicit prefixes such as `g`, `gh`, `yt`, and `maps`
 - Evaluates calculator expressions with parentheses, constants, powers, and
   common functions, then copies or pastes the result
+- Converts arbitrarily large signed integers between bases 2–36, including
+  familiar binary, octal, decimal, hexadecimal, and base-36 forms
 - Converts length, mass, temperature, time, and data units with queries such as
   `10 km to mi`, then copies or pastes the result
 - Transforms local text with explicit commands for case conversion, URL and
@@ -152,6 +154,10 @@ Query JSON locally with `jget user.name :: {"user":{"name":"Ada"}}`, list
 immediate children with `jkeys /user :: <json>`, or enumerate leaf values with
 `jpaths :: <json>`. Paths accept JSON Pointer as well as dot and array-index syntax.
 
+Convert integers with `base 0xff`, `base 16:deadbeef to 2`, or
+`base z from 36 to decimal`. Without a target, Nexus shows binary, octal,
+decimal, hexadecimal, and base-36 results together.
+
 Open `Clash` to inspect and switch between Rule, Global, and Direct modes. Configure
 the HTTP `external-controller` address and optional `secret` in the Clash settings
 pane. Clash Verge Rev is detected through `/tmp/verge/verge-mihomo.sock` first;
@@ -184,6 +190,7 @@ applications can be excluded by bundle identifier in Settings.
 - `crates/clipkeep-core`: reusable Rust host implementation retained for future
   non-macOS frontends and protocol tests
 - `plugins/applications`: installed application index and launcher
+- `plugins/base-converter`: arbitrary-precision integer radix conversion
 - `plugins/caffeinate`: timed display and system sleep prevention with cancellation
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 - `plugins/color-tools`: local CSS color parsing and format conversion

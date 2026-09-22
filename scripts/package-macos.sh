@@ -19,6 +19,7 @@ install -d "$bundle_dir/Contents/PlugIns"
 rm -f "$bundle_dir/Contents/MacOS/clipkeep" "$bundle_dir/Contents/MacOS/ClipKeep"
 install -m 755 target/swift/Nexus "$bundle_dir/Contents/MacOS/Nexus"
 applications_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.applications.clipkeepplugin"
+base_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.base-converter.clipkeepplugin"
 caffeinate_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.caffeinate.clipkeepplugin"
 clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplugin"
 color_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.color-tools.clipkeepplugin"
@@ -51,6 +52,10 @@ install -d "$clipboard_plugin/Contents/MacOS" "$clipboard_plugin/Contents/Resour
 install -m 755 target/release/clipkeep-plugin-applications "$applications_plugin/Contents/MacOS/clipkeep-plugin-applications"
 install -m 644 plugins/applications/plugin.toml "$applications_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Applications-Info.plist "$applications_plugin/Contents/Info.plist"
+install -d "$base_converter_plugin/Contents/MacOS" "$base_converter_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-base-converter "$base_converter_plugin/Contents/MacOS/clipkeep-plugin-base-converter"
+install -m 644 plugins/base-converter/plugin.toml "$base_converter_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-BaseConverter-Info.plist "$base_converter_plugin/Contents/Info.plist"
 install -d "$caffeinate_plugin/Contents/MacOS" "$caffeinate_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-caffeinate "$caffeinate_plugin/Contents/MacOS/clipkeep-plugin-caffeinate"
 install -m 644 plugins/caffeinate/plugin.toml "$caffeinate_plugin/Contents/Resources/plugin.toml"
@@ -166,6 +171,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.applications \
         "$applications_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.base-converter \
+        "$base_converter_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.caffeinate \
         "$caffeinate_plugin"
