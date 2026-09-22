@@ -27,6 +27,7 @@ cron_schedule_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.cron-schedule.cli
 csv_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.csv-inspector.clipkeepplugin"
 date_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.date-calculator.clipkeepplugin"
 dns_lookup_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.dns-lookup.clipkeepplugin"
+encoding_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.encoding-inspector.clipkeepplugin"
 file_checksum_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-checksum.clipkeepplugin"
 file_info_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-info.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
@@ -95,6 +96,10 @@ install -d "$dns_lookup_plugin/Contents/MacOS" "$dns_lookup_plugin/Contents/Reso
 install -m 755 target/release/clipkeep-plugin-dns-lookup "$dns_lookup_plugin/Contents/MacOS/clipkeep-plugin-dns-lookup"
 install -m 644 plugins/dns-lookup/plugin.toml "$dns_lookup_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-DNSLookup-Info.plist "$dns_lookup_plugin/Contents/Info.plist"
+install -d "$encoding_inspector_plugin/Contents/MacOS" "$encoding_inspector_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-encoding-inspector "$encoding_inspector_plugin/Contents/MacOS/clipkeep-plugin-encoding-inspector"
+install -m 644 plugins/encoding-inspector/plugin.toml "$encoding_inspector_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-EncodingInspector-Info.plist "$encoding_inspector_plugin/Contents/Info.plist"
 install -d "$file_checksum_plugin/Contents/MacOS" "$file_checksum_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-file-checksum "$file_checksum_plugin/Contents/MacOS/clipkeep-plugin-file-checksum"
 install -m 644 plugins/file-checksum/plugin.toml "$file_checksum_plugin/Contents/Resources/plugin.toml"
@@ -255,6 +260,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.dns-lookup \
         "$dns_lookup_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.encoding-inspector \
+        "$encoding_inspector_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.file-checksum \
         "$file_checksum_plugin"

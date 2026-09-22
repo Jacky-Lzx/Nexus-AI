@@ -35,6 +35,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   verifies expected digests, and offers explicitly labeled legacy SHA-1 support
 - Inspects local file, folder, and symbolic-link metadata, including sizes, Unix
   modes, ownership IDs, timestamps, allocation, inode, and link target status
+- Inspects bounded local files for ASCII, UTF-8, UTF-16, UTF-32, BOMs, likely
+  BOM-less Unicode, common binary signatures, controls, and mixed line endings
 - Reads local battery, disk, memory, CPU, uptime, and network status without
   contacting an external service
 - Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
@@ -199,6 +201,11 @@ The result distinguishes files, folders, links, sockets, pipes, and devices; sho
 Unix mode, size/allocation, ownership IDs, timestamps, inode, and link status; and
 offers copy, open, and Finder reveal actions.
 
+Inspect a file's text encoding with `encoding ~/Downloads/data.txt`. Files up to
+16 MiB are checked in full for Unicode validity, byte-order marks, likely BOM-less
+UTF-16/32, common binary signatures, NUL/control bytes, line-ending styles, and a
+final newline. The plugin reports inference as heuristic rather than definitive.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -260,6 +267,7 @@ identifier in Settings.
 - `plugins/csv-inspector`: bounded local delimited-data inspection and conversion
 - `plugins/date-calculator`: local Gregorian date arithmetic and differences
 - `plugins/dns-lookup`: explicit DNS record and reverse-address lookups
+- `plugins/encoding-inspector`: bounded local Unicode, binary-signature, and line-ending inspection
 - `plugins/file-checksum`: streaming local file hashes and digest verification
 - `plugins/file-info`: local file, directory, and symbolic-link metadata inspection
 - `plugins/calculator`: expression parser and result copy/paste actions

@@ -267,6 +267,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-encoding-inspector"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "url",
+]
+
+[[package]]
 name = "clipkeep-plugin-file-checksum"
 version = "0.1.0"
 dependencies = [
