@@ -54,6 +54,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   unverified time-claim status without implying signature validation
 - Calculates IPv4 and IPv6 CIDR networks, masks, endpoint ranges, and address
   counts entirely offline
+- Normalizes MAC-48 addresses, explains individual/group and universal/local
+  bits, derives Modified EUI-64 interface IDs, and generates secure local addresses
 - Summarizes numeric datasets locally with compensated sums, mean, median,
   quartiles, range, and population or sample standard deviation
 - Resolves DNS A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, SOA, and reverse PTR
@@ -221,6 +223,12 @@ whitespace are accepted between values; the report includes the sum, mean,
 median, linearly interpolated quartiles, range, and both population and sample
 standard deviation for up to 10,000 finite values.
 
+Inspect a MAC-48 address with `macaddr 00:11:22:33:44:55`; compact, hyphenated,
+and Cisco dotted forms are also accepted. The result explains unicast/multicast
+and universal/local bits, provides normalized forms and Modified EUI-64 output,
+and does not guess a vendor without an OUI database. Use `macaddr random` to
+create a cryptographically secure locally administered unicast address.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -295,6 +303,7 @@ identifier in Settings.
 - `plugins/json-query`: local JSON value, child-key, and leaf-path queries
 - `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
+- `plugins/mac-address`: local MAC-48 inspection, normalization, EUI-64, and generation
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
 - `plugins/number-statistics`: bounded local descriptive statistics for numeric datasets

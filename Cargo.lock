@@ -367,6 +367,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-mac-address"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "getrandom",
+]
+
+[[package]]
 name = "clipkeep-plugin-menu-bar"
 version = "0.1.0"
 dependencies = [

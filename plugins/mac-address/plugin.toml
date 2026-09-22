@@ -1,0 +1,10 @@
+id = "io.clipkeep.mac-address"
+name = "MAC Address"
+description = "Inspect, normalize, derive EUI-64 from, and securely generate MAC-48 addresses"
+icon = "network"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-mac-address"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]
