@@ -31,6 +31,7 @@ members = [
     "plugins/kill-process",
     "plugins/line-tools",
     "plugins/mac-address",
+    "plugins/markdown-tools",
     "plugins/menu-bar",
     "plugins/network-calculator",
     "plugins/number-statistics",

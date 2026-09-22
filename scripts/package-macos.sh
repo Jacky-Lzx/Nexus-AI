@@ -46,6 +46,7 @@ jwt_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.jwt-inspector.cli
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 line_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.line-tools.clipkeepplugin"
 mac_address_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.mac-address.clipkeepplugin"
+markdown_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.markdown-tools.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 network_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.network-calculator.clipkeepplugin"
 number_statistics_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.number-statistics.clipkeepplugin"
@@ -181,6 +182,10 @@ install -d "$mac_address_plugin/Contents/MacOS" "$mac_address_plugin/Contents/Re
 install -m 755 target/release/clipkeep-plugin-mac-address "$mac_address_plugin/Contents/MacOS/clipkeep-plugin-mac-address"
 install -m 644 plugins/mac-address/plugin.toml "$mac_address_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-MACAddress-Info.plist "$mac_address_plugin/Contents/Info.plist"
+install -d "$markdown_tools_plugin/Contents/MacOS" "$markdown_tools_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-markdown-tools "$markdown_tools_plugin/Contents/MacOS/clipkeep-plugin-markdown-tools"
+install -m 644 plugins/markdown-tools/plugin.toml "$markdown_tools_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-MarkdownTools-Info.plist "$markdown_tools_plugin/Contents/Info.plist"
 install -d "$menu_bar_plugin/Contents/MacOS" "$menu_bar_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-menu-bar "$menu_bar_plugin/Contents/MacOS/clipkeep-plugin-menu-bar"
 install -m 644 plugins/menu-bar/plugin.toml "$menu_bar_plugin/Contents/Resources/plugin.toml"
@@ -362,6 +367,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.mac-address \
         "$mac_address_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.markdown-tools \
+        "$markdown_tools_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.menu-bar \
         "$menu_bar_plugin"

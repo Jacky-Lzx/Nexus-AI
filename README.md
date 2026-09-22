@@ -51,6 +51,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   percent encoding and JSON, and builds query strings from flat JSON objects
 - Escapes text as JSON string literals or fragments, optionally produces
   ASCII-only Unicode escapes, and strictly decodes JSON escape sequences
+- Creates stable Markdown anchor slugs, safely escaped text, links, images,
+  collision-free fenced code blocks, and multiline block quotes
 - Converts HEX, RGB, HSL, alpha, and common named colors entirely locally
 - Generates UUID v4, time-ordered UUID v7, ULID, and configurable Nano ID values
   using the system secure random source
@@ -273,6 +275,12 @@ ASCII-only escapes with `jsonescape ascii :: café 😀`. Decode strict literals
 or content fragments with `jsonunescape :: "line\\nnext"` and
 `jsonunescape fragment :: line\\nnext`.
 
+Create a Markdown anchor with `mdslug :: Hello, 世界!`, escape literal markup
+with `mdescape :: # [text]`, or build a link with
+`mdlink https://example.com/docs :: Read the docs`. Use `mdimage`, `mdquote`,
+or `mdcode rust :: fn main() {}` for images, block quotes, and fenced code blocks;
+code fences automatically grow when their contents already contain backticks.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -353,6 +361,7 @@ identifier in Settings.
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/line-tools`: bounded multiline sorting, deduplication, reversal, and frequencies
 - `plugins/mac-address`: local MAC-48 inspection, normalization, EUI-64, and generation
+- `plugins/markdown-tools`: local Markdown anchors, escaping, links, images, code blocks, and quotes
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
 - `plugins/number-statistics`: bounded local descriptive statistics for numeric datasets

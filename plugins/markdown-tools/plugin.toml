@@ -1,0 +1,10 @@
+id = "io.clipkeep.markdown-tools"
+name = "Markdown Tools"
+description = "Create Markdown anchors, links, images, code blocks, quotes, and escaped text locally"
+icon = "text.document"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-markdown-tools"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]
