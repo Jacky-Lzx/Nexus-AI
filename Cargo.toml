@@ -8,6 +8,7 @@ members = [
     "plugins/caffeinate",
     "plugins/calculator",
     "plugins/calendar",
+    "plugins/case-converter",
     "plugins/clash",
     "plugins/clipboard",
     "plugins/color-tools",

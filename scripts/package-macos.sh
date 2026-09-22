@@ -32,6 +32,7 @@ file_checksum_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-checksum.cli
 file_info_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-info.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
+case_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.case-converter.clipkeepplugin"
 clash_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clash.clipkeepplugin"
 files_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.files.clipkeepplugin"
 http_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.http-inspector.clipkeepplugin"
@@ -120,6 +121,10 @@ install -d "$calendar_plugin/Contents/MacOS" "$calendar_plugin/Contents/Resource
 install -m 755 target/release/clipkeep-plugin-calendar "$calendar_plugin/Contents/MacOS/clipkeep-plugin-calendar"
 install -m 644 plugins/calendar/plugin.toml "$calendar_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Calendar-Info.plist "$calendar_plugin/Contents/Info.plist"
+install -d "$case_converter_plugin/Contents/MacOS" "$case_converter_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-case-converter "$case_converter_plugin/Contents/MacOS/clipkeep-plugin-case-converter"
+install -m 644 plugins/case-converter/plugin.toml "$case_converter_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-CaseConverter-Info.plist "$case_converter_plugin/Contents/Info.plist"
 install -d "$clash_plugin/Contents/MacOS" "$clash_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-clash "$clash_plugin/Contents/MacOS/clipkeep-plugin-clash"
 install -m 644 plugins/clash/plugin.toml "$clash_plugin/Contents/Resources/plugin.toml"
@@ -295,6 +300,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.calendar \
         "$calendar_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.case-converter \
+        "$case_converter_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.clash \
         "$clash_plugin"
