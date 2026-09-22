@@ -25,6 +25,7 @@ clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplu
 color_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.color-tools.clipkeepplugin"
 cron_schedule_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.cron-schedule.clipkeepplugin"
 date_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.date-calculator.clipkeepplugin"
+dns_lookup_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.dns-lookup.clipkeepplugin"
 file_checksum_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.file-checksum.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
@@ -82,6 +83,10 @@ install -d "$date_calculator_plugin/Contents/MacOS" "$date_calculator_plugin/Con
 install -m 755 target/release/clipkeep-plugin-date-calculator "$date_calculator_plugin/Contents/MacOS/clipkeep-plugin-date-calculator"
 install -m 644 plugins/date-calculator/plugin.toml "$date_calculator_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-DateCalculator-Info.plist "$date_calculator_plugin/Contents/Info.plist"
+install -d "$dns_lookup_plugin/Contents/MacOS" "$dns_lookup_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-dns-lookup "$dns_lookup_plugin/Contents/MacOS/clipkeep-plugin-dns-lookup"
+install -m 644 plugins/dns-lookup/plugin.toml "$dns_lookup_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-DNSLookup-Info.plist "$dns_lookup_plugin/Contents/Info.plist"
 install -d "$file_checksum_plugin/Contents/MacOS" "$file_checksum_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-file-checksum "$file_checksum_plugin/Contents/MacOS/clipkeep-plugin-file-checksum"
 install -m 644 plugins/file-checksum/plugin.toml "$file_checksum_plugin/Contents/Resources/plugin.toml"
@@ -224,6 +229,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.date-calculator \
         "$date_calculator_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.dns-lookup \
+        "$dns_lookup_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.file-checksum \
         "$file_checksum_plugin"

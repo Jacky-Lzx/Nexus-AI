@@ -13,6 +13,7 @@ members = [
     "plugins/color-tools",
     "plugins/cron-schedule",
     "plugins/date-calculator",
+    "plugins/dns-lookup",
     "plugins/file-checksum",
     "plugins/files",
     "plugins/id-generator",

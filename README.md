@@ -48,6 +48,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   unverified time-claim status without implying signature validation
 - Calculates IPv4 and IPv6 CIDR networks, masks, endpoint ranges, and address
   counts entirely offline
+- Resolves DNS A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, SOA, and reverse PTR
+  records through the configured system resolver, including TTLs
 - Inspects visible local TCP listeners and UDP bindings by port, process, PID,
   user, endpoint, and socket state without changing or terminating them
 - Tests Rust regular expressions locally with common flags, match positions,
@@ -92,8 +94,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Discovers versioned plugin bundles from the app bundle and the user plugin
   directory, with manifest validation, per-plugin logs, search timeouts, and
   bounded automatic restart after a crash
-- No analytics or cloud service; network access is limited to plugin-requested
-  integrations such as the configured Clash controller
+- No analytics or cloud service; network access is limited to explicit plugin
+  requests such as DNS lookups and the configured Clash controller
 - Configurable history retention, sensitive-content filtering, ignored source
   applications, and time-range clearing (favorites are preserved)
 
@@ -180,6 +182,11 @@ with `checksum sha256 <absolute-path>`, or verify a published digest with
 `checksum verify sha256 <digest> <absolute-path>`. SHA-1 remains available only
 for compatibility and is labeled as a legacy algorithm in every result.
 
+Resolve both address families with `dns example.com`, request a specific record
+with `dns mx example.com` or `dns txt _dmarc.example.com`, and perform reverse
+lookup by entering an address such as `dns 1.1.1.1`. Results show the configured
+resolver, response status, TTL, and query time.
+
 Convert integers with `base 0xff`, `base 16:deadbeef to 2`, or
 `base z from 36 to decimal`. Without a target, Nexus shows binary, octal,
 decimal, hexadecimal, and base-36 results together.
@@ -222,6 +229,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/color-tools`: local CSS color parsing and format conversion
 - `plugins/cron-schedule`: cron validation and upcoming local-run previews
 - `plugins/date-calculator`: local Gregorian date arithmetic and differences
+- `plugins/dns-lookup`: explicit DNS record and reverse-address lookups
 - `plugins/file-checksum`: streaming local file hashes and digest verification
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
