@@ -54,6 +54,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   unverified time-claim status without implying signature validation
 - Calculates IPv4 and IPv6 CIDR networks, masks, endpoint ranges, and address
   counts entirely offline
+- Summarizes numeric datasets locally with compensated sums, mean, median,
+  quartiles, range, and population or sample standard deviation
 - Resolves DNS A, AAAA, CNAME, MX, TXT, NS, SRV, CAA, SOA, and reverse PTR
   records through the configured system resolver, including TTLs
 - Inspects visible local TCP listeners and UDP bindings by port, process, PID,
@@ -214,6 +216,11 @@ Inspect a version with `semver 1.2.3-beta.2+build.7`, compare precedence with
 without incrementing the core version. A conventional leading `v` is accepted
 as input and removed from the normalized result.
 
+Summarize pasted numbers with `stats 1, 2, 3, 4.5`. Commas, semicolons, and
+whitespace are accepted between values; the report includes the sum, mean,
+median, linearly interpolated quartiles, range, and both population and sample
+standard deviation for up to 10,000 finite values.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -290,6 +297,7 @@ identifier in Settings.
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
+- `plugins/number-statistics`: bounded local descriptive statistics for numeric datasets
 - `plugins/password-generator`: secure local password and PIN generation
 - `plugins/permission-calculator`: local Unix chmod conversion and explanation
 - `plugins/port-inspector`: read-only local TCP listener and UDP binding inspection

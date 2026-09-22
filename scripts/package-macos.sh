@@ -42,6 +42,7 @@ jwt_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.jwt-inspector.cli
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 network_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.network-calculator.clipkeepplugin"
+number_statistics_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.number-statistics.clipkeepplugin"
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
 permission_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.permission-calculator.clipkeepplugin"
 port_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.port-inspector.clipkeepplugin"
@@ -157,6 +158,10 @@ install -d "$network_calculator_plugin/Contents/MacOS" "$network_calculator_plug
 install -m 755 target/release/clipkeep-plugin-network-calculator "$network_calculator_plugin/Contents/MacOS/clipkeep-plugin-network-calculator"
 install -m 644 plugins/network-calculator/plugin.toml "$network_calculator_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-NetworkCalculator-Info.plist "$network_calculator_plugin/Contents/Info.plist"
+install -d "$number_statistics_plugin/Contents/MacOS" "$number_statistics_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-number-statistics "$number_statistics_plugin/Contents/MacOS/clipkeep-plugin-number-statistics"
+install -m 644 plugins/number-statistics/plugin.toml "$number_statistics_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-NumberStatistics-Info.plist "$number_statistics_plugin/Contents/Info.plist"
 install -d "$password_generator_plugin/Contents/MacOS" "$password_generator_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-password-generator "$password_generator_plugin/Contents/MacOS/clipkeep-plugin-password-generator"
 install -m 644 plugins/password-generator/plugin.toml "$password_generator_plugin/Contents/Resources/plugin.toml"
@@ -310,6 +315,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.network-calculator \
         "$network_calculator_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.number-statistics \
+        "$number_statistics_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.password-generator \
         "$password_generator_plugin"

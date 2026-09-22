@@ -1,0 +1,10 @@
+id = "io.clipkeep.number-statistics"
+name = "Number Statistics"
+description = "Calculate descriptive statistics for bounded numeric datasets locally"
+icon = "chart.bar.xaxis"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-number-statistics"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

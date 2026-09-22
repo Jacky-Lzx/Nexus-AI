@@ -386,6 +386,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-number-statistics"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+]
+
+[[package]]
 name = "clipkeep-plugin-password-generator"
 version = "0.1.0"
 dependencies = [

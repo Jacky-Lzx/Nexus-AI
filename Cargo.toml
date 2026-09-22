@@ -27,6 +27,7 @@ members = [
     "plugins/kill-process",
     "plugins/menu-bar",
     "plugins/network-calculator",
+    "plugins/number-statistics",
     "plugins/password-generator",
     "plugins/permission-calculator",
     "plugins/port-inspector",
