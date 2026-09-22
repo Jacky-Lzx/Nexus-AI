@@ -1,0 +1,11 @@
+[package]
+name = "clipkeep-plugin-data-uri"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arboard = "3.6"
+base64 = "0.22"
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol.workspace = true

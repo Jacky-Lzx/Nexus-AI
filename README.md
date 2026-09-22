@@ -27,6 +27,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   kebab-case, CONSTANT_CASE, dot.case, title case, and lowercase words
 - Encodes HTML-sensitive characters, optionally emits ASCII-only numeric
   references, and strictly decodes common named and Unicode numeric entities
+- Creates percent-encoded or Base64 text Data URIs and decodes bounded textual
+  Data URIs with media-type, parameter, and charset validation
 - Inspects Unicode scalars, UTF-8 and UTF-16 encodings, escapes, and invisible
   controls, and decodes sequences such as `unicode U+1F468 U+200D U+1F4BB`
 - Shows local and international times using the macOS time-zone database, and
@@ -251,6 +253,11 @@ references. `htmldecode :: &lt;p&gt;&#x1F600;&lt;/p&gt;` strictly decodes
 semicolon-terminated numeric references and a documented core of common named
 entities while leaving ordinary literal ampersands intact.
 
+Create a text Data URI with `datauri :: Hello, 世界`, select Base64 and a media
+type with `datauri base64 application/json :: {"ready":true}`, or recover text
+with `datauridecode :: data:text/plain;charset=UTF-8,Hello%20world`. Decoding
+validates metadata and UTF-8/US-ASCII declarations and rejects binary payloads.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -310,6 +317,7 @@ identifier in Settings.
 - `plugins/color-tools`: local CSS color parsing and format conversion
 - `plugins/cron-schedule`: cron validation and upcoming local-run previews
 - `plugins/csv-inspector`: bounded local delimited-data inspection and conversion
+- `plugins/data-uri`: local text Data URI generation and validated decoding
 - `plugins/date-calculator`: local Gregorian date arithmetic and differences
 - `plugins/dns-lookup`: explicit DNS record and reverse-address lookups
 - `plugins/encoding-inspector`: bounded local Unicode, binary-signature, and line-ending inspection

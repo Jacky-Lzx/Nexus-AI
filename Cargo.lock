@@ -257,6 +257,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-data-uri"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "base64",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+]
+
+[[package]]
 name = "clipkeep-plugin-date-calculator"
 version = "0.1.0"
 dependencies = [

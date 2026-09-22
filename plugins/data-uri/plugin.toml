@@ -1,0 +1,10 @@
+id = "io.clipkeep.data-uri"
+name = "Data URI Tools"
+description = "Create and inspect bounded text Data URIs locally"
+icon = "doc.badge.gearshape"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-data-uri"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]
