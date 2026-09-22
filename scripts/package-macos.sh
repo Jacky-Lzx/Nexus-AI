@@ -45,6 +45,7 @@ system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands
 system_status_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-status.clipkeepplugin"
 text_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-tools.clipkeepplugin"
 time_date_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.time-date.clipkeepplugin"
+unicode_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unicode-inspector.clipkeepplugin"
 unit_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unit-converter.clipkeepplugin"
 url_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.url-inspector.clipkeepplugin"
 web_search_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.web-search.clipkeepplugin"
@@ -158,6 +159,10 @@ install -d "$time_date_plugin/Contents/MacOS" "$time_date_plugin/Contents/Resour
 install -m 755 target/release/clipkeep-plugin-time-date "$time_date_plugin/Contents/MacOS/clipkeep-plugin-time-date"
 install -m 644 plugins/time-date/plugin.toml "$time_date_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-TimeDate-Info.plist "$time_date_plugin/Contents/Info.plist"
+install -d "$unicode_inspector_plugin/Contents/MacOS" "$unicode_inspector_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-unicode-inspector "$unicode_inspector_plugin/Contents/MacOS/clipkeep-plugin-unicode-inspector"
+install -m 644 plugins/unicode-inspector/plugin.toml "$unicode_inspector_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-UnicodeInspector-Info.plist "$unicode_inspector_plugin/Contents/Info.plist"
 install -d "$unit_converter_plugin/Contents/MacOS" "$unit_converter_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-unit-converter "$unit_converter_plugin/Contents/MacOS/clipkeep-plugin-unit-converter"
 install -m 644 plugins/unit-converter/plugin.toml "$unit_converter_plugin/Contents/Resources/plugin.toml"
@@ -264,6 +269,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.time-date \
         "$time_date_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.unicode-inspector \
+        "$unicode_inspector_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.unit-converter \
         "$unit_converter_plugin"

@@ -23,6 +23,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   `10 km to mi`, then copies or pastes the result
 - Transforms local text with explicit commands for case conversion, URL and
   Base64 encoding, JSON formatting, SHA-256, trimming, and text statistics
+- Inspects Unicode scalars, UTF-8 and UTF-16 encodings, escapes, and invisible
+  controls, and decodes sequences such as `unicode U+1F468 U+200D U+1F4BB`
 - Shows local and international times using the macOS time-zone database, and
   creates or interprets Unix second and millisecond timestamps
 - Adds or subtracts calendar days, weeks, months, years, and weekdays, and
@@ -225,6 +227,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/system-status`: read-only local hardware and operating-system status
 - `plugins/text-tools`: local text transformations with copy/paste actions
 - `plugins/time-date`: world clocks and Unix timestamp conversion
+- `plugins/unicode-inspector`: Unicode scalar, encoding, and escape inspection
 - `plugins/unit-converter`: natural unit conversion with copy/paste actions
 - `plugins/url-inspector`: local URL normalization and component inspection
 - `plugins/web-search`: prefix-triggered searches opened in the default browser
