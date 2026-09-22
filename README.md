@@ -36,6 +36,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   counts entirely offline
 - Tests Rust regular expressions locally with common flags, match positions,
   numbered and named capture groups, and bounded reports
+- Inspects and normalizes URLs locally, including credentials, hosts, ports,
+  decoded paths, duplicate query parameters, and fragments
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -199,6 +201,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/text-tools`: local text transformations with copy/paste actions
 - `plugins/time-date`: world clocks and Unix timestamp conversion
 - `plugins/unit-converter`: natural unit conversion with copy/paste actions
+- `plugins/url-inspector`: local URL normalization and component inspection
 - `plugins/web-search`: prefix-triggered searches opened in the default browser
 
 Built-in plugins are separate executables. A plugin crash cannot directly crash

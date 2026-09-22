@@ -1,0 +1,10 @@
+id = "io.clipkeep.url-inspector"
+name = "URL Inspector"
+description = "Inspect and normalize URLs locally without making network requests"
+icon = "link"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-url-inspector"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

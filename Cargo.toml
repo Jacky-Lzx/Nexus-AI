@@ -26,6 +26,7 @@ members = [
     "plugins/text-tools",
     "plugins/time-date",
     "plugins/unit-converter",
+    "plugins/url-inspector",
     "plugins/web-search",
 ]
 resolver = "3"
