@@ -23,6 +23,7 @@ base_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.base-converter.c
 caffeinate_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.caffeinate.clipkeepplugin"
 clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplugin"
 color_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.color-tools.clipkeepplugin"
+cron_schedule_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.cron-schedule.clipkeepplugin"
 date_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.date-calculator.clipkeepplugin"
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
@@ -69,6 +70,10 @@ install -d "$color_tools_plugin/Contents/MacOS" "$color_tools_plugin/Contents/Re
 install -m 755 target/release/clipkeep-plugin-color-tools "$color_tools_plugin/Contents/MacOS/clipkeep-plugin-color-tools"
 install -m 644 plugins/color-tools/plugin.toml "$color_tools_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-ColorTools-Info.plist "$color_tools_plugin/Contents/Info.plist"
+install -d "$cron_schedule_plugin/Contents/MacOS" "$cron_schedule_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-cron-schedule "$cron_schedule_plugin/Contents/MacOS/clipkeep-plugin-cron-schedule"
+install -m 644 plugins/cron-schedule/plugin.toml "$cron_schedule_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-CronSchedule-Info.plist "$cron_schedule_plugin/Contents/Info.plist"
 install -d "$date_calculator_plugin/Contents/MacOS" "$date_calculator_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-date-calculator "$date_calculator_plugin/Contents/MacOS/clipkeep-plugin-date-calculator"
 install -m 644 plugins/date-calculator/plugin.toml "$date_calculator_plugin/Contents/Resources/plugin.toml"
@@ -193,6 +198,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.color-tools \
         "$color_tools_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.cron-schedule \
+        "$cron_schedule_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.date-calculator \
         "$date_calculator_plugin"

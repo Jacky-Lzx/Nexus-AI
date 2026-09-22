@@ -17,6 +17,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   familiar binary, octal, decimal, hexadecimal, and base-36 forms
 - Converts Unix permission modes between octal and symbolic notation, explains
   each access class and special bit, and accepts `chmod 755` or `perm rwxr-xr-x`
+- Validates five-field cron expressions and previews the next five local runs,
+  including lists, ranges, steps, names, macros, and standard cron day semantics
 - Converts length, mass, temperature, time, and data units with queries such as
   `10 km to mi`, then copies or pastes the result
 - Transforms local text with explicit commands for case conversion, URL and
@@ -200,6 +202,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/caffeinate`: timed display and system sleep prevention with cancellation
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 - `plugins/color-tools`: local CSS color parsing and format conversion
+- `plugins/cron-schedule`: cron validation and upcoming local-run previews
 - `plugins/date-calculator`: local Gregorian date arithmetic and differences
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search

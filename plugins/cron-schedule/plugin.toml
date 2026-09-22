@@ -1,0 +1,10 @@
+id = "io.clipkeep.cron-schedule"
+name = "Cron Schedule"
+description = "Validate cron expressions and preview upcoming local runs"
+icon = "calendar.badge.clock"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-cron-schedule"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]
