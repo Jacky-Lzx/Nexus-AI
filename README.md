@@ -17,6 +17,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   `10 km to mi`, then copies or pastes the result
 - Transforms local text with explicit commands for case conversion, URL and
   Base64 encoding, JSON formatting, SHA-256, trimming, and text statistics
+- Shows local and international times using the macOS time-zone database, and
+  creates or interprets Unix second and millisecond timestamps
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -169,6 +171,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
 - `plugins/text-tools`: local text transformations with copy/paste actions
+- `plugins/time-date`: world clocks and Unix timestamp conversion
 - `plugins/unit-converter`: natural unit conversion with copy/paste actions
 - `plugins/web-search`: prefix-triggered searches opened in the default browser
 

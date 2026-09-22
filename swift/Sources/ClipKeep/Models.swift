@@ -320,6 +320,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.reminders": "bell.badge"
         case "io.clipkeep.system-commands": "power"
         case "io.clipkeep.text-tools": "textformat"
+        case "io.clipkeep.time-date": "clock"
         case "io.clipkeep.unit-converter": "ruler"
         case "io.clipkeep.web-search": "globe"
         default: "puzzlepiece.extension"

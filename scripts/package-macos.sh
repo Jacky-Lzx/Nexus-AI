@@ -30,6 +30,7 @@ menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugi
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
 text_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-tools.clipkeepplugin"
+time_date_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.time-date.clipkeepplugin"
 unit_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unit-converter.clipkeepplugin"
 web_search_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.web-search.clipkeepplugin"
 rm -f "$applications_plugin/clipkeep-plugin-applications" "$applications_plugin/plugin.toml"
@@ -82,6 +83,10 @@ install -d "$text_tools_plugin/Contents/MacOS" "$text_tools_plugin/Contents/Reso
 install -m 755 target/release/clipkeep-plugin-text-tools "$text_tools_plugin/Contents/MacOS/clipkeep-plugin-text-tools"
 install -m 644 plugins/text-tools/plugin.toml "$text_tools_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-TextTools-Info.plist "$text_tools_plugin/Contents/Info.plist"
+install -d "$time_date_plugin/Contents/MacOS" "$time_date_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-time-date "$time_date_plugin/Contents/MacOS/clipkeep-plugin-time-date"
+install -m 644 plugins/time-date/plugin.toml "$time_date_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-TimeDate-Info.plist "$time_date_plugin/Contents/Info.plist"
 install -d "$unit_converter_plugin/Contents/MacOS" "$unit_converter_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-unit-converter "$unit_converter_plugin/Contents/MacOS/clipkeep-plugin-unit-converter"
 install -m 644 plugins/unit-converter/plugin.toml "$unit_converter_plugin/Contents/Resources/plugin.toml"
@@ -139,6 +144,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.text-tools \
         "$text_tools_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.time-date \
+        "$time_date_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.unit-converter \
         "$unit_converter_plugin"

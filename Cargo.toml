@@ -15,6 +15,7 @@ members = [
     "plugins/reminders",
     "plugins/system-commands",
     "plugins/text-tools",
+    "plugins/time-date",
     "plugins/unit-converter",
     "plugins/web-search",
 ]
