@@ -265,6 +265,8 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Create reminders and receive a macOS notification when they are due"
         case "io.clipkeep.system-commands":
             pluginDescription = "Quickly run common macOS system actions"
+        case "io.clipkeep.unit-converter":
+            pluginDescription = "Convert common length, mass, temperature, time, and data units"
         case "io.clipkeep.web-search":
             pluginDescription = "Search popular websites with short prefixes from the global palette"
         default:
