@@ -60,6 +60,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   user, endpoint, and socket state without changing or terminating them
 - Tests Rust regular expressions locally with common flags, match positions,
   numbered and named capture groups, and bounded reports
+- Parses, compares, and increments Semantic Versioning 2.0.0 values locally,
+  including specification-correct prerelease precedence and build metadata
 - Inspects bounded CSV, TSV, semicolon, and pipe-delimited data locally, profiles
   column types and irregular records, and converts tables to CSV, TSV, or JSON
 - Compares two text values locally by line, word token, or Unicode scalar and
@@ -206,6 +208,12 @@ Inspect a file's text encoding with `encoding ~/Downloads/data.txt`. Files up to
 UTF-16/32, common binary signatures, NUL/control bytes, line-ending styles, and a
 final newline. The plugin reports inference as heuristic rather than definitive.
 
+Inspect a version with `semver 1.2.3-beta.2+build.7`, compare precedence with
+`semver compare 1.2.3-rc.1 1.2.3`, or create a new version with
+`semver bump minor 1.2.3`. `bump release` removes prerelease and build metadata
+without incrementing the core version. A conventional leading `v` is accepted
+as input and removed from the normalized result.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -289,6 +297,7 @@ identifier in Settings.
 - `plugins/randomizer`: secure dice, coin, integer, choice, and shuffle tools
 - `plugins/regex-tester`: bounded local Rust regular-expression testing and captures
 - `plugins/reminders`: persistent reminders and background notification delivery
+- `plugins/semantic-version`: local SemVer parsing, precedence comparison, and increments
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
 - `plugins/system-status`: read-only local hardware and operating-system status

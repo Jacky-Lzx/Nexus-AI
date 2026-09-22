@@ -1,0 +1,10 @@
+[package]
+name = "clipkeep-plugin-semantic-version"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arboard = "3.6"
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol.workspace = true

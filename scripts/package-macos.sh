@@ -49,6 +49,7 @@ quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkee
 randomizer_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.randomizer.clipkeepplugin"
 regex_tester_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.regex-tester.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
+semantic_version_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.semantic-version.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
 system_status_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-status.clipkeepplugin"
 text_diff_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-diff.clipkeepplugin"
@@ -184,6 +185,10 @@ install -d "$reminders_plugin/Contents/MacOS" "$reminders_plugin/Contents/Resour
 install -m 755 target/release/clipkeep-plugin-reminders "$reminders_plugin/Contents/MacOS/clipkeep-plugin-reminders"
 install -m 644 plugins/reminders/plugin.toml "$reminders_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Reminders-Info.plist "$reminders_plugin/Contents/Info.plist"
+install -d "$semantic_version_plugin/Contents/MacOS" "$semantic_version_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-semantic-version "$semantic_version_plugin/Contents/MacOS/clipkeep-plugin-semantic-version"
+install -m 644 plugins/semantic-version/plugin.toml "$semantic_version_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-SemanticVersion-Info.plist "$semantic_version_plugin/Contents/Info.plist"
 install -d "$system_commands_plugin/Contents/MacOS" "$system_commands_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-system-commands "$system_commands_plugin/Contents/MacOS/clipkeep-plugin-system-commands"
 install -m 644 plugins/system-commands/plugin.toml "$system_commands_plugin/Contents/Resources/plugin.toml"
@@ -326,6 +331,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.reminders \
         "$reminders_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.semantic-version \
+        "$semantic_version_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.system-commands \
         "$system_commands_plugin"

@@ -34,6 +34,7 @@ members = [
     "plugins/randomizer",
     "plugins/regex-tester",
     "plugins/reminders",
+    "plugins/semantic-version",
     "plugins/system-commands",
     "plugins/system-status",
     "plugins/text-diff",
