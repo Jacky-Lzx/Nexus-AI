@@ -201,6 +201,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-files"
+version = "0.1.0"
+dependencies = [
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "directories",
+]
+
+[[package]]
 name = "clipkeep-plugin-kill-process"
 version = "0.1.0"
 dependencies = [

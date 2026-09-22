@@ -1988,7 +1988,7 @@ private final class ResultCellView: NSTableCellView {
                 accessibilityDescription: result.kind.rawValue
             )
         }
-        guard result.kind == .application,
+        guard (result.kind == .application || result.kind == .file),
               let path = result.metadata["path"] else { return nil }
         let cacheKey = path as NSString
         if let image = applicationIconCache.object(forKey: cacheKey) {

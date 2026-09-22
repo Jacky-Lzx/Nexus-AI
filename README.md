@@ -156,6 +156,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching
+- `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/reminders`: persistent reminders and background notification delivery

@@ -255,6 +255,8 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Read-only access to your upcoming calendar events"
         case "io.clipkeep.clash":
             pluginDescription = "View and switch the routing mode of a local Clash or Mihomo controller"
+        case "io.clipkeep.files":
+            pluginDescription = "Find files and folders indexed by Spotlight, then open or reveal them"
         case "io.clipkeep.kill-process":
             pluginDescription = "Find running processes and terminate them after confirmation"
         case "io.clipkeep.menu-bar":

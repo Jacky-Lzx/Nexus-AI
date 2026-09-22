@@ -1,0 +1,8 @@
+id = "io.clipkeep.files"
+name = "Files"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-files"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["files.search", "files.open"]

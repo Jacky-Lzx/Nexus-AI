@@ -314,6 +314,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.calculator": "function"
         case "io.clipkeep.calendar": "calendar"
         case "io.clipkeep.clash": "network"
+        case "io.clipkeep.files": "doc.text.magnifyingglass"
         case "io.clipkeep.kill-process": "xmark.circle"
         case "io.clipkeep.menu-bar": "menubar.rectangle"
         case "io.clipkeep.reminders": "bell.badge"

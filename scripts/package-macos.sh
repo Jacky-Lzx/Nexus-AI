@@ -24,6 +24,7 @@ clipboard_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clipboard.clipkeepplu
 calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calculator.clipkeepplugin"
 calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugin"
 clash_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clash.clipkeepplugin"
+files_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.files.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
@@ -54,6 +55,10 @@ install -d "$clash_plugin/Contents/MacOS" "$clash_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-clash "$clash_plugin/Contents/MacOS/clipkeep-plugin-clash"
 install -m 644 plugins/clash/plugin.toml "$clash_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-Clash-Info.plist "$clash_plugin/Contents/Info.plist"
+install -d "$files_plugin/Contents/MacOS" "$files_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-files "$files_plugin/Contents/MacOS/clipkeep-plugin-files"
+install -m 644 plugins/files/plugin.toml "$files_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-Files-Info.plist "$files_plugin/Contents/Info.plist"
 install -d "$kill_process_plugin/Contents/MacOS" "$kill_process_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-kill-process "$kill_process_plugin/Contents/MacOS/clipkeep-plugin-kill-process"
 install -m 644 plugins/kill-process/plugin.toml "$kill_process_plugin/Contents/Resources/plugin.toml"
@@ -101,6 +106,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.clash \
         "$clash_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.files \
+        "$files_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.kill-process \
         "$kill_process_plugin"
