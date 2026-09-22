@@ -29,6 +29,7 @@ members = [
     "plugins/reminders",
     "plugins/system-commands",
     "plugins/system-status",
+    "plugins/text-diff",
     "plugins/text-tools",
     "plugins/time-date",
     "plugins/unicode-inspector",

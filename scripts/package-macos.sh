@@ -44,6 +44,7 @@ regex_tester_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.regex-tester.clipk
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
 system_status_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-status.clipkeepplugin"
+text_diff_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-diff.clipkeepplugin"
 text_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-tools.clipkeepplugin"
 time_date_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.time-date.clipkeepplugin"
 unicode_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unicode-inspector.clipkeepplugin"
@@ -156,6 +157,10 @@ install -d "$system_status_plugin/Contents/MacOS" "$system_status_plugin/Content
 install -m 755 target/release/clipkeep-plugin-system-status "$system_status_plugin/Contents/MacOS/clipkeep-plugin-system-status"
 install -m 644 plugins/system-status/plugin.toml "$system_status_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-SystemStatus-Info.plist "$system_status_plugin/Contents/Info.plist"
+install -d "$text_diff_plugin/Contents/MacOS" "$text_diff_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-text-diff "$text_diff_plugin/Contents/MacOS/clipkeep-plugin-text-diff"
+install -m 644 plugins/text-diff/plugin.toml "$text_diff_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-TextDiff-Info.plist "$text_diff_plugin/Contents/Info.plist"
 install -d "$text_tools_plugin/Contents/MacOS" "$text_tools_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-text-tools "$text_tools_plugin/Contents/MacOS/clipkeep-plugin-text-tools"
 install -m 644 plugins/text-tools/plugin.toml "$text_tools_plugin/Contents/Resources/plugin.toml"
@@ -271,6 +276,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.system-status \
         "$system_status_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.text-diff \
+        "$text_diff_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.text-tools \
         "$text_tools_plugin"

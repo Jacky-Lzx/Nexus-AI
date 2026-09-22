@@ -50,6 +50,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   user, endpoint, and socket state without changing or terminating them
 - Tests Rust regular expressions locally with common flags, match positions,
   numbered and named capture groups, and bounded reports
+- Compares two text values locally by line, word token, or Unicode scalar and
+  produces a bounded, copyable diff with addition and removal counts
 - Queries local JSON with JSON Pointer or dot/bracket paths, lists immediate
   child keys, and enumerates bounded leaf-value paths
 - Inspects and normalizes URLs locally, including credentials, hosts, ports,
@@ -166,6 +168,11 @@ Query JSON locally with `jget user.name :: {"user":{"name":"Ada"}}`, list
 immediate children with `jkeys /user :: <json>`, or enumerate leaf values with
 `jpaths :: <json>`. Paths accept JSON Pointer as well as dot and array-index syntax.
 
+Compare pasted text with `diff old text :: new text`, switch to word-token output
+with `diff words hello, world :: hello world!`, or use `diff chars` for a
+Unicode-scalar comparison. The report marks unchanged, removed, and added units
+and can be copied or pasted into the previously focused application.
+
 Convert integers with `base 0xff`, `base 16:deadbeef to 2`, or
 `base z from 36 to decimal`. Without a target, Nexus shows binary, octal,
 decimal, hexadecimal, and base-36 results together.
@@ -228,6 +235,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
 - `plugins/system-status`: read-only local hardware and operating-system status
+- `plugins/text-diff`: bounded local line, word-token, and Unicode-scalar diffs
 - `plugins/text-tools`: local text transformations with copy/paste actions
 - `plugins/time-date`: world clocks and Unix timestamp conversion
 - `plugins/unicode-inspector`: Unicode scalar, encoding, and escape inspection
