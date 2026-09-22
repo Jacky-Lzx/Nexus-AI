@@ -29,6 +29,7 @@ kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipk
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
+system_status_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-status.clipkeepplugin"
 text_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-tools.clipkeepplugin"
 time_date_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.time-date.clipkeepplugin"
 unit_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unit-converter.clipkeepplugin"
@@ -79,6 +80,10 @@ install -d "$system_commands_plugin/Contents/MacOS" "$system_commands_plugin/Con
 install -m 755 target/release/clipkeep-plugin-system-commands "$system_commands_plugin/Contents/MacOS/clipkeep-plugin-system-commands"
 install -m 644 plugins/system-commands/plugin.toml "$system_commands_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-SystemCommands-Info.plist "$system_commands_plugin/Contents/Info.plist"
+install -d "$system_status_plugin/Contents/MacOS" "$system_status_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-system-status "$system_status_plugin/Contents/MacOS/clipkeep-plugin-system-status"
+install -m 644 plugins/system-status/plugin.toml "$system_status_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-SystemStatus-Info.plist "$system_status_plugin/Contents/Info.plist"
 install -d "$text_tools_plugin/Contents/MacOS" "$text_tools_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-text-tools "$text_tools_plugin/Contents/MacOS/clipkeep-plugin-text-tools"
 install -m 644 plugins/text-tools/plugin.toml "$text_tools_plugin/Contents/Resources/plugin.toml"
@@ -141,6 +146,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.system-commands \
         "$system_commands_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.system-status \
+        "$system_status_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.text-tools \
         "$text_tools_plugin"

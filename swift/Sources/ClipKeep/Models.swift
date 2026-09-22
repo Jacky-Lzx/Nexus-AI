@@ -319,6 +319,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.menu-bar": "menubar.rectangle"
         case "io.clipkeep.reminders": "bell.badge"
         case "io.clipkeep.system-commands": "power"
+        case "io.clipkeep.system-status": "gauge.with.dots.needle.67percent"
         case "io.clipkeep.text-tools": "textformat"
         case "io.clipkeep.time-date": "clock"
         case "io.clipkeep.unit-converter": "ruler"

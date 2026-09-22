@@ -265,6 +265,8 @@ final class SettingsWindowController: NSWindowController,
             pluginDescription = "Create reminders and receive a macOS notification when they are due"
         case "io.clipkeep.system-commands":
             pluginDescription = "Quickly run common macOS system actions"
+        case "io.clipkeep.system-status":
+            pluginDescription = "Inspect battery, storage, memory, CPU, uptime, and local network status"
         case "io.clipkeep.text-tools":
             pluginDescription = "Transform, encode, format, hash, and inspect text locally"
         case "io.clipkeep.time-date":

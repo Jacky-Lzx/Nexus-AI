@@ -19,6 +19,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   Base64 encoding, JSON formatting, SHA-256, trimming, and text statistics
 - Shows local and international times using the macOS time-zone database, and
   creates or interprets Unix second and millisecond timestamps
+- Reads local battery, disk, memory, CPU, uptime, and network status without
+  contacting an external service
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -170,6 +172,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/reminders`: persistent reminders and background notification delivery
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
+- `plugins/system-status`: read-only local hardware and operating-system status
 - `plugins/text-tools`: local text transformations with copy/paste actions
 - `plugins/time-date`: world clocks and Unix timestamp conversion
 - `plugins/unit-converter`: natural unit conversion with copy/paste actions

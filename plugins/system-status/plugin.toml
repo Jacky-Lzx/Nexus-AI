@@ -1,0 +1,8 @@
+id = "io.clipkeep.system-status"
+name = "System Status"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-system-status"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["system.read", "clipboard.write"]
