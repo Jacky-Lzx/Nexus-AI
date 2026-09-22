@@ -14,6 +14,7 @@ members = [
     "plugins/id-generator",
     "plugins/kill-process",
     "plugins/menu-bar",
+    "plugins/password-generator",
     "plugins/quick-notes",
     "plugins/reminders",
     "plugins/system-commands",

@@ -29,6 +29,7 @@ files_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.files.clipkeepplugin"
 id_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-generator.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
+password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
 quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
@@ -83,6 +84,10 @@ install -d "$menu_bar_plugin/Contents/MacOS" "$menu_bar_plugin/Contents/Resource
 install -m 755 target/release/clipkeep-plugin-menu-bar "$menu_bar_plugin/Contents/MacOS/clipkeep-plugin-menu-bar"
 install -m 644 plugins/menu-bar/plugin.toml "$menu_bar_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-MenuBar-Info.plist "$menu_bar_plugin/Contents/Info.plist"
+install -d "$password_generator_plugin/Contents/MacOS" "$password_generator_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-password-generator "$password_generator_plugin/Contents/MacOS/clipkeep-plugin-password-generator"
+install -m 644 plugins/password-generator/plugin.toml "$password_generator_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-PasswordGenerator-Info.plist "$password_generator_plugin/Contents/Info.plist"
 install -d "$quick_notes_plugin/Contents/MacOS" "$quick_notes_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-quick-notes "$quick_notes_plugin/Contents/MacOS/clipkeep-plugin-quick-notes"
 install -m 644 plugins/quick-notes/plugin.toml "$quick_notes_plugin/Contents/Resources/plugin.toml"
@@ -161,6 +166,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.menu-bar \
         "$menu_bar_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.password-generator \
+        "$password_generator_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.quick-notes \
         "$quick_notes_plugin"
