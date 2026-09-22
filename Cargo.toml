@@ -26,6 +26,7 @@ members = [
     "plugins/id-generator",
     "plugins/id-inspector",
     "plugins/json-query",
+    "plugins/json-string",
     "plugins/jwt-inspector",
     "plugins/kill-process",
     "plugins/line-tools",

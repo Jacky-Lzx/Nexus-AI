@@ -41,6 +41,7 @@ http_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.http-inspector.c
 id_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-generator.clipkeepplugin"
 id_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-inspector.clipkeepplugin"
 json_query_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.json-query.clipkeepplugin"
+json_string_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.json-string.clipkeepplugin"
 jwt_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.jwt-inspector.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 line_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.line-tools.clipkeepplugin"
@@ -160,6 +161,10 @@ install -d "$json_query_plugin/Contents/MacOS" "$json_query_plugin/Contents/Reso
 install -m 755 target/release/clipkeep-plugin-json-query "$json_query_plugin/Contents/MacOS/clipkeep-plugin-json-query"
 install -m 644 plugins/json-query/plugin.toml "$json_query_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-JSONQuery-Info.plist "$json_query_plugin/Contents/Info.plist"
+install -d "$json_string_plugin/Contents/MacOS" "$json_string_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-json-string "$json_string_plugin/Contents/MacOS/clipkeep-plugin-json-string"
+install -m 644 plugins/json-string/plugin.toml "$json_string_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-JSONString-Info.plist "$json_string_plugin/Contents/Info.plist"
 install -d "$jwt_inspector_plugin/Contents/MacOS" "$jwt_inspector_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-jwt-inspector "$jwt_inspector_plugin/Contents/MacOS/clipkeep-plugin-jwt-inspector"
 install -m 644 plugins/jwt-inspector/plugin.toml "$jwt_inspector_plugin/Contents/Resources/plugin.toml"
@@ -342,6 +347,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.json-query \
         "$json_query_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.json-string \
+        "$json_string_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.jwt-inspector \
         "$jwt_inspector_plugin"

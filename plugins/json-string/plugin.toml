@@ -1,0 +1,10 @@
+id = "io.clipkeep.json-string"
+name = "JSON String Tools"
+description = "Escape and unescape JSON string literals or fragments locally"
+icon = "quote.opening"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-json-string"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

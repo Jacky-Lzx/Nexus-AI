@@ -49,6 +49,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   actions
 - Parses form query strings, preserves repeated parameters, emits canonical
   percent encoding and JSON, and builds query strings from flat JSON objects
+- Escapes text as JSON string literals or fragments, optionally produces
+  ASCII-only Unicode escapes, and strictly decodes JSON escape sequences
 - Converts HEX, RGB, HSL, alpha, and common named colors entirely locally
 - Generates UUID v4, time-ordered UUID v7, ULID, and configurable Nano ID values
   using the system secure random source
@@ -265,6 +267,12 @@ the plugin returns both a canonical RFC 3986 query and grouped JSON without
 dropping repeated values. Reverse the conversion with
 `queryjson :: {"name":"Alice Smith","tag":["rust","mac"]}`.
 
+Produce a complete JSON string literal with `jsonescape :: line "one"`, omit
+the surrounding quotes with `jsonescape fragment :: line "one"`, or force portable
+ASCII-only escapes with `jsonescape ascii :: café 😀`. Decode strict literals
+or content fragments with `jsonunescape :: "line\\nnext"` and
+`jsonunescape fragment :: line\\nnext`.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -340,6 +348,7 @@ identifier in Settings.
 - `plugins/id-generator`: secure local UUID, ULID, and Nano ID generation
 - `plugins/id-inspector`: local UUID and ULID validation, normalization, and timestamp decoding
 - `plugins/json-query`: local JSON value, child-key, and leaf-path queries
+- `plugins/json-string`: local JSON string escaping and strict unescaping
 - `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/line-tools`: bounded multiline sorting, deduplication, reversal, and frequencies

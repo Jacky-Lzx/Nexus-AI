@@ -376,6 +376,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-json-string"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "serde_json",
+]
+
+[[package]]
 name = "clipkeep-plugin-jwt-inspector"
 version = "0.1.0"
 dependencies = [
