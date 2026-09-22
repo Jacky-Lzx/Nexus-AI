@@ -32,6 +32,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   lists locally with unbiased system-secure randomness
 - Decodes JWT headers and payloads locally, formats their JSON, and reports
   unverified time-claim status without implying signature validation
+- Calculates IPv4 and IPv6 CIDR networks, masks, endpoint ranges, and address
+  counts entirely offline
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -183,6 +185,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
+- `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
 - `plugins/password-generator`: secure local password and PIN generation
 - `plugins/quick-notes`: persistent, prefix-triggered local notes and snippets
 - `plugins/randomizer`: secure dice, coin, integer, choice, and shuffle tools

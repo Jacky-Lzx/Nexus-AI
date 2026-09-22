@@ -30,6 +30,7 @@ id_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-generator.clipk
 jwt_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.jwt-inspector.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
+network_calculator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.network-calculator.clipkeepplugin"
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
 quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkeepplugin"
 randomizer_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.randomizer.clipkeepplugin"
@@ -90,6 +91,10 @@ install -d "$menu_bar_plugin/Contents/MacOS" "$menu_bar_plugin/Contents/Resource
 install -m 755 target/release/clipkeep-plugin-menu-bar "$menu_bar_plugin/Contents/MacOS/clipkeep-plugin-menu-bar"
 install -m 644 plugins/menu-bar/plugin.toml "$menu_bar_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-MenuBar-Info.plist "$menu_bar_plugin/Contents/Info.plist"
+install -d "$network_calculator_plugin/Contents/MacOS" "$network_calculator_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-network-calculator "$network_calculator_plugin/Contents/MacOS/clipkeep-plugin-network-calculator"
+install -m 644 plugins/network-calculator/plugin.toml "$network_calculator_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-NetworkCalculator-Info.plist "$network_calculator_plugin/Contents/Info.plist"
 install -d "$password_generator_plugin/Contents/MacOS" "$password_generator_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-password-generator "$password_generator_plugin/Contents/MacOS/clipkeep-plugin-password-generator"
 install -m 644 plugins/password-generator/plugin.toml "$password_generator_plugin/Contents/Resources/plugin.toml"
@@ -179,6 +184,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.menu-bar \
         "$menu_bar_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.network-calculator \
+        "$network_calculator_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.password-generator \
         "$password_generator_plugin"

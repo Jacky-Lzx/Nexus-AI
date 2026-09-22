@@ -15,6 +15,7 @@ members = [
     "plugins/jwt-inspector",
     "plugins/kill-process",
     "plugins/menu-bar",
+    "plugins/network-calculator",
     "plugins/password-generator",
     "plugins/quick-notes",
     "plugins/randomizer",
