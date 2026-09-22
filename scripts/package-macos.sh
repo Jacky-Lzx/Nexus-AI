@@ -29,6 +29,7 @@ kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipk
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
+web_search_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.web-search.clipkeepplugin"
 rm -f "$applications_plugin/clipkeep-plugin-applications" "$applications_plugin/plugin.toml"
 rm -f "$clipboard_plugin/clipkeep-plugin-clipboard" "$clipboard_plugin/plugin.toml"
 install -d "$applications_plugin/Contents/MacOS" "$applications_plugin/Contents/Resources"
@@ -75,6 +76,10 @@ install -d "$system_commands_plugin/Contents/MacOS" "$system_commands_plugin/Con
 install -m 755 target/release/clipkeep-plugin-system-commands "$system_commands_plugin/Contents/MacOS/clipkeep-plugin-system-commands"
 install -m 644 plugins/system-commands/plugin.toml "$system_commands_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-SystemCommands-Info.plist "$system_commands_plugin/Contents/Info.plist"
+install -d "$web_search_plugin/Contents/MacOS" "$web_search_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-web-search "$web_search_plugin/Contents/MacOS/clipkeep-plugin-web-search"
+install -m 644 plugins/web-search/plugin.toml "$web_search_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-WebSearch-Info.plist "$web_search_plugin/Contents/Info.plist"
 # Remove legacy plugin locations when updating a bundle in place.
 rm -f "$bundle_dir/Contents/MacOS/clipkeep-plugin-applications"
 rm -f "$bundle_dir/Contents/MacOS/clipkeep-plugin-clipboard"
@@ -121,6 +126,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.system-commands \
         "$system_commands_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.web-search \
+        "$web_search_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         "$bundle_dir/Contents/PlugIns/io.clipkeep.ocr.clipkeepplugin"
     codesign --force --sign "$signing_identity" --timestamp=none \

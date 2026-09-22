@@ -257,6 +257,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-web-search"
+version = "0.1.0"
+dependencies = [
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+]
+
+[[package]]
 name = "clipkeep-protocol"
 version = "0.1.0"
 dependencies = [

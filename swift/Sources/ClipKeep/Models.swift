@@ -319,6 +319,7 @@ struct PluginDescriptor: Equatable {
         case "io.clipkeep.menu-bar": "menubar.rectangle"
         case "io.clipkeep.reminders": "bell.badge"
         case "io.clipkeep.system-commands": "power"
+        case "io.clipkeep.web-search": "globe"
         default: "puzzlepiece.extension"
         }
     }
