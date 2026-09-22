@@ -308,6 +308,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-id-inspector"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "chrono",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+]
+
+[[package]]
 name = "clipkeep-plugin-json-query"
 version = "0.1.0"
 dependencies = [

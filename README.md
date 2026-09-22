@@ -42,6 +42,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Converts HEX, RGB, HSL, alpha, and common named colors entirely locally
 - Generates UUID v4, time-ordered UUID v7, ULID, and configurable Nano ID values
   using the system secure random source
+- Validates and normalizes UUID and ULID values, explains UUID version and
+  variant fields, and extracts embedded UUID v1/v6/v7 or ULID timestamps
 - Generates strong, readable, or alphanumeric passwords and numeric PINs locally
   with unbiased system-secure randomness
 - Rolls dice, flips coins, samples integer ranges, picks options, and shuffles
@@ -189,6 +191,11 @@ The result distinguishes files, folders, links, sockets, pipes, and devices; sho
 Unix mode, size/allocation, ownership IDs, timestamps, inode, and link status; and
 offers copy, open, and Finder reveal actions.
 
+Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
+or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
+by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
+timestamp and Unix milliseconds without making any network request.
+
 Resolve both address families with `dns example.com`, request a specific record
 with `dns mx example.com` or `dns txt _dmarc.example.com`, and perform reverse
 lookup by entering an address such as `dns 1.1.1.1`. Results show the configured
@@ -252,6 +259,7 @@ identifier in Settings.
 - `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
 - `plugins/http-inspector`: bounded explicit HTTP HEAD requests with redirect and timing details
 - `plugins/id-generator`: secure local UUID, ULID, and Nano ID generation
+- `plugins/id-inspector`: local UUID and ULID validation, normalization, and timestamp decoding
 - `plugins/json-query`: local JSON value, child-key, and leaf-path queries
 - `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination

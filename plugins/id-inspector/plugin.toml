@@ -1,0 +1,10 @@
+id = "io.clipkeep.id-inspector"
+name = "Identifier Inspector"
+description = "Validate and explain UUID and ULID values, including embedded timestamps"
+icon = "number.square.fill"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-id-inspector"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

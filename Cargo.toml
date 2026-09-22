@@ -19,6 +19,7 @@ members = [
     "plugins/files",
     "plugins/http-inspector",
     "plugins/id-generator",
+    "plugins/id-inspector",
     "plugins/json-query",
     "plugins/jwt-inspector",
     "plugins/kill-process",
