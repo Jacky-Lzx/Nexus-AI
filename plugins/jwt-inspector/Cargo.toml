@@ -1,0 +1,12 @@
+[package]
+name = "clipkeep-plugin-jwt-inspector"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arboard = "3.6"
+base64 = "0.22"
+clipkeep-plugin-sdk = { path = "../../crates/clipkeep-plugin-sdk" }
+clipkeep-protocol.workspace = true
+serde_json.workspace = true

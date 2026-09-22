@@ -27,6 +27,7 @@ calendar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.calendar.clipkeepplugi
 clash_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.clash.clipkeepplugin"
 files_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.files.clipkeepplugin"
 id_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.id-generator.clipkeepplugin"
+jwt_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.jwt-inspector.clipkeepplugin"
 kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipkeepplugin"
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
@@ -77,6 +78,10 @@ install -d "$id_generator_plugin/Contents/MacOS" "$id_generator_plugin/Contents/
 install -m 755 target/release/clipkeep-plugin-id-generator "$id_generator_plugin/Contents/MacOS/clipkeep-plugin-id-generator"
 install -m 644 plugins/id-generator/plugin.toml "$id_generator_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-IdGenerator-Info.plist "$id_generator_plugin/Contents/Info.plist"
+install -d "$jwt_inspector_plugin/Contents/MacOS" "$jwt_inspector_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-jwt-inspector "$jwt_inspector_plugin/Contents/MacOS/clipkeep-plugin-jwt-inspector"
+install -m 644 plugins/jwt-inspector/plugin.toml "$jwt_inspector_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-JWTInspector-Info.plist "$jwt_inspector_plugin/Contents/Info.plist"
 install -d "$kill_process_plugin/Contents/MacOS" "$kill_process_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-kill-process "$kill_process_plugin/Contents/MacOS/clipkeep-plugin-kill-process"
 install -m 644 plugins/kill-process/plugin.toml "$kill_process_plugin/Contents/Resources/plugin.toml"
@@ -165,6 +170,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.id-generator \
         "$id_generator_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.jwt-inspector \
+        "$jwt_inspector_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.kill-process \
         "$kill_process_plugin"

@@ -30,6 +30,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   with unbiased system-secure randomness
 - Rolls dice, flips coins, samples integer ranges, picks options, and shuffles
   lists locally with unbiased system-secure randomness
+- Decodes JWT headers and payloads locally, formats their JSON, and reports
+  unverified time-claim status without implying signature validation
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -178,6 +180,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching
 - `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
 - `plugins/id-generator`: secure local UUID, ULID, and Nano ID generation
+- `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/password-generator`: secure local password and PIN generation
