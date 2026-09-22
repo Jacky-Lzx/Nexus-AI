@@ -36,6 +36,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   counts entirely offline
 - Tests Rust regular expressions locally with common flags, match positions,
   numbered and named capture groups, and bounded reports
+- Queries local JSON with JSON Pointer or dot/bracket paths, lists immediate
+  child keys, and enumerates bounded leaf-value paths
 - Inspects and normalizes URLs locally, including credentials, hosts, ports,
   decoded paths, duplicate query parameters, and fragments
 - Reads and searches upcoming EventKit calendar events, with a configurable
@@ -146,6 +148,10 @@ Reminder data is stored locally alongside the other Nexus application data.
 Open `Caffeinate`, choose an end time, and Nexus will keep both the display and Mac
 awake until then. Run `Decaffeinate` from the same plugin to end the session early.
 
+Query JSON locally with `jget user.name :: {"user":{"name":"Ada"}}`, list
+immediate children with `jkeys /user :: <json>`, or enumerate leaf values with
+`jpaths :: <json>`. Paths accept JSON Pointer as well as dot and array-index syntax.
+
 Open `Clash` to inspect and switch between Rule, Global, and Direct modes. Configure
 the HTTP `external-controller` address and optional `secret` in the Clash settings
 pane. Clash Verge Rev is detected through `/tmp/verge/verge-mihomo.sock` first;
@@ -186,6 +192,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching
 - `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
 - `plugins/id-generator`: secure local UUID, ULID, and Nano ID generation
+- `plugins/json-query`: local JSON value, child-key, and leaf-path queries
 - `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection
 - `plugins/kill-process`: process-name search and confirmed SIGTERM termination
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility

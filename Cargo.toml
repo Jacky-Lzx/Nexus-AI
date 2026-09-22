@@ -12,6 +12,7 @@ members = [
     "plugins/color-tools",
     "plugins/files",
     "plugins/id-generator",
+    "plugins/json-query",
     "plugins/jwt-inspector",
     "plugins/kill-process",
     "plugins/menu-bar",
