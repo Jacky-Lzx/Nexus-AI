@@ -28,6 +28,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   using the system secure random source
 - Generates strong, readable, or alphanumeric passwords and numeric PINs locally
   with unbiased system-secure randomness
+- Rolls dice, flips coins, samples integer ranges, picks options, and shuffles
+  lists locally with unbiased system-secure randomness
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -180,6 +182,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/password-generator`: secure local password and PIN generation
 - `plugins/quick-notes`: persistent, prefix-triggered local notes and snippets
+- `plugins/randomizer`: secure dice, coin, integer, choice, and shuffle tools
 - `plugins/reminders`: persistent reminders and background notification delivery
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands

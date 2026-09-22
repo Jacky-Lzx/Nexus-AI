@@ -31,6 +31,7 @@ kill_process_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.kill-process.clipk
 menu_bar_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.menu-bar.clipkeepplugin"
 password_generator_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.password-generator.clipkeepplugin"
 quick_notes_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.quick-notes.clipkeepplugin"
+randomizer_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.randomizer.clipkeepplugin"
 reminders_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.reminders.clipkeepplugin"
 system_commands_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-commands.clipkeepplugin"
 system_status_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.system-status.clipkeepplugin"
@@ -92,6 +93,10 @@ install -d "$quick_notes_plugin/Contents/MacOS" "$quick_notes_plugin/Contents/Re
 install -m 755 target/release/clipkeep-plugin-quick-notes "$quick_notes_plugin/Contents/MacOS/clipkeep-plugin-quick-notes"
 install -m 644 plugins/quick-notes/plugin.toml "$quick_notes_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-QuickNotes-Info.plist "$quick_notes_plugin/Contents/Info.plist"
+install -d "$randomizer_plugin/Contents/MacOS" "$randomizer_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-randomizer "$randomizer_plugin/Contents/MacOS/clipkeep-plugin-randomizer"
+install -m 644 plugins/randomizer/plugin.toml "$randomizer_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-Randomizer-Info.plist "$randomizer_plugin/Contents/Info.plist"
 install -d "$reminders_plugin/Contents/MacOS" "$reminders_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-reminders "$reminders_plugin/Contents/MacOS/clipkeep-plugin-reminders"
 install -m 644 plugins/reminders/plugin.toml "$reminders_plugin/Contents/Resources/plugin.toml"
@@ -172,6 +177,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.quick-notes \
         "$quick_notes_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.randomizer \
+        "$randomizer_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.reminders \
         "$reminders_plugin"

@@ -16,6 +16,7 @@ members = [
     "plugins/menu-bar",
     "plugins/password-generator",
     "plugins/quick-notes",
+    "plugins/randomizer",
     "plugins/reminders",
     "plugins/system-commands",
     "plugins/system-status",
