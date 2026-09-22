@@ -187,6 +187,11 @@ with `dns mx example.com` or `dns txt _dmarc.example.com`, and perform reverse
 lookup by entering an address such as `dns 1.1.1.1`. Results show the configured
 resolver, response status, TTL, and query time.
 
+Inspect a website without downloading its response body with `http example.com`.
+The result follows up to five HTTP/HTTPS redirects and reports the final status,
+protocol, remote peer, content type, header size, certificate verification, and
+DNS/connect/TLS/first-byte/total timings. URLs containing credentials are rejected.
+
 Convert integers with `base 0xff`, `base 16:deadbeef to 2`, or
 `base z from 36 to decimal`. Without a target, Nexus shows binary, octal,
 decimal, hexadecimal, and base-36 results together.
@@ -210,9 +215,11 @@ Encrypted history is stored in the platform application-data directory:
 ## Privacy note
 
 Clipboard history can contain passwords, images, files, and other sensitive
-content. Nexus never sends data over the network. History is encrypted at
-rest, concealed/transient pasteboard data is ignored by default, and additional
-applications can be excluded by bundle identifier in Settings.
+content. Nexus never uploads clipboard history. Network access occurs only for
+explicit features such as DNS lookup, HTTP inspection, Clash control, and web
+search. History is encrypted at rest, concealed/transient pasteboard data is
+ignored by default, and additional applications can be excluded by bundle
+identifier in Settings.
 
 ## Architecture
 
@@ -235,6 +242,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching
 - `plugins/files`: Spotlight-backed file and folder search with open and Finder reveal actions
+- `plugins/http-inspector`: bounded explicit HTTP HEAD requests with redirect and timing details
 - `plugins/id-generator`: secure local UUID, ULID, and Nano ID generation
 - `plugins/json-query`: local JSON value, child-key, and leaf-path queries
 - `plugins/jwt-inspector`: local JWT header, payload, and time-claim inspection

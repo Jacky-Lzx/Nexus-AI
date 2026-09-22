@@ -16,6 +16,7 @@ members = [
     "plugins/dns-lookup",
     "plugins/file-checksum",
     "plugins/files",
+    "plugins/http-inspector",
     "plugins/id-generator",
     "plugins/json-query",
     "plugins/jwt-inspector",

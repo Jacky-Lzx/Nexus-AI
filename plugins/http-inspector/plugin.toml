@@ -1,0 +1,10 @@
+id = "io.clipkeep.http-inspector"
+name = "HTTP Inspector"
+description = "Inspect an explicit URL's HTTP status, redirects, protocol, peer, and timings"
+icon = "network.badge.shield.half.filled"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-http-inspector"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["network.http", "clipboard.write"]
