@@ -1,0 +1,10 @@
+id = "io.clipkeep.date-calculator"
+name = "Date Calculator"
+description = "Add, subtract, inspect, and compare Gregorian dates locally"
+icon = "calendar.badge.clock"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-date-calculator"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

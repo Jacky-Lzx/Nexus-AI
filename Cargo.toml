@@ -11,6 +11,7 @@ members = [
     "plugins/clash",
     "plugins/clipboard",
     "plugins/color-tools",
+    "plugins/date-calculator",
     "plugins/files",
     "plugins/id-generator",
     "plugins/json-query",

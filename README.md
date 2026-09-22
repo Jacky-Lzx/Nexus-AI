@@ -21,6 +21,10 @@ plugin protocol remains portable to future Windows and Linux frontends.
   Base64 encoding, JSON formatting, SHA-256, trimming, and text statistics
 - Shows local and international times using the macOS time-zone database, and
   creates or interprets Unix second and millisecond timestamps
+- Adds or subtracts calendar days, weeks, months, years, and weekdays, and
+  compares two ISO dates with explicit weekend-only business-day semantics;
+  try `datecalc 2026-01-31 + 1 month`, `datecalc today + 10 weekdays`, or
+  `datecalc diff 2026-01-01 2026-12-31`
 - Reads local battery, disk, memory, CPU, uptime, and network status without
   contacting an external service
 - Saves searchable local quick notes with pin, copy, paste, and confirmed-delete
@@ -194,6 +198,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/caffeinate`: timed display and system sleep prevention with cancellation
 - `plugins/clipboard`: clipboard capture, search, persistence, and actions
 - `plugins/color-tools`: local CSS color parsing and format conversion
+- `plugins/date-calculator`: local Gregorian date arithmetic and differences
 - `plugins/calculator`: expression parser and result copy/paste actions
 - `plugins/calendar`: read-only EventKit upcoming-event search
 - `plugins/clash`: Clash/Mihomo External Controller mode status and switching
