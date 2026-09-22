@@ -257,6 +257,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-text-tools"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "base64",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "ring",
+ "serde_json",
+]
+
+[[package]]
 name = "clipkeep-plugin-unit-converter"
 version = "0.1.0"
 dependencies = [

@@ -15,6 +15,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
   common functions, then copies or pastes the result
 - Converts length, mass, temperature, time, and data units with queries such as
   `10 km to mi`, then copies or pastes the result
+- Transforms local text with explicit commands for case conversion, URL and
+  Base64 encoding, JSON formatting, SHA-256, trimming, and text statistics
 - Reads and searches upcoming EventKit calendar events, with a configurable
   1–90 day range and on-demand calendar permission
 - Runs common macOS commands including Lock Screen, display sleep, screen saver,
@@ -166,6 +168,7 @@ applications can be excluded by bundle identifier in Settings.
 - `plugins/reminders`: persistent reminders and background notification delivery
 - `plugins/system-commands`: curated macOS system actions with confirmation for
   disruptive commands
+- `plugins/text-tools`: local text transformations with copy/paste actions
 - `plugins/unit-converter`: natural unit conversion with copy/paste actions
 - `plugins/web-search`: prefix-triggered searches opened in the default browser
 
