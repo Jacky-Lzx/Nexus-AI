@@ -173,9 +173,10 @@ code-signing identity in Xcode or Keychain Access, then package the app normally
 ```
 
 The private key remains in the login keychain. The packaging script automatically
-uses the identity named `ClipKeep Local Development` to sign the app and its Rust
-plugin executables. Grant Accessibility permission once more after switching from
-the old ad-hoc build; subsequent signed builds retain the same designated requirement.
+uses the identity named `Nexus Development` to sign the app and its plugins. If
+the identity is unavailable, packaging stops instead of producing an ad-hoc build.
+Grant Accessibility permission once more after switching from the old ad-hoc
+build; subsequent signed builds retain the same designated requirement.
 
 To use an Apple Development or Developer ID identity instead, set
 `CLIPKEEP_CODESIGN_IDENTITY` to its certificate name when packaging.

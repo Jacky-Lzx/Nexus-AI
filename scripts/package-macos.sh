@@ -4,6 +4,15 @@ set -eu
 project_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 bundle_dir="$project_dir/dist/Nexus.app"
 legacy_bundle_dir="$project_dir/dist/ClipKeep.app"
+signing_identity=${CLIPKEEP_CODESIGN_IDENTITY:-}
+if [ -z "$signing_identity" ]; then
+    signing_identity=$(security find-identity -v -p codesigning 2>/dev/null \
+        | awk -F '"' '$2 == "Nexus Development" { print $2; exit }')
+fi
+if [ -z "$signing_identity" ]; then
+    echo "error: Nexus Development signing identity not found; set CLIPKEEP_CODESIGN_IDENTITY to override" >&2
+    exit 1
+fi
 
 if [ ! -e "$bundle_dir" ] && [ -d "$legacy_bundle_dir" ]; then
     mv "$legacy_bundle_dir" "$bundle_dir"
@@ -287,11 +296,6 @@ install -m 644 packaging/macos/Info.plist "$bundle_dir/Contents/Info.plist"
 
 python3 "$project_dir/scripts/package-plugin.py" "$project_dir/plugins/ocr" --output "$bundle_dir/Contents/PlugIns"
 
-signing_identity=${CLIPKEEP_CODESIGN_IDENTITY:-}
-if [ -z "$signing_identity" ]; then
-    signing_identity=$(security find-identity -v -p codesigning 2>/dev/null \
-        | awk -F '"' '/"ClipKeep Local Development"/ { print $2; exit }')
-fi
 if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.applications \
@@ -455,9 +459,6 @@ if [ -n "$signing_identity" ]; then
         --identifier io.clipkeep.ClipKeep "$bundle_dir"
     codesign --verify --deep --strict "$bundle_dir"
     echo "Signed with $signing_identity"
-else
-    echo "warning: no stable signing identity found; Accessibility permission will reset after rebuilds" >&2
-    echo "Create a development signing identity, or set CLIPKEEP_CODESIGN_IDENTITY." >&2
 fi
 
 echo "Created $bundle_dir"
