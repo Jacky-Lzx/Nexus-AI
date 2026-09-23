@@ -214,13 +214,8 @@ fn scan_applications() -> Vec<Application> {
         // The Rust plugin loop does not drain Cocoa autoreleased objects. Release
         // temporary localization objects after every scan, including the first one.
         objc2::rc::autoreleasepool(|_| {
-            let mut roots = vec![
-                PathBuf::from("/Applications"),
-                PathBuf::from("/System/Applications"),
-            ];
-            if let Some(user_dirs) = UserDirs::new() {
-                roots.push(user_dirs.home_dir().join("Applications"));
-            }
+            let user_home = UserDirs::new().map(|user_dirs| user_dirs.home_dir().to_owned());
+            let roots = macos_application_roots(user_home.as_deref());
             let mut applications = Vec::new();
             for root in roots {
                 scan_macos_directory(&root, 3, &mut applications);
@@ -234,6 +229,20 @@ fn scan_applications() -> Vec<Application> {
     {
         Vec::new()
     }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_application_roots(user_home: Option<&Path>) -> Vec<PathBuf> {
+    let mut roots = vec![
+        PathBuf::from("/Applications"),
+        PathBuf::from("/System/Applications"),
+        // macOS keeps some user-facing utilities here, including Keychain Access.
+        PathBuf::from("/System/Library/CoreServices/Applications"),
+    ];
+    if let Some(user_home) = user_home {
+        roots.push(user_home.join("Applications"));
+    }
+    roots
 }
 
 #[cfg(target_os = "macos")]
@@ -593,5 +602,14 @@ mod tests {
             ["zh-Hans-CN", "zh-Hans", "zh"]
         );
         assert_eq!(localization_directory_candidates("en_US"), ["en-US", "en"]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn application_roots_include_core_services_utilities() {
+        let roots = macos_application_roots(Some(Path::new("/Users/example")));
+
+        assert!(roots.contains(&PathBuf::from("/System/Library/CoreServices/Applications")));
+        assert!(roots.contains(&PathBuf::from("/Users/example/Applications")));
     }
 }
