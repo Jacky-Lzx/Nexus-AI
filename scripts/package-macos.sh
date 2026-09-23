@@ -66,6 +66,7 @@ text_diff_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-diff.clipkeepplu
 text_tools_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.text-tools.clipkeepplugin"
 time_date_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.time-date.clipkeepplugin"
 unicode_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unicode-inspector.clipkeepplugin"
+unicode_normalization_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unicode-normalization.clipkeepplugin"
 unit_converter_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.unit-converter.clipkeepplugin"
 url_inspector_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.url-inspector.clipkeepplugin"
 web_search_plugin="$bundle_dir/Contents/PlugIns/io.clipkeep.web-search.clipkeepplugin"
@@ -263,6 +264,10 @@ install -d "$unicode_inspector_plugin/Contents/MacOS" "$unicode_inspector_plugin
 install -m 755 target/release/clipkeep-plugin-unicode-inspector "$unicode_inspector_plugin/Contents/MacOS/clipkeep-plugin-unicode-inspector"
 install -m 644 plugins/unicode-inspector/plugin.toml "$unicode_inspector_plugin/Contents/Resources/plugin.toml"
 install -m 644 packaging/macos/Plugin-UnicodeInspector-Info.plist "$unicode_inspector_plugin/Contents/Info.plist"
+install -d "$unicode_normalization_plugin/Contents/MacOS" "$unicode_normalization_plugin/Contents/Resources"
+install -m 755 target/release/clipkeep-plugin-unicode-normalization "$unicode_normalization_plugin/Contents/MacOS/clipkeep-plugin-unicode-normalization"
+install -m 644 plugins/unicode-normalization/plugin.toml "$unicode_normalization_plugin/Contents/Resources/plugin.toml"
+install -m 644 packaging/macos/Plugin-UnicodeNormalization-Info.plist "$unicode_normalization_plugin/Contents/Info.plist"
 install -d "$unit_converter_plugin/Contents/MacOS" "$unit_converter_plugin/Contents/Resources"
 install -m 755 target/release/clipkeep-plugin-unit-converter "$unit_converter_plugin/Contents/MacOS/clipkeep-plugin-unit-converter"
 install -m 644 plugins/unit-converter/plugin.toml "$unit_converter_plugin/Contents/Resources/plugin.toml"
@@ -432,6 +437,9 @@ if [ -n "$signing_identity" ]; then
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.unicode-inspector \
         "$unicode_inspector_plugin"
+    codesign --force --sign "$signing_identity" --timestamp=none \
+        --identifier io.clipkeep.ClipKeep.unicode-normalization \
+        "$unicode_normalization_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep.unit-converter \
         "$unit_converter_plugin"

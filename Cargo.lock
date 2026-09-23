@@ -626,6 +626,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "clipkeep-plugin-unicode-normalization"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "clipkeep-plugin-sdk",
+ "clipkeep-protocol",
+ "objc2",
+ "objc2-foundation",
+]
+
+[[package]]
 name = "clipkeep-plugin-unit-converter"
 version = "0.1.0"
 dependencies = [

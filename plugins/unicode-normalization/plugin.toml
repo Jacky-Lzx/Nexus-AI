@@ -1,0 +1,10 @@
+id = "io.clipkeep.unicode-normalization"
+name = "Unicode Normalization"
+description = "Normalize, compare, and inspect Unicode text using macOS Foundation"
+icon = "character.book.closed"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-unicode-normalization"
+default_enabled = true
+include_in_global_search = true
+capabilities = ["clipboard.write"]

@@ -31,6 +31,9 @@ plugin protocol remains portable to future Windows and Linux frontends.
   Data URIs with media-type, parameter, and charset validation
 - Inspects Unicode scalars, UTF-8 and UTF-16 encodings, escapes, and invisible
   controls, and decodes sequences such as `unicode U+1F468 U+200D U+1F4BB`
+- Normalizes text to NFC, NFD, NFKC, or NFKD with macOS Foundation, strips
+  diacritics, reports current forms, and compares canonical and compatibility
+  equivalence
 - Shows local and international times using the macOS time-zone database, and
   creates or interprets Unix second and millisecond timestamps
 - Adds or subtracts calendar days, weeks, months, years, and weekdays, and
@@ -290,6 +293,13 @@ with `pathrelative /Users/alice/work :: /Users/alice/docs/readme.md`. Use
 `pathjoin <base> :: <relative-child>` and `pathext md :: <path>` for composition
 and extension replacement; `pathext none` removes the final extension.
 
+Normalize Unicode text with `nfd :: café` or `unorm nfkc :: ① ﬁ`, inspect all
+four forms with `normcheck :: <text>`, and remove accents with
+`stripdiacritics :: Crème Brûlée`. Compare exact, canonical, and compatibility
+equivalence using `unicodeeq é :: é` (the right side uses U+0301);
+transformations run locally through macOS Foundation and preserve the exact
+result for copy or paste actions.
+
 Inspect an existing identifier with `idinfo 550e8400-e29b-41d4-a716-446655440000`,
 or force its type with `uuidinfo` or `ulidinfo`. UUIDs are normalized and decoded
 by version and variant; UUID v1/v6/v7 and ULID values expose their embedded UTC
@@ -391,6 +401,7 @@ identifier in Settings.
 - `plugins/text-tools`: local text transformations with copy/paste actions
 - `plugins/time-date`: world clocks and Unix timestamp conversion
 - `plugins/unicode-inspector`: Unicode scalar, encoding, and escape inspection
+- `plugins/unicode-normalization`: local Foundation-backed Unicode normalization and comparison
 - `plugins/unit-converter`: natural unit conversion with copy/paste actions
 - `plugins/url-inspector`: local URL normalization and component inspection
 - `plugins/web-search`: prefix-triggered searches opened in the default browser

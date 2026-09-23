@@ -51,6 +51,7 @@ members = [
     "plugins/text-tools",
     "plugins/time-date",
     "plugins/unicode-inspector",
+    "plugins/unicode-normalization",
     "plugins/unit-converter",
     "plugins/url-inspector",
     "plugins/web-search",
