@@ -199,8 +199,9 @@ the content and a future date and time. Nexus requests notification permission o
 the first reminder and continues checking reminders while it runs in the background.
 Reminder data is stored locally alongside the other Nexus application data.
 
-Open `Caffeinate`, choose an end time, and Nexus will keep both the display and Mac
-awake until then. Run `Decaffeinate` from the same plugin to end the session early.
+Open `Caffeinate` and leave both duration fields empty to keep the display and Mac
+awake indefinitely, or enter hours and/or minutes for a timed session. Run
+`Decaffeinate` from the same plugin to end the session early.
 
 Query JSON locally with `jget user.name :: {"user":{"name":"Ada"}}`, list
 immediate children with `jkeys /user :: <json>`, or enumerate leaf values with
@@ -561,13 +562,14 @@ Each `ActionInputField` declares a unique `id`, `label`, optional `placeholder`,
 `kind` (`text` or `integer`), `required`, and optional integer `minimum`/`maximum`.
 The host validates the fields and passes a JSON object **encoded as a string** in
 `HostRequest::Execute.input`; implement the SDK's `execute_with_input` to consume
-it. Optional empty integer fields become `0`; empty text fields become `""`.
+it. Optional empty integer fields are omitted; empty text fields become `""`.
 Plugins must also validate input themselves and report errors without starting an
 invalid operation. Existing actions without fields keep their normal behavior.
 
 For example, Caffeinate returns `hours` (label `hour`, integer 0–8760) and `minutes`
 (label `min`, integer 0–59). Type `caffeinate`, Tab, `1`, Tab, `30`, Return to start
-90 minutes. The plugin receives `{"hours":1,"minutes":30}`. A zero total is rejected.
+90 minutes. The plugin receives `{"hours":1,"minutes":30}`. Leave both fields
+empty for an indefinite session; an explicit zero total is rejected.
 See `plugins/caffeinate/src/main.rs` for the complete reusable action declaration
 and execution handler; no plugin-specific host UI is needed.
 

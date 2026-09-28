@@ -24,17 +24,18 @@ struct CaffeinatePlugin {
 
 struct ActiveCaffeination {
     child: Child,
-    ends_at: SystemTime,
+    ends_at: Option<SystemTime>,
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct CaffeinateInput {
     #[serde(default)]
-    hours: u64,
+    hours: Option<u64>,
     #[serde(default)]
-    minutes: u64,
+    minutes: Option<u64>,
     #[serde(default)]
-    seconds: u64,
+    seconds: Option<u64>,
 }
 
 impl CaffeinatePlugin {
@@ -51,19 +52,19 @@ impl CaffeinatePlugin {
 
     fn start(&mut self, input: &str) -> Result<Option<String>, String> {
         let duration_seconds = parse_duration(input)?;
-        if duration_seconds == 0 {
+        if duration_seconds == Some(0) {
             return Err("caffeinate duration must be greater than zero".into());
         }
         self.refresh();
         self.stop()?;
-        let child = Command::new("/usr/bin/caffeinate")
-            .args([
-                "-di",
-                "-t",
-                &duration_seconds.to_string(),
-                "-w",
-                &std::process::id().to_string(),
-            ])
+        let mut command = Command::new("/usr/bin/caffeinate");
+        command.arg("-di");
+        if let Some(seconds) = duration_seconds {
+            command.arg("-t").arg(seconds.to_string());
+        }
+        let child = command
+            .arg("-w")
+            .arg(std::process::id().to_string())
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -71,12 +72,13 @@ impl CaffeinatePlugin {
             .map_err(|error| format!("could not start caffeinate: {error}"))?;
         self.active = Some(ActiveCaffeination {
             child,
-            ends_at: SystemTime::now() + Duration::from_secs(duration_seconds),
+            ends_at: duration_seconds
+                .map(|seconds| SystemTime::now() + Duration::from_secs(seconds)),
         });
-        Ok(Some(format!(
-            "Keeping this Mac awake for {}",
-            format_duration(duration_seconds)
-        )))
+        Ok(Some(match duration_seconds {
+            Some(seconds) => format!("Keeping this Mac awake for {}", format_duration(seconds)),
+            None => "Keeping this Mac awake indefinitely".into(),
+        }))
     }
 
     fn stop(&mut self) -> Result<Option<String>, String> {
@@ -170,33 +172,39 @@ impl Plugin for CaffeinatePlugin {
         let Some(active) = self.active.as_ref() else {
             return Vec::new();
         };
-        let countdown_until = active
-            .ends_at
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
+        let mut metadata = BTreeMap::from([("symbol_name".into(), "cup.and.saucer.fill".into())]);
+        if let Some(ends_at) = active.ends_at {
+            let countdown_until = ends_at
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            metadata.insert("countdown_until".into(), countdown_until.to_string());
+        }
         vec![PluginPresentationItem {
             id: "caffeinate-status".into(),
             title: "Caffeinated".into(),
-            value: format!("{} remaining", remaining_duration(active)),
+            value: active
+                .ends_at
+                .map(|_| format!("{} remaining", remaining_duration(active)))
+                .unwrap_or_else(|| "Indefinitely".into()),
             style: PresentationStyle::Success,
-            metadata: BTreeMap::from([
-                ("countdown_until".into(), countdown_until.to_string()),
-                ("symbol_name".into(), "cup.and.saucer.fill".into()),
-            ]),
+            metadata,
         }]
     }
 }
 
 fn start_result(active: Option<&ActiveCaffeination>) -> SearchResult {
     let subtitle = active
-        .map(|active| {
-            format!(
+        .map(|active| match active.ends_at {
+            Some(_) => format!(
                 "Active · {} remaining · choose a new end time",
                 remaining_duration(active)
-            )
+            ),
+            None => "Active · no end time · choose a duration".into(),
         })
-        .unwrap_or_else(|| "Keep the display and Mac awake until a chosen time".into());
+        .unwrap_or_else(|| {
+            "Keep the display and Mac awake indefinitely or for a chosen time".into()
+        });
     SearchResult {
         plugin_id: PLUGIN_ID.into(),
         id: "caffeinate:start".into(),
@@ -222,7 +230,10 @@ fn start_result(active: Option<&ActiveCaffeination>) -> SearchResult {
 }
 
 fn stop_result(active: &ActiveCaffeination) -> SearchResult {
-    let subtitle = format!("Cancel the current {} session", remaining_duration(active));
+    let subtitle = match active.ends_at {
+        Some(_) => format!("Cancel the current {} session", remaining_duration(active)),
+        None => "Cancel the current indefinite session".into(),
+    };
     SearchResult {
         plugin_id: PLUGIN_ID.into(),
         id: "caffeinate:stop".into(),
@@ -256,22 +267,27 @@ fn duration_field(id: &str, label: &str, maximum: i64) -> ActionInputField {
     }
 }
 
-fn parse_duration(input: &str) -> Result<u64, String> {
+fn parse_duration(input: &str) -> Result<Option<u64>, String> {
     let input: CaffeinateInput =
         serde_json::from_str(input).map_err(|error| format!("invalid duration: {error}"))?;
-    if input.hours > 8_760 || input.minutes > 59 || input.seconds > 59 {
+    if input.hours.is_none() && input.minutes.is_none() && input.seconds.is_none() {
+        return Ok(None);
+    }
+    let hours = input.hours.unwrap_or(0);
+    let minutes = input.minutes.unwrap_or(0);
+    let seconds = input.seconds.unwrap_or(0);
+    if hours > 8_760 || minutes > 59 || seconds > 59 {
         return Err("duration must use hours 0–8760 and minutes/seconds 0–59".into());
     }
-    input
-        .hours
+    hours
         .checked_mul(3_600)
         .and_then(|hours| {
-            input
-                .minutes
+            minutes
                 .checked_mul(60)
                 .and_then(|minutes| hours.checked_add(minutes))
         })
-        .and_then(|duration| duration.checked_add(input.seconds))
+        .and_then(|duration| duration.checked_add(seconds))
+        .map(Some)
         .ok_or_else(|| "caffeinate duration is too large".into())
 }
 
@@ -283,6 +299,7 @@ fn remaining_duration(active: &ActiveCaffeination) -> String {
     format_duration(
         active
             .ends_at
+            .expect("timed caffeination has an end time")
             .duration_since(SystemTime::now())
             .unwrap_or_default()
             .as_secs(),
@@ -312,19 +329,29 @@ mod tests {
         assert_eq!((&*fields[1].id, &*fields[1].label), ("minutes", "min"));
         assert_eq!(
             parse_duration(r#"{"hours":1,"minutes":30}"#).unwrap(),
-            5_400
+            Some(5_400)
         );
-        assert_eq!(parse_duration(r#"{"minutes":15}"#).unwrap(), 900);
+        assert_eq!(parse_duration(r#"{"minutes":15}"#).unwrap(), Some(900));
+        assert_eq!(parse_duration("{}").unwrap(), None);
+        assert_eq!(
+            parse_duration(r#"{"hours":null,"minutes":null}"#).unwrap(),
+            None
+        );
         for invalid in [
             r#"{"hours":8761}"#,
             r#"{"minutes":60}"#,
             r#"{"hours":-1}"#,
             r#"{"minutes":1.5}"#,
             r#"{"hours":"one"}"#,
+            r#"{"duration":1}"#,
         ] {
             assert!(parse_duration(invalid).is_err(), "{invalid}");
         }
-        assert!(CaffeinatePlugin::default().start("{}").is_err());
+        assert!(
+            CaffeinatePlugin::default()
+                .start(r#"{"hours":0,"minutes":0}"#)
+                .is_err()
+        );
     }
 
     #[test]
@@ -350,6 +377,34 @@ mod tests {
             .start(r#"{"hours":0,"minutes":0,"seconds":5}"#)
             .unwrap();
         assert!(plugin.active.is_some());
+        plugin.stop().unwrap();
+        assert!(plugin.active.is_none());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn starts_and_stops_indefinite_caffeinate() {
+        let mut plugin = CaffeinatePlugin::default();
+        assert_eq!(
+            plugin.start("{}").unwrap().as_deref(),
+            Some("Keeping this Mac awake indefinitely")
+        );
+        assert!(
+            plugin
+                .active
+                .as_mut()
+                .unwrap()
+                .child
+                .try_wait()
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(plugin.presentation_items()[0].value, "Indefinitely");
+        assert!(
+            !plugin.presentation_items()[0]
+                .metadata
+                .contains_key("countdown_until")
+        );
         plugin.stop().unwrap();
         assert!(plugin.active.is_none());
     }

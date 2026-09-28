@@ -886,7 +886,9 @@ final class LauncherPanelController: NSWindowController,
                     window?.makeFirstResponder(field)
                     return
                 }
-                values[definition.id] = definition.kind == .integer ? 0 : ""
+                if definition.kind == .text {
+                    values[definition.id] = ""
+                }
                 continue
             }
             switch definition.kind {
