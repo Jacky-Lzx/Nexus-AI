@@ -5,14 +5,14 @@ import Foundation
 enum PluginHostAction: String {
     case media = "system.media"
     case editText = "text.edit"
-    case reminderForm = "form.reminder"
+    case notificationPermission = "notifications.authorize"
     case menuPress = "menu.press"
 
     var capability: String {
         switch self {
         case .media: "system.control"
         case .editText: "clipboard.write"
-        case .reminderForm: "notifications"
+        case .notificationPermission: "notifications"
         case .menuPress: "accessibility.press"
         }
     }
@@ -23,7 +23,6 @@ enum PluginHostAction: String {
         let legacy: Self?
         switch (descriptor.id, actionId) {
         case ("io.clipkeep.clipboard", "edit"): legacy = .editText
-        case ("io.clipkeep.reminders", "create"): legacy = .reminderForm
         case ("io.clipkeep.menu-bar", "press"): legacy = .menuPress
         case ("io.clipkeep.system-commands", "run")
             where SystemMediaController.command(for: result.metadata["command"] ?? "") != nil:

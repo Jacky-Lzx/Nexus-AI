@@ -1,6 +1,8 @@
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, LocalResult, NaiveDateTime, NaiveTime, TimeZone};
 use clipkeep_plugin_sdk::{Plugin, run_plugin};
-use clipkeep_protocol::{PluginNotification, ResultAction, ResultKind, SearchResult};
+use clipkeep_protocol::{
+    ActionInputField, ActionInputKind, PluginNotification, ResultAction, ResultKind, SearchResult,
+};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -28,7 +30,7 @@ struct Reminder {
 #[derive(Deserialize)]
 struct NewReminder {
     content: String,
-    due_at: i64,
+    when: String,
 }
 
 struct RemindersPlugin {
@@ -85,15 +87,14 @@ impl RemindersPlugin {
         if content.is_empty() {
             return Err("reminder content cannot be empty".into());
         }
-        if reminder.due_at <= now_seconds() {
-            return Err("reminder time must be in the future".into());
-        }
+        let now = Local::now();
+        let due_at = parse_due_time(&reminder.when, now)?;
         self.reminders.push(Reminder {
             id: self.next_id,
             content: content.into(),
-            due_at: reminder.due_at,
+            due_at,
             delivered: false,
-            created_at: now_seconds(),
+            created_at: now.timestamp(),
         });
         self.next_id += 1;
         self.reminders.sort_by_key(|item| item.due_at);
@@ -190,15 +191,19 @@ fn new_reminder_result() -> SearchResult {
     SearchResult {
         plugin_id: PLUGIN_ID.into(),
         id: "reminder:new".into(),
-        title: "Add Reminder".into(),
-        subtitle: "Choose the reminder content and time".into(),
-        preview: "Create a reminder".into(),
+        title: "Reminder".into(),
+        subtitle: "Enter a message and when to be reminded".into(),
+        preview:
+            "Create a reminder: message, then when (15m, 2h, tomorrow 09:00, or YYYY-MM-DD HH:MM)"
+                .into(),
         kind: ResultKind::Command,
         score: 4_000.0,
         metadata: BTreeMap::from([
-            ("input_form".into(), "reminder".into()),
-            ("host_action.create".into(), "form.reminder".into()),
             ("symbol_name".into(), "bell.badge".into()),
+            (
+                "host_action.create".into(),
+                "notifications.authorize".into(),
+            ),
         ]),
         actions: vec![ResultAction {
             id: "create".into(),
@@ -207,9 +212,74 @@ fn new_reminder_result() -> SearchResult {
             default: true,
             closes_window: false,
             paste_to_previous: false,
-            input_fields: Vec::new(),
+            input_fields: vec![
+                ActionInputField {
+                    id: "content".into(),
+                    label: "message".into(),
+                    placeholder: "Message".into(),
+                    kind: ActionInputKind::Text,
+                    required: true,
+                    minimum: None,
+                    maximum: None,
+                },
+                ActionInputField {
+                    id: "when".into(),
+                    label: "when".into(),
+                    placeholder: "15m / tomorrow 09:00".into(),
+                    kind: ActionInputKind::Text,
+                    required: true,
+                    minimum: None,
+                    maximum: None,
+                },
+            ],
         }],
     }
+}
+
+fn parse_due_time(input: &str, now: DateTime<Local>) -> Result<i64, String> {
+    let value = input.trim();
+    let invalid = || "Use 15m, 2h, tomorrow 09:00, or YYYY-MM-DD HH:MM".to_string();
+
+    let relative = value
+        .strip_suffix('m')
+        .map(|count| (count, 60_i64))
+        .or_else(|| value.strip_suffix('h').map(|count| (count, 3_600)))
+        .or_else(|| value.strip_suffix('d').map(|count| (count, 86_400)));
+    let due = if let Some((count, unit_seconds)) = relative {
+        let seconds = count
+            .parse::<i64>()
+            .ok()
+            .filter(|count| *count > 0)
+            .and_then(|count| count.checked_mul(unit_seconds))
+            .ok_or_else(invalid)?;
+        now.timestamp().checked_add(seconds).ok_or_else(invalid)?
+    } else {
+        let lower = value.to_ascii_lowercase();
+        let tomorrow_time = lower
+            .strip_prefix("tomorrow ")
+            .or_else(|| value.strip_prefix("明天 "));
+        let naive = if let Some(time) = tomorrow_time {
+            let time = NaiveTime::parse_from_str(time, "%H:%M").map_err(|_| invalid())?;
+            let date = now.date_naive().succ_opt().ok_or_else(invalid)?;
+            date.and_time(time)
+        } else {
+            NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M").map_err(|_| invalid())?
+        };
+        match Local.from_local_datetime(&naive) {
+            LocalResult::Single(due) => due.timestamp(),
+            LocalResult::Ambiguous(first, second) => [first, second]
+                .into_iter()
+                .map(|time| time.timestamp())
+                .filter(|time| *time > now.timestamp())
+                .min()
+                .ok_or_else(|| "Reminder time must be in the future".to_string())?,
+            LocalResult::None => return Err("That local time does not exist".into()),
+        }
+    };
+    if due <= now.timestamp() {
+        return Err("Reminder time must be in the future".into());
+    }
+    Ok(due)
 }
 
 fn reminder_result(reminder: &Reminder) -> SearchResult {
@@ -269,7 +339,7 @@ mod tests {
         let mut plugin = test_plugin();
         let input = serde_json::json!({
             "content": "Call Alice",
-            "due_at": now_seconds() + 3_600,
+            "when": "2h",
         });
         plugin
             .execute_with_input("reminder:new", "create", Some(&input.to_string()))
@@ -277,7 +347,69 @@ mod tests {
         let results = plugin.search("Alice", 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "Call Alice");
+        assert_eq!(
+            plugin.reminders[0].due_at - plugin.reminders[0].created_at,
+            7_200
+        );
+        let command = plugin.search("reminder", 10).unwrap().remove(0);
+        assert_eq!(command.title, "Reminder");
+        assert_eq!(command.actions[0].input_fields.len(), 2);
+        assert_eq!(command.actions[0].input_fields[0].id, "content");
+        assert_eq!(command.actions[0].input_fields[1].id, "when");
+        assert_eq!(
+            command.metadata["host_action.create"],
+            "notifications.authorize"
+        );
+        let reloaded = RemindersPlugin::from_path(plugin.storage_path.clone());
+        assert_eq!(reloaded.reminders[0].content, "Call Alice");
         let _ = fs::remove_file(plugin.storage_path);
+    }
+
+    #[test]
+    fn parses_relative_and_local_times() {
+        let now = Local::now();
+        assert_eq!(parse_due_time("15m", now).unwrap(), now.timestamp() + 900);
+        assert_eq!(parse_due_time("2h", now).unwrap(), now.timestamp() + 7_200);
+        assert_eq!(parse_due_time("1d", now).unwrap(), now.timestamp() + 86_400);
+        let tomorrow = now.date_naive().succ_opt().unwrap();
+        let expected = Local
+            .from_local_datetime(&tomorrow.and_hms_opt(9, 0, 0).unwrap())
+            .earliest()
+            .unwrap()
+            .timestamp();
+        assert_eq!(parse_due_time("明天 09:00", now).unwrap(), expected);
+        assert_eq!(parse_due_time("tomorrow 09:00", now).unwrap(), expected);
+        let future = Local
+            .with_ymd_and_hms(2099, 1, 2, 10, 30, 0)
+            .single()
+            .unwrap()
+            .timestamp();
+        assert_eq!(parse_due_time("2099-01-02 10:30", now).unwrap(), future);
+    }
+
+    #[test]
+    fn rejects_bad_or_past_times_without_saving() {
+        let now = Local::now();
+        for input in [
+            "",
+            "0m",
+            "-2h",
+            "999999999999999999999d",
+            "next Tuesday",
+            "明天 25:00",
+        ] {
+            assert!(parse_due_time(input, now).is_err(), "{input}");
+        }
+        assert!(parse_due_time("2000-01-01 09:00", now).is_err());
+        let mut plugin = test_plugin();
+        let input = serde_json::json!({"content": "Invalid", "when": "0m"});
+        assert!(
+            plugin
+                .execute_with_input("reminder:new", "create", Some(&input.to_string()))
+                .is_err()
+        );
+        assert!(plugin.reminders.is_empty());
+        assert!(!plugin.storage_path.exists());
     }
 
     #[test]

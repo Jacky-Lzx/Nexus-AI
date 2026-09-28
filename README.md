@@ -123,7 +123,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Escape hides the palette and restores focus to the previously active application
 - Choosing a clipboard entry restores the previous application and pastes it directly
 - Plugins keep running while the window is hidden
-- Persistent reminders with a native content/time form and macOS notifications
+- Persistent reminders with inline message/time arguments and macOS notifications
 - Discovers versioned plugin bundles from the app bundle and the user plugin
   directory, with manifest validation, per-plugin logs, search timeouts, and
   bounded automatic restart after a crash
@@ -194,9 +194,12 @@ kept out of it and remains available through its shortcut or the existing
 its plugin processes. Use
 **Quit** in the bottom action bar to stop Nexus completely.
 
-Open the `Reminders` item from the main search, choose `Add Reminder`, then enter
-the content and a future date and time. Nexus requests notification permission on
-the first reminder and continues checking reminders while it runs in the background.
+Type `reminder` in the main search, press Tab, enter the message, press Tab again,
+enter when it is due, then press Return. The same fields appear after selecting
+`Reminder` from the Reminders plugin page. The time accepts `15m`, `2h`, `1d`,
+`tomorrow 09:00` / `明天 09:00`, or a local `YYYY-MM-DD HH:MM` date and time.
+Nexus requests notification permission on the first reminder and continues checking
+reminders while it runs in the background.
 Due reminders appear as macOS notifications from Nexus, including while its window
 is open. Enable Nexus in **System Settings > Notifications** and choose the desired
 banner/alert and sound settings; Focus settings can silence their presentation.
@@ -527,8 +530,8 @@ show a per-item visibility list; consume the `hidden_items` configure setting.
 
 ### Host services
 
-Most actions are sent to the plugin's `execute` method. An action can instead
-request a host integration by adding `host_action.<action-id>` to its result's
+Most actions are sent to the plugin's `execute` method. An action can request
+a host integration before execution or in place of it by adding `host_action.<action-id>` to its result's
 `metadata`. Declare the corresponding capability in `plugin.toml`:
 
 | Metadata value | Required capability | Additional result metadata / behavior |
@@ -536,7 +539,7 @@ request a host integration by adding `host_action.<action-id>` to its result's
 | `system.media` | `system.control` | `command`: `mute`, `volume-up`, `volume-down`, `play-pause`, `next-track`, or `previous-track` |
 | `menu.press` | `accessibility.press` | `target_pid`, `menu_path` (JSON array), `menu_item_id`; performs the selected application's menu command |
 | `text.edit` | `clipboard.write` | Opens the external text editor using `preview`; submits edited text to `edit_submit_action` (defaults to `apply_edit`) |
-| `form.reminder` | `notifications` | Shows a content/date form, then calls the original action with JSON `content` and `due_at` input |
+| `notifications.authorize` | `notifications` | Requests macOS notification permission before submitting a plugin action with inline arguments |
 
 For example, `metadata = {"host_action.toggle": "system.media", "command": "mute"}`
 requests a host media action for an action whose ID is `toggle`. New plugin IDs

@@ -35,3 +35,25 @@ import Testing
         try PluginHostAction.resolve(result: result, actionId: "run", descriptor: descriptor)
     }
 }
+
+@Test func notificationPermissionRequiresDeclaredCapability() throws {
+    let result = try JSONDecoder().decode(SearchResult.self, from: Data("""
+    {"plugin_id":"com.example.remind","id":"new","title":"Reminder","kind":"command",
+     "metadata":{"host_action.create":"notifications.authorize"}}
+    """.utf8))
+    let descriptor = PluginDescriptor(
+        id: "com.example.remind", name: "Reminders", version: "1", protocolVersion: 1,
+        executable: "remind", executableURL: URL(fileURLWithPath: "/tmp/remind"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: true, capabilities: ["notifications"]
+    )
+    #expect(try PluginHostAction.resolve(result: result, actionId: "create", descriptor: descriptor) == .notificationPermission)
+    let withoutPermission = PluginDescriptor(
+        id: descriptor.id, name: descriptor.name, version: descriptor.version,
+        protocolVersion: descriptor.protocolVersion, executable: descriptor.executable,
+        executableURL: descriptor.executableURL, defaultEnabled: true,
+        defaultIncludedInGlobalSearch: true, capabilities: []
+    )
+    #expect(throws: (any Error).self) {
+        try PluginHostAction.resolve(result: result, actionId: "create", descriptor: withoutPermission)
+    }
+}

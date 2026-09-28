@@ -4,5 +4,5 @@ version = "0.1.0"
 protocol_version = 1
 entrypoint = "clipkeep-plugin-reminders"
 default_enabled = true
-include_in_global_search = false
+include_in_global_search = true
 capabilities = ["notifications", "storage", "background"]

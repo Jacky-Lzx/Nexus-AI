@@ -56,54 +56,6 @@ private final class ResultsTableView: NSTableView {
     }
 }
 
-private final class ReminderFormView: NSView {
-    private let contentField = NSTextField()
-    private let datePicker = NSDatePicker()
-
-    var content: String { contentField.stringValue }
-    var date: Date { datePicker.dateValue }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: NSRect(x: 0, y: 0, width: 360, height: 92))
-
-        let contentLabel = NSTextField(labelWithString: "Reminder")
-        let timeLabel = NSTextField(labelWithString: "Time")
-        for label in [contentLabel, timeLabel] {
-            label.font = .systemFont(ofSize: 13, weight: .medium)
-            label.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(label)
-        }
-
-        contentField.placeholderString = "What do you want to remember?"
-        contentField.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(contentField)
-
-        datePicker.datePickerStyle = .textFieldAndStepper
-        datePicker.datePickerElements = [.yearMonthDay, .hourMinute]
-        datePicker.minDate = Date(timeIntervalSinceNow: 60)
-        datePicker.dateValue = Date(timeIntervalSinceNow: 3_600)
-        datePicker.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(datePicker)
-
-        NSLayoutConstraint.activate([
-            contentLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
-            contentLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-            contentLabel.widthAnchor.constraint(equalToConstant: 72),
-            contentField.centerYAnchor.constraint(equalTo: contentLabel.centerYAnchor),
-            contentField.leadingAnchor.constraint(equalTo: contentLabel.trailingAnchor, constant: 8),
-            contentField.trailingAnchor.constraint(equalTo: trailingAnchor),
-            timeLabel.topAnchor.constraint(equalTo: contentLabel.bottomAnchor, constant: 20),
-            timeLabel.leadingAnchor.constraint(equalTo: contentLabel.leadingAnchor),
-            timeLabel.widthAnchor.constraint(equalTo: contentLabel.widthAnchor),
-            datePicker.centerYAnchor.constraint(equalTo: timeLabel.centerYAnchor),
-            datePicker.leadingAnchor.constraint(equalTo: contentField.leadingAnchor),
-            datePicker.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor),
-        ])
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-}
-
 private struct ActiveActionInput {
     let result: SearchResult
     let action: ResultAction
@@ -714,9 +666,8 @@ final class LauncherPanelController: NSWindowController,
             case .editText:
                 performClipboardEdit(on: result)
                 return
-            case .reminderForm:
-                performReminderCreation(on: result, actionId: action.id)
-                return
+            case .notificationPermission:
+                break
             case .menuPress:
                 performMenuBarPress(on: result)
                 return
@@ -827,7 +778,7 @@ final class LauncherPanelController: NSWindowController,
         container.layer?.cornerCurve = .continuous
         container.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.10).cgColor
         container.translatesAutoresizingMaskIntoConstraints = false
-        container.widthAnchor.constraint(equalToConstant: 104).isActive = true
+        container.widthAnchor.constraint(equalToConstant: definition.kind == .text ? 220 : 104).isActive = true
         container.heightAnchor.constraint(equalToConstant: 36).isActive = true
 
         let field = NSTextField()
@@ -919,6 +870,44 @@ final class LauncherPanelController: NSWindowController,
         guard let data = try? JSONSerialization.data(withJSONObject: values),
               let input = String(data: data, encoding: .utf8)
         else { return }
+        guard let descriptor = coordinator.descriptors.first(where: { $0.id == activeActionInput.result.pluginId }),
+              coordinator.isEnabled(activeActionInput.result.pluginId) else { return }
+        let hostAction: PluginHostAction?
+        do {
+            hostAction = try PluginHostAction.resolve(
+                result: activeActionInput.result,
+                actionId: activeActionInput.action.id,
+                descriptor: descriptor
+            )
+        } catch {
+            statusLabel.stringValue = error.localizedDescription
+            return
+        }
+        if hostAction == .notificationPermission {
+            SystemNotificationPresenter.shared.requestAuthorization(willPrompt: { [weak self] in
+                self?.ignoreNextResign = true
+            }) { [weak self] authorized in
+                guard let self else { return }
+                self.ignoreNextResign = false
+                guard self.isPresented,
+                      let current = self.activeActionInput,
+                      current.result.id == activeActionInput.result.id,
+                      current.result.pluginId == activeActionInput.result.pluginId,
+                      current.action.id == activeActionInput.action.id,
+                      self.coordinator.canExecute(current.result) else { return }
+                self.window?.makeKey()
+                guard authorized else {
+                    self.statusLabel.stringValue = "Allow Nexus in System Settings > Notifications to create reminders"
+                    return
+                }
+                self.executeActionInputForm(current, input: input)
+            }
+        } else {
+            executeActionInputForm(activeActionInput, input: input)
+        }
+    }
+
+    private func executeActionInputForm(_ activeActionInput: ActiveActionInput, input: String) {
         coordinator.execute(
             activeActionInput.result,
             actionId: activeActionInput.action.id,
@@ -929,50 +918,6 @@ final class LauncherPanelController: NSWindowController,
             self.endActionInputForm(restoreSearchFocus: !closesWindow)
             if closesWindow {
                 self.hide(restorePreviousApplication: true)
-            }
-        }
-    }
-
-    private func performReminderCreation(on result: SearchResult, actionId: String) {
-        let form = ReminderFormView()
-        let alert = NSAlert()
-        alert.messageText = "Add Reminder"
-        alert.informativeText = "Enter what you want to remember and when Nexus should notify you."
-        alert.alertStyle = .informational
-        alert.accessoryView = form
-        alert.addButton(withTitle: "Add Reminder")
-        alert.addButton(withTitle: "Cancel")
-        ignoreNextResign = true
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            window?.makeKey()
-            window?.makeFirstResponder(searchField)
-            return
-        }
-        let content = form.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty, form.date.timeIntervalSinceNow > 0 else {
-            coordinator.onStatusChanged?("Enter reminder content and a future time")
-            window?.makeKey()
-            window?.makeFirstResponder(searchField)
-            return
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: [
-            "content": content,
-            "due_at": Int(form.date.timeIntervalSince1970),
-        ]), let input = String(data: data, encoding: .utf8) else { return }
-
-        SystemNotificationPresenter.shared.requestAuthorization(willPrompt: { [weak self] in
-            self?.ignoreNextResign = true
-        }) { [weak self] authorized in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                self.ignoreNextResign = false
-                self.window?.makeKey()
-                self.window?.makeFirstResponder(self.searchField)
-                guard authorized else {
-                    self.coordinator.onStatusChanged?("Allow Nexus in System Settings > Notifications to create reminders")
-                    return
-                }
-                self.coordinator.execute(result, actionId: actionId, input: input)
             }
         }
     }
