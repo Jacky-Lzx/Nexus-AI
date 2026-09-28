@@ -1143,8 +1143,15 @@ final class LauncherPanelController: NSWindowController,
     /// Preview the first command's arguments without taking focus from the query.
     private func updateInlineArguments() {
         guard activeActionInput == nil || inlineActionInput else { return }
-        guard searchMode == .global, !searchField.stringValue.isEmpty,
+        let isRemindersPage: Bool
+        if case let .plugin(plugin) = searchMode {
+            isRemindersPage = plugin.id == "io.clipkeep.reminders"
+        } else {
+            isRemindersPage = false
+        }
+        guard (searchMode == .global || isRemindersPage), !searchField.stringValue.isEmpty,
               tableView.selectedRow == 0, let result = results.first,
+              (!isRemindersPage || result.id == "reminder:new"),
               coordinator.canExecute(result),
               let action = result.actions.first(where: { $0.default }) ?? result.actions.first,
               !action.inputFields.isEmpty else {

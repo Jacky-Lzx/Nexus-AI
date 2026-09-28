@@ -194,9 +194,10 @@ kept out of it and remains available through its shortcut or the existing
 its plugin processes. Use
 **Quit** in the bottom action bar to stop Nexus completely.
 
-Type `reminder` in the main search, press Tab, enter the message, press Tab again,
-enter when it is due, then press Return. The same fields appear after selecting
-`Reminder` from the Reminders plugin page. The time accepts `15m`, `2h`, `1d`,
+Open `Reminders` from the main search, then select `Add Reminder` in its search
+list. Press Return or Tab to enter the message, Tab to enter when it is due, and
+Return to create it. Typing `add reminder` in the Reminders search field also
+previews both arguments beside the query. The time accepts `15m`, `2h`, `1d`,
 `tomorrow 09:00` / `明天 09:00`, or a local `YYYY-MM-DD HH:MM` date and time.
 Nexus requests notification permission on the first reminder and continues checking
 reminders while it runs in the background.

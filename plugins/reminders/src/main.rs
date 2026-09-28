@@ -191,7 +191,7 @@ fn new_reminder_result() -> SearchResult {
     SearchResult {
         plugin_id: PLUGIN_ID.into(),
         id: "reminder:new".into(),
-        title: "Reminder".into(),
+        title: "Add Reminder".into(),
         subtitle: "Enter a message and when to be reminded".into(),
         preview:
             "Create a reminder: message, then when (15m, 2h, tomorrow 09:00, or YYYY-MM-DD HH:MM)"
@@ -352,7 +352,7 @@ mod tests {
             7_200
         );
         let command = plugin.search("reminder", 10).unwrap().remove(0);
-        assert_eq!(command.title, "Reminder");
+        assert_eq!(command.title, "Add Reminder");
         assert_eq!(command.actions[0].input_fields.len(), 2);
         assert_eq!(command.actions[0].input_fields[0].id, "content");
         assert_eq!(command.actions[0].input_fields[1].id, "when");
