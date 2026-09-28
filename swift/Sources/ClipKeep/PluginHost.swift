@@ -692,6 +692,9 @@ final class SearchCoordinator {
             if let pluginsResult = pluginsRouteResult() {
                 results.append(pluginsResult)
             }
+            if let settingsResult = settingsRouteResult() {
+                results.append(settingsResult)
+            }
         } else if currentShowsAllPluginItems {
             results.append(contentsOf: pluginEntryResults(includeGlobalSearchPlugins: true))
         }
@@ -753,6 +756,27 @@ final class SearchCoordinator {
             metadata: [
                 "route_mode": "plugins",
                 "symbol_name": "puzzlepiece.extension.fill",
+            ],
+            actions: []
+        )
+    }
+
+    private func settingsRouteResult() -> SearchResult? {
+        guard let score = mainItemScore(
+            query: currentQuery,
+            candidates: ["Nexus Settings", "Settings", "Preferences"]
+        ) else { return nil }
+        return SearchResult(
+            pluginId: "io.clipkeep.settings",
+            id: "host-route:settings",
+            title: "Nexus Settings",
+            subtitle: "Open Nexus settings",
+            preview: "Open the Nexus settings window",
+            kind: .command,
+            score: score + 200,
+            metadata: [
+                "route_mode": "settings",
+                "symbol_name": "gearshape.fill",
             ],
             actions: []
         )

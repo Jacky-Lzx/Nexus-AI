@@ -212,6 +212,7 @@ final class LauncherPanelController: NSWindowController,
             uniqueKeysWithValues: coordinator.descriptors.map { ($0.id, $0.name) }
         )
         pluginNames["io.clipkeep.plugins"] = "Nexus"
+        pluginNames["io.clipkeep.settings"] = "Nexus"
         pluginNamesById = pluginNames
         let panel = LauncherPanel(
             contentRect: NSRect(x: 0, y: 0, width: Layout.width, height: Layout.collapsedHeight),
@@ -246,6 +247,7 @@ final class LauncherPanelController: NSWindowController,
     func refreshPlugins() {
         pluginNamesById = Dictionary(uniqueKeysWithValues: coordinator.descriptors.map { ($0.id, $0.name) })
         pluginNamesById["io.clipkeep.plugins"] = "Nexus"
+        pluginNamesById["io.clipkeep.settings"] = "Nexus"
         if let input = activeActionInput,
            !coordinator.canExecute(input.result) {
             endActionInputForm(restoreSearchFocus: true)
@@ -686,6 +688,8 @@ final class LauncherPanelController: NSWindowController,
         guard let result = selectedResult else { return }
         if result.metadata["route_mode"] == "plugins" {
             switchSearchMode(to: .plugins)
+        } else if result.metadata["route_mode"] == "settings" {
+            hide { [weak self] in self?.onShowSettings?() }
         } else if result.kind == .command,
            let pluginId = result.metadata["route_plugin_id"],
            coordinator.isEnabled(pluginId),
