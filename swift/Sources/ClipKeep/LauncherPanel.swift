@@ -960,7 +960,7 @@ final class LauncherPanelController: NSWindowController,
             "due_at": Int(form.date.timeIntervalSince1970),
         ]), let input = String(data: data, encoding: .utf8) else { return }
 
-        NotificationPresenter.shared.requestAuthorization(willPrompt: { [weak self] in
+        SystemNotificationPresenter.shared.requestAuthorization(willPrompt: { [weak self] in
             self?.ignoreNextResign = true
         }) { [weak self] authorized in
             DispatchQueue.main.async {
@@ -969,7 +969,7 @@ final class LauncherPanelController: NSWindowController,
                 self.window?.makeKey()
                 self.window?.makeFirstResponder(self.searchField)
                 guard authorized else {
-                    self.coordinator.onStatusChanged?("Allow notifications in System Settings to create reminders")
+                    self.coordinator.onStatusChanged?("Allow Nexus in System Settings > Notifications to create reminders")
                     return
                 }
                 self.coordinator.execute(result, actionId: actionId, input: input)

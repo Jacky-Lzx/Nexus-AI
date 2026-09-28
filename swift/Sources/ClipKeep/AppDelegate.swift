@@ -11,10 +11,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        let systemNotifications = SystemNotificationPresenter.shared
         plugins = PluginRegistry.discover()
         coordinator = SearchCoordinator(descriptors: plugins)
         coordinator.onNotification = { notification in
             NotificationPresenter.shared.deliver(notification)
+        }
+        coordinator.onSystemNotification = { notification in
+            systemNotifications.deliver(notification)
         }
         launcher = LauncherPanelController(coordinator: coordinator)
         launcher.onShowSettings = { [weak self] in self?.showSettings() }

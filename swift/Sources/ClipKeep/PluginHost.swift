@@ -202,6 +202,7 @@ final class SearchCoordinator {
     var onStatusChanged: ((String) -> Void)?
     var onPluginStateChanged: (() -> Void)?
     var onNotification: ((PluginNotification) -> Void)?
+    var onSystemNotification: ((PluginNotification) -> Void)?
     private(set) var descriptors: [PluginDescriptor]
 
     private var processes: [String: PluginProcess] = [:]
@@ -597,7 +598,11 @@ final class SearchCoordinator {
             configurationCompletions[requestId] = nil
             pending.completion(items)
         case let .notification(notification):
-            onNotification?(notification)
+            if pluginId == "io.clipkeep.reminders" {
+                onSystemNotification?(notification)
+            } else {
+                onNotification?(notification)
+            }
             if currentPluginIds.contains(pluginId) {
                 repeatCurrentSearch()
             }

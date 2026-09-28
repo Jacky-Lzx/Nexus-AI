@@ -197,6 +197,11 @@ its plugin processes. Use
 Open the `Reminders` item from the main search, choose `Add Reminder`, then enter
 the content and a future date and time. Nexus requests notification permission on
 the first reminder and continues checking reminders while it runs in the background.
+Due reminders appear as macOS notifications from Nexus, including while its window
+is open. Enable Nexus in **System Settings > Notifications** and choose the desired
+banner/alert and sound settings; Focus settings can silence their presentation.
+If permission is later denied or submitting a notification fails, an in-app toast
+is used as a fallback. Nexus must remain running to detect due reminders.
 Reminder data is stored locally alongside the other Nexus application data.
 
 Open `Caffeinate` and leave both duration fields empty to keep the display and Mac

@@ -21,14 +21,6 @@ final class NotificationPresenter {
         buildInterface()
     }
 
-    /// App-provided toasts need no system notification authorization.
-    func requestAuthorization(
-        willPrompt _: @escaping () -> Void,
-        completion: @escaping (Bool) -> Void
-    ) {
-        DispatchQueue.main.async { completion(true) }
-    }
-
     func deliver(_ notification: PluginNotification) {
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in self?.deliver(notification) }
