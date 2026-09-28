@@ -272,7 +272,7 @@ final class SettingsWindowController: NSWindowController,
         case "io.clipkeep.text-tools":
             pluginDescription = "Transform, encode, format, hash, and inspect text locally"
         case "io.clipkeep.time-date":
-            pluginDescription = "Check world clocks and create or interpret Unix timestamps"
+            pluginDescription = "Check local time and date, or create and interpret Unix timestamps"
         case "io.clipkeep.unit-converter":
             pluginDescription = "Convert common length, mass, temperature, time, and data units"
         case "io.clipkeep.web-search":

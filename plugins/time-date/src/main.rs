@@ -32,26 +32,43 @@ impl Plugin for TimeDatePlugin {
         if let Some(mode) = parse_timestamp_query(query) {
             return self.timestamp_results(mode, limit);
         }
-        let Some(filter) = parse_time_query(query) else {
-            return Ok(Vec::new());
+        let modes = if query.trim().is_empty() {
+            vec![LocalQuery::Time, LocalQuery::Date]
+        } else {
+            match parse_local_query(query) {
+                Some(mode) => vec![mode],
+                None => return Ok(Vec::new()),
+            }
         };
         let seconds = current_unix_time()?.0;
-        let zones: Vec<_> = ZONES
-            .iter()
-            .enumerate()
-            .filter(|(_, zone)| zone.matches(&filter))
-            .take(limit)
-            .collect();
-        let mut results = Vec::with_capacity(zones.len());
-        for (index, zone, formatted) in format_zones(seconds, &zones)? {
-            let value = format!("{} {}", formatted.time, formatted.abbreviation);
-            let result_id = format!("time-date:zone:{}:{seconds}", zone.id);
-            self.recent_values.insert(result_id.clone(), value.clone());
-            results.push(time_result(
-                zone,
-                formatted,
+        let formatted = format_local(seconds)?;
+        let mut results = Vec::with_capacity(modes.len().min(limit));
+        for (index, mode) in modes.into_iter().take(limit).enumerate() {
+            let (result_id, title, subtitle, value, symbol) = match mode {
+                LocalQuery::Time => (
+                    format!("time-date:local-time:{seconds}"),
+                    format!("Time — {}", formatted.time),
+                    format!(
+                        "Local time · {} · {}",
+                        formatted.abbreviation, formatted.date
+                    ),
+                    formatted.time.clone(),
+                    "clock",
+                ),
+                LocalQuery::Date => (
+                    format!("time-date:local-date:{seconds}"),
+                    format!("Date — {}", formatted.date),
+                    format!("Local date · {}", formatted.weekday),
+                    formatted.date.clone(),
+                    "calendar",
+                ),
+            };
+            self.recent_values.insert(result_id.clone(), value);
+            results.push(simple_result(
                 result_id,
-                value,
+                title,
+                subtitle,
+                symbol,
                 3_100.0 - index as f32,
             ));
         }
@@ -69,7 +86,7 @@ impl Plugin for TimeDatePlugin {
         arboard::Clipboard::new()
             .and_then(|mut clipboard| clipboard.set_text(value))
             .map_err(|error| error.to_string())?;
-        Ok(Some("Time copied".into()))
+        Ok(Some("Copied".into()))
     }
 }
 
@@ -108,107 +125,30 @@ impl TimeDatePlugin {
                     .collect())
             }
             TimestampMode::Parse(seconds) => {
-                let mut results = Vec::new();
-                for zone in ZONES.iter().take(2).take(limit) {
-                    let formatted = format_in_zone(seconds, zone)?;
-                    let value = format!(
-                        "{} {} {}",
-                        formatted.date, formatted.time, formatted.abbreviation
-                    );
-                    let result_id = format!("time-date:parsed:{}:{seconds}", zone.id);
-                    self.recent_values.insert(result_id.clone(), value.clone());
-                    results.push(simple_result(
-                        result_id,
-                        format!("Timestamp {seconds} — {} — {value}", zone.name),
-                        format!("{} · {}", zone.name, formatted.weekday),
-                        "clock.arrow.circlepath",
-                        3_100.0 - results.len() as f32,
-                    ));
-                }
-                Ok(results)
+                let formatted = format_local(seconds)?;
+                let value = format!(
+                    "{} {} {}",
+                    formatted.date, formatted.time, formatted.abbreviation
+                );
+                let result_id = format!("time-date:parsed:local:{seconds}");
+                self.recent_values.insert(result_id.clone(), value.clone());
+                Ok(vec![simple_result(
+                    result_id,
+                    format!("Timestamp {seconds} — {value}"),
+                    format!("Local time · {}", formatted.weekday),
+                    "clock.arrow.circlepath",
+                    3_100.0,
+                )])
             }
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Zone {
-    id: &'static str,
-    name: &'static str,
-    timezone: Option<&'static str>,
-    aliases: &'static [&'static str],
+enum LocalQuery {
+    Time,
+    Date,
 }
-
-impl Zone {
-    fn matches(self, filter: &str) -> bool {
-        filter.is_empty()
-            || self.name.to_ascii_lowercase().contains(filter)
-            || self.aliases.contains(&filter)
-    }
-}
-
-const ZONES: &[Zone] = &[
-    Zone {
-        id: "local",
-        name: "Local Time",
-        timezone: None,
-        aliases: &["local", "here", "本地"],
-    },
-    Zone {
-        id: "utc",
-        name: "UTC",
-        timezone: Some("UTC"),
-        aliases: &["utc", "gmt"],
-    },
-    Zone {
-        id: "shanghai",
-        name: "Shanghai",
-        timezone: Some("Asia/Shanghai"),
-        aliases: &["shanghai", "beijing", "china", "上海", "北京", "中国"],
-    },
-    Zone {
-        id: "tokyo",
-        name: "Tokyo",
-        timezone: Some("Asia/Tokyo"),
-        aliases: &["tokyo", "japan", "东京", "日本"],
-    },
-    Zone {
-        id: "london",
-        name: "London",
-        timezone: Some("Europe/London"),
-        aliases: &["london", "uk", "britain", "伦敦", "英国"],
-    },
-    Zone {
-        id: "new-york",
-        name: "New York",
-        timezone: Some("America/New_York"),
-        aliases: &["new york", "newyork", "nyc", "eastern", "纽约"],
-    },
-    Zone {
-        id: "los-angeles",
-        name: "Los Angeles",
-        timezone: Some("America/Los_Angeles"),
-        aliases: &["los angeles", "losangeles", "la", "pacific", "洛杉矶"],
-    },
-    Zone {
-        id: "paris",
-        name: "Paris",
-        timezone: Some("Europe/Paris"),
-        aliases: &["paris", "france", "巴黎", "法国"],
-    },
-    Zone {
-        id: "sydney",
-        name: "Sydney",
-        timezone: Some("Australia/Sydney"),
-        aliases: &["sydney", "australia", "悉尼", "澳大利亚"],
-    },
-    Zone {
-        id: "singapore",
-        name: "Singapore",
-        timezone: Some("Asia/Singapore"),
-        aliases: &["singapore", "新加坡"],
-    },
-];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum TimestampMode {
@@ -239,24 +179,13 @@ fn parse_timestamp_query(query: &str) -> Option<TimestampMode> {
     None
 }
 
-fn parse_time_query(query: &str) -> Option<String> {
-    let query = query.trim();
-    let lowercase = query.to_lowercase();
-    if matches!(
-        lowercase.as_str(),
-        "time" | "date" | "timezone" | "时间" | "时区"
-    ) {
-        return Some(String::new());
+fn parse_local_query(query: &str) -> Option<LocalQuery> {
+    match query.trim().to_lowercase().as_str() {
+        "time" | "time local" | "timezone" | "local" | "here" | "时间" | "时区" | "本地"
+        | "本地时间" => Some(LocalQuery::Time),
+        "date" | "date local" | "日期" | "本地日期" => Some(LocalQuery::Date),
+        _ => None,
     }
-    for prefix in ["time ", "date ", "timezone ", "时间 ", "时区 "] {
-        if let Some(filter) = lowercase.strip_prefix(prefix) {
-            return Some(filter.trim().to_owned());
-        }
-    }
-    ZONES
-        .iter()
-        .any(|zone| zone.aliases.contains(&lowercase.as_str()))
-        .then_some(lowercase)
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -267,55 +196,23 @@ struct FormattedTime {
     weekday: String,
 }
 
-fn format_in_zone(seconds: i64, zone: &Zone) -> Result<FormattedTime, String> {
-    let output = date_command(seconds, zone)
+fn format_local(seconds: i64) -> Result<FormattedTime, String> {
+    let output = date_command(seconds)
         .output()
         .map_err(|error| format!("could not read system time: {error}"))?;
     parse_date_output(output)
 }
 
-fn format_zones<'a>(
-    seconds: i64,
-    zones: &[(usize, &'a Zone)],
-) -> Result<Vec<(usize, &'a Zone, FormattedTime)>, String> {
-    let mut pending = Vec::with_capacity(zones.len());
-    for &(index, zone) in zones {
-        match date_command(seconds, zone).spawn() {
-            Ok(child) => pending.push((index, zone, child)),
-            Err(error) => {
-                for (_, _, mut child) in pending {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                }
-                return Err(format!("could not start system time query: {error}"));
-            }
-        }
-    }
-
-    pending
-        .into_iter()
-        .map(|(index, zone, child)| {
-            let output = child
-                .wait_with_output()
-                .map_err(|error| format!("could not read system time: {error}"))?;
-            Ok((index, zone, parse_date_output(output)?))
-        })
-        .collect()
-}
-
-fn date_command(seconds: i64, zone: &Zone) -> Command {
+fn date_command(seconds: i64) -> Command {
     let mut command = Command::new("/bin/date");
     command
         .arg("-r")
         .arg(seconds.to_string())
-        .arg("+%Y-%m-%d|%H:%M:%S|%Z|%A")
+        .arg("+%Y.%m.%d|%H:%M:%S|%Z|%A")
         .env("LC_ALL", "C")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
-    if let Some(timezone) = zone.timezone {
-        command.env("TZ", timezone);
-    }
     command
 }
 
@@ -350,22 +247,6 @@ fn current_unix_time() -> Result<(i64, i128), String> {
     let seconds = i64::try_from(duration.as_secs())
         .map_err(|_| "current timestamp is too large".to_owned())?;
     Ok((seconds, duration.as_millis() as i128))
-}
-
-fn time_result(
-    zone: &Zone,
-    formatted: FormattedTime,
-    result_id: String,
-    value: String,
-    score: f32,
-) -> SearchResult {
-    simple_result(
-        result_id,
-        format!("Time {} — {value}", zone.name),
-        format!("{} · {}, {}", zone.name, formatted.weekday, formatted.date),
-        "clock",
-        score,
-    )
 }
 
 fn simple_result(
@@ -412,21 +293,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_time_queries_and_exact_city_aliases() {
-        assert_eq!(parse_time_query("time"), Some(String::new()));
-        assert_eq!(parse_time_query("time New York"), Some("new york".into()));
-        assert_eq!(parse_time_query("东京"), Some("东京".into()));
-        assert_eq!(parse_time_query("ordinary text"), None);
-    }
-
-    #[test]
-    fn filters_named_time_zones() {
-        let matches: Vec<_> = ZONES
-            .iter()
-            .filter(|zone| zone.matches("new york"))
-            .map(|zone| zone.id)
-            .collect();
-        assert_eq!(matches, ["new-york"]);
+    fn recognizes_only_local_time_and_date_queries() {
+        assert_eq!(parse_local_query("time"), Some(LocalQuery::Time));
+        assert_eq!(parse_local_query("日期"), Some(LocalQuery::Date));
+        assert_eq!(parse_local_query("time local"), Some(LocalQuery::Time));
+        assert_eq!(parse_local_query("timezone"), Some(LocalQuery::Time));
+        assert_eq!(parse_local_query("time New York"), None);
+        assert_eq!(parse_local_query("东京"), None);
     }
 
     #[test]
@@ -447,12 +320,53 @@ mod tests {
     }
 
     #[test]
-    fn utc_epoch_uses_the_system_timezone_database() {
-        let formatted = format_in_zone(0, &ZONES[1]).unwrap();
-        assert_eq!(formatted.date, "1970-01-01");
+    fn local_format_uses_the_system_timezone() {
+        let output = date_command(0).env("TZ", "UTC").output().unwrap();
+        let formatted = parse_date_output(output).unwrap();
+        assert_eq!(formatted.date, "1970.01.01");
         assert_eq!(formatted.time, "00:00:00");
         assert_eq!(formatted.abbreviation, "UTC");
         assert_eq!(formatted.weekday, "Thursday");
+    }
+
+    #[test]
+    fn search_returns_one_local_result_and_date_is_copyable() {
+        let mut plugin = TimeDatePlugin::default();
+        let time = plugin.search("time", 10).unwrap();
+        assert_eq!(time.len(), 1);
+        assert!(time[0].title.starts_with("Time — "));
+        assert!(time[0].subtitle.starts_with("Local time · "));
+
+        let date = plugin.search("date", 10).unwrap();
+        assert_eq!(date.len(), 1);
+        let value = plugin.recent_values.get(&date[0].id).unwrap();
+        assert_eq!(value.len(), 10);
+        assert_eq!(value.as_bytes()[4], b'.');
+        assert_eq!(value.as_bytes()[7], b'.');
+        assert_eq!(date[0].title, format!("Date — {value}"));
+    }
+
+    #[test]
+    fn empty_query_shows_time_then_date_and_respects_limit() {
+        let mut plugin = TimeDatePlugin::default();
+        let results = plugin.search("", 10).unwrap();
+        assert_eq!(results.len(), 2);
+        assert!(results[0].title.starts_with("Time — "));
+        assert!(results[1].title.starts_with("Date — "));
+        assert!(plugin.recent_values.contains_key(&results[0].id));
+        assert!(plugin.recent_values.contains_key(&results[1].id));
+
+        let limited = plugin.search(" ", 1).unwrap();
+        assert_eq!(limited.len(), 1);
+        assert!(limited[0].title.starts_with("Time — "));
+    }
+
+    #[test]
+    fn parsed_timestamp_returns_only_local_time() {
+        let mut plugin = TimeDatePlugin::default();
+        let results = plugin.search("timestamp 0", 10).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].subtitle.split('·').next(), Some("Local time "));
     }
 
     #[test]
@@ -467,22 +381,5 @@ mod tests {
         assert_eq!(result.actions.len(), 2);
         assert!(result.actions[0].default);
         assert!(result.actions[0].paste_to_previous);
-    }
-
-    #[test]
-    fn world_clock_titles_keep_the_time_query_rankable() {
-        let result = time_result(
-            &ZONES[3],
-            FormattedTime {
-                date: "2026-09-23".into(),
-                time: "01:30:00".into(),
-                abbreviation: "JST".into(),
-                weekday: "Wednesday".into(),
-            },
-            "time-date:test".into(),
-            "01:30:00 JST".into(),
-            3_100.0,
-        );
-        assert_eq!(result.title, "Time Tokyo — 01:30:00 JST");
     }
 }

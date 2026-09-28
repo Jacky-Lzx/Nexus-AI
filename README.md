@@ -34,8 +34,8 @@ plugin protocol remains portable to future Windows and Linux frontends.
 - Normalizes text to NFC, NFD, NFKC, or NFKD with macOS Foundation, strips
   diacritics, reports current forms, and compares canonical and compatibility
   equivalence
-- Shows local and international times using the macOS time-zone database, and
-  creates or interprets Unix second and millisecond timestamps
+- Shows local time and the local date in `YYYY.MM.DD` format, and creates or
+  interprets Unix second and millisecond timestamps
 - Adds or subtracts calendar days, weeks, months, years, and weekdays, and
   compares two ISO dates with explicit weekend-only business-day semantics;
   try `datecalc 2026-01-31 + 1 month`, `datecalc today + 10 weekdays`, or
@@ -401,7 +401,7 @@ identifier in Settings.
 - `plugins/system-status`: read-only local hardware and operating-system status
 - `plugins/text-diff`: bounded local line, word-token, and Unicode-scalar diffs
 - `plugins/text-tools`: local text transformations with copy/paste actions
-- `plugins/time-date`: world clocks and Unix timestamp conversion
+- `plugins/time-date`: local time and date (`YYYY.MM.DD`) plus Unix timestamp conversion
 - `plugins/unicode-inspector`: Unicode scalar, encoding, and escape inspection
 - `plugins/unicode-normalization`: local Foundation-backed Unicode normalization and comparison
 - `plugins/unit-converter`: natural unit conversion with copy/paste actions
