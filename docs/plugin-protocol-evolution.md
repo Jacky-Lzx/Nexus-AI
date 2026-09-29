@@ -123,5 +123,9 @@ and Nexus Development signature were verified. Desktop checks passed for:
   Save and Cancel correctly. The form was cancelled without changing preferences;
   typed configuration application was verified separately by the protocol smoke.
 
-The temporary Hello plugin was removed after testing. The app continues running
-from `dist/Nexus.app`; the bundle in `/Applications` has not been replaced.
+The temporary Hello plugin was removed after testing. After the user authorized
+installation, `/Applications/Nexus.app` was replaced through a verified staged
+copy, retaining the previous bundle in a temporary backup. All 215 files/symlinks
+match `dist/Nexus.app`; deep signature verification passed with Nexus Development.
+The app was restarted from `/Applications/Nexus.app`, and its actual running path
+and calculator search `2+3` displaying `5` were verified again.
