@@ -12,7 +12,7 @@ final class PluginProcess {
         case notification(PluginNotification)
         case catalogChanged
         case actionFinished(requestId: UInt64, success: Bool, message: String?)
-        case error(String)
+        case error(PluginFailure)
         case terminated
     }
 
@@ -39,9 +39,11 @@ final class PluginProcess {
         let message: String?
         let pluginId: String?
         let protocolVersion: Int?
+        let code: String?
+        let retryable: Bool?
 
         enum CodingKeys: String, CodingKey {
-            case type, items, notification, success, message
+            case type, items, notification, success, message, code, retryable
             case queryId = "query_id"
             case requestId = "request_id"
             case pluginId = "plugin_id"
@@ -143,7 +145,7 @@ final class PluginProcess {
         do {
             try input.fileHandleForWriting.write(contentsOf: data)
         } catch {
-            onEvent?(.error(error.localizedDescription))
+            onEvent?(.error(PluginFailure(message: error.localizedDescription)))
         }
     }
 
@@ -187,7 +189,9 @@ final class PluginProcess {
                 message: envelope.message
             )
         case "error":
-            event = .error(envelope.message ?? "Plugin error")
+            event = .error(PluginFailure(message: envelope.message ?? "Plugin error",
+                queryId: envelope.queryId, requestId: envelope.requestId,
+                code: envelope.code, retryable: envelope.retryable ?? false))
         default:
             event = nil
         }
@@ -224,7 +228,10 @@ final class SearchCoordinator {
     private var restartAttempts: [String: Int] = [:]
     private var pendingSearches: [String: UInt64] = [:]
 
-    init(descriptors: [PluginDescriptor]) {
+    private let searchTimeout: TimeInterval
+
+    init(descriptors: [PluginDescriptor], searchTimeout: TimeInterval = 2) {
+        self.searchTimeout = searchTimeout
         self.descriptors = descriptors
         ClipboardPreference.registerDefaults()
         CalendarPreference.registerDefaults()
@@ -391,16 +398,13 @@ final class SearchCoordinator {
             guard let process = processes[pluginId] else { continue }
             pendingSearches[pluginId] = sentQueryId
             process.search(queryId: sentQueryId, query: query)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self, weak process] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + searchTimeout) { [weak self, weak process] in
                 guard let self, let process,
                       self.processes[pluginId] === process,
                       self.pendingSearches[pluginId] == sentQueryId else { return }
                 let name = self.descriptors.first(where: { $0.id == pluginId })?.name ?? pluginId
-                self.onStatusChanged?("\(name) is taking longer than expected…")
-                self.cancelPendingActivation()
-                if targetChanged, preservingPublishedResults {
-                    self.publishResults()
-                }
+                self.onStatusChanged?("\(name) search timed out")
+                self.failSearch(pluginId: pluginId, queryId: sentQueryId)
             }
         }
         // Publish fast plugins together instead of flashing an intermediate empty state.
@@ -489,7 +493,7 @@ final class SearchCoordinator {
         guard let process = processes[pluginId] else { completion?(false); return }
         requestId += 1
         let sentRequestId = requestId
-        if let completion { actionCompletions[sentRequestId] = (pluginId, completion) }
+        actionCompletions[sentRequestId] = (pluginId, completion ?? { _ in })
         process.execute(
             requestId: sentRequestId,
             resultId: resultId,
@@ -580,7 +584,7 @@ final class SearchCoordinator {
                 self.restartAttempts[pluginId] = 0
             }
         case let .searchResults(eventQueryId, items, presentationItems)
-            where eventQueryId == queryId && currentPluginIds.contains(pluginId):
+            where eventQueryId == queryId && pendingSearches[pluginId] == eventQueryId:
             pendingSearches[pluginId] = nil
             stagedResultsByPlugin[pluginId] = items.filter { $0.pluginId == pluginId }.map { item in
                 var item = item
@@ -609,6 +613,7 @@ final class SearchCoordinator {
         case .catalogChanged where currentPluginIds.contains(pluginId):
             repeatCurrentSearch()
         case let .actionFinished(requestId, success, message):
+            guard actionCompletions[requestId]?.pluginId == pluginId else { break }
             onStatusChanged?(message ?? "Done")
             if success, let message, !message.isEmpty {
                 let pluginName = descriptors.first(where: { $0.id == pluginId })?.name ?? "Nexus"
@@ -620,10 +625,27 @@ final class SearchCoordinator {
             }
             actionCompletions.removeValue(forKey: requestId)?.completion(success)
             repeatCurrentSearch()
-        case let .error(message):
-            onStatusChanged?(message)
+        case let .error(failure):
+            if let failedQuery = failure.queryId {
+                guard pendingSearches[pluginId] == failedQuery else { break }
+                onStatusChanged?(failure.message)
+                failSearch(pluginId: pluginId, queryId: failedQuery)
+            } else if let request = failure.requestId {
+                if actionCompletions[request]?.pluginId == pluginId {
+                    onStatusChanged?(failure.message)
+                    actionCompletions.removeValue(forKey: request)?.completion(false)
+                } else if configurationCompletions[request]?.pluginId == pluginId {
+                    onStatusChanged?(failure.message)
+                    configurationCompletions.removeValue(forKey: request)?.completion([])
+                }
+            } else {
+                // Legacy unscoped errors may come from background work. Do not
+                // attribute them to the latest search; its deadline still applies.
+                onStatusChanged?(failure.message)
+            }
         case .terminated:
             guard processes[pluginId] === process else { return }
+            failSearch(pluginId: pluginId, queryId: queryId)
             cancelPendingActivation()
             let failedActions = actionCompletions.filter { $0.value.pluginId == pluginId }
             failedActions.keys.forEach { actionCompletions[$0] = nil }
@@ -639,6 +661,16 @@ final class SearchCoordinator {
         default:
             break
         }
+    }
+
+    private func failSearch(pluginId: String, queryId failedQuery: UInt64) {
+        guard failedQuery == queryId, pendingSearches[pluginId] == failedQuery else { return }
+        cancelPendingActivation()
+        pendingSearches[pluginId] = nil
+        stagedResultsByPlugin[pluginId] = []
+        presentationItemsByPlugin[pluginId] = []
+        commitStagedResults(queryId: failedQuery)
+        if pendingSearches.isEmpty { searchActivation.finish(queryId: failedQuery) }
     }
 
     private func scheduleRestart(pluginId: String) {

@@ -59,6 +59,14 @@ pub enum PluginEvent {
     },
     Error {
         message: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        query_id: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        request_id: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
+        #[serde(default)]
+        retryable: bool,
     },
 }
 
@@ -169,6 +177,18 @@ pub enum ActionInputKind {
     #[default]
     Text,
     Integer,
+}
+
+impl PluginEvent {
+    pub fn error(message: impl Into<String>) -> Self {
+        Self::Error {
+            message: message.into(),
+            query_id: None,
+            request_id: None,
+            code: None,
+            retryable: false,
+        }
+    }
 }
 
 #[cfg(test)]

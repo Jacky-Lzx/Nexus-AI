@@ -80,7 +80,7 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
                     running = handle_request(&mut plugin, request, &mut output)?;
                 }
                 ReaderMessage::Invalid(message) => {
-                    send(&mut output, &PluginEvent::Error { message })?;
+                    send(&mut output, &PluginEvent::error(message))?;
                 }
                 ReaderMessage::Closed => return Ok(()),
             }
@@ -93,7 +93,7 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
             match plugin.tick() {
                 Ok(true) => send(&mut output, &PluginEvent::CatalogChanged)?,
                 Ok(false) => {}
-                Err(message) => send(&mut output, &PluginEvent::Error { message })?,
+                Err(message) => send(&mut output, &PluginEvent::error(message))?,
             }
             match plugin.notifications() {
                 Ok(notifications) => {
@@ -101,7 +101,7 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
                         send(&mut output, &PluginEvent::Notification { notification })?;
                     }
                 }
-                Err(message) => send(&mut output, &PluginEvent::Error { message })?,
+                Err(message) => send(&mut output, &PluginEvent::error(message))?,
             }
             poll_interval = plugin.poll_interval();
             next_poll = poll_interval.map(|interval| Instant::now() + interval);
@@ -120,11 +120,9 @@ fn handle_request(
             if protocol_version != PROTOCOL_VERSION {
                 send(
                     output,
-                    &PluginEvent::Error {
-                        message: format!(
-                            "unsupported protocol version {protocol_version}; expected {PROTOCOL_VERSION}"
-                        ),
-                    },
+                    &PluginEvent::error(format!(
+                        "unsupported protocol version {protocol_version}; expected {PROTOCOL_VERSION}"
+                    )),
                 )?;
             } else {
                 send(
@@ -139,7 +137,7 @@ fn handle_request(
         HostRequest::Configure { settings } => match plugin.configure(&settings) {
             Ok(true) => send(output, &PluginEvent::CatalogChanged)?,
             Ok(false) => {}
-            Err(message) => send(output, &PluginEvent::Error { message })?,
+            Err(message) => send(output, &PluginEvent::error(message))?,
         },
         HostRequest::Search {
             query_id,
@@ -154,7 +152,16 @@ fn handle_request(
                     presentation_items: plugin.presentation_items(),
                 },
             )?,
-            Err(message) => send(output, &PluginEvent::Error { message })?,
+            Err(message) => send(
+                output,
+                &PluginEvent::Error {
+                    message,
+                    query_id: Some(query_id),
+                    request_id: None,
+                    code: Some("search_failed".into()),
+                    retryable: false,
+                },
+            )?,
         },
         HostRequest::ListConfigurationItems { request_id } => send(
             output,
@@ -219,4 +226,56 @@ fn request_reader() -> Receiver<ReaderMessage> {
         let _ = sender.send(ReaderMessage::Closed);
     });
     receiver
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    struct Failing;
+    impl Plugin for Failing {
+        fn id(&self) -> &'static str {
+            "test"
+        }
+        fn search(&mut self, _: &str, _: usize) -> Result<Vec<SearchResult>, String> {
+            Err("failed".into())
+        }
+        fn execute(&mut self, _: &str, _: &str) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+    }
+    #[test]
+    fn search_failure_keeps_query_identity() {
+        let mut output = Vec::new();
+        handle_request(
+            &mut Failing,
+            HostRequest::Search {
+                query_id: 42,
+                query: "x".into(),
+                limit: 1,
+            },
+            &mut output,
+        )
+        .unwrap();
+        let event: PluginEvent = serde_json::from_slice(&output).unwrap();
+        assert!(matches!(
+            event,
+            PluginEvent::Error {
+                query_id: Some(42),
+                ..
+            }
+        ));
+    }
+    #[test]
+    fn legacy_error_still_decodes() {
+        let event: PluginEvent =
+            serde_json::from_str(r#"{"type":"error","message":"old"}"#).unwrap();
+        assert!(matches!(
+            event,
+            PluginEvent::Error {
+                query_id: None,
+                request_id: None,
+                ..
+            }
+        ));
+    }
 }

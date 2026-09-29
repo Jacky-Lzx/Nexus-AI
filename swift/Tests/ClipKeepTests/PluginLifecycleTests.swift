@@ -184,3 +184,58 @@ private func eventually(_ predicate: () -> Bool) async -> Bool {
         .write(to: manifest, atomically: true, encoding: .utf8)
     #expect(throws: (any Error).self) { try PluginRegistry.load(bundle) }
 }
+
+@Test @MainActor func timedOutSearchDiscardsLateResultsAndAllowsFreshReturn() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let fast = try fixture(root, id: "com.example.fast")
+    let slow = try fixture(root, id: "com.example.slow", delay: 0.4)
+    let coordinator = SearchCoordinator(descriptors: try [fast, slow].map(PluginRegistry.load), searchTimeout: 0.2)
+    defer { coordinator.updatePlugins([]) }
+    var titles: [String] = []
+    var timedOut = false
+    var opened = 0
+    coordinator.onResultsChanged = { titles = $0.map(\.title) }
+    coordinator.onStatusChanged = { if $0.contains("timed out") { timedOut = true } }
+    coordinator.searchGlobal("target")
+    coordinator.activateWhenSearchSettles { opened += 1 }
+    #expect(await eventually { timedOut })
+    #expect(opened == 0)
+    coordinator.activateWhenSearchSettles { opened += 1 }
+    #expect(opened == 1)
+    #expect(titles == ["1.0:target"])
+    try await Task.sleep(for: .seconds(1))
+    #expect(titles == ["1.0:target"])
+    #expect(opened == 1)
+}
+
+@Test @MainActor func correlatedSearchErrorSettlesWithoutWaitingForDeadline() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    let executable = bundle.appendingPathComponent("plugin")
+    var source = try String(contentsOf: executable, encoding: .utf8)
+    source = source.replacingOccurrences(of: "time.sleep(0.0)", with: """
+    if request['query'] == 'fail':
+                print(json.dumps(dict(type='error', query_id=request['query_id'], message='fixture failure', code='search_failed')), flush=True)
+                continue
+    """)
+    try source.write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+    let coordinator = SearchCoordinator(descriptors: [try PluginRegistry.load(bundle)], searchTimeout: 10)
+    defer { coordinator.updatePlugins([]) }
+    var failure = false
+    var titles: [String] = []
+    coordinator.onResultsChanged = { titles = $0.map(\.title) }
+    coordinator.onStatusChanged = { failure = $0 == "fixture failure" }
+    coordinator.searchGlobal("previous")
+    #expect(await eventually { titles == ["1.0:previous"] })
+    coordinator.searchGlobal("fail")
+    var opened = 0
+    coordinator.activateWhenSearchSettles { opened += 1 }
+    #expect(await eventually { failure })
+    #expect(opened == 0)
+    #expect(titles.isEmpty)
+    coordinator.activateWhenSearchSettles { opened += 1 }
+    #expect(opened == 1)
+}

@@ -251,7 +251,7 @@ impl SearchCore {
                         });
                         refresh = true;
                     }
-                    PluginEvent::Error { message } => self.status = Some(message),
+                    PluginEvent::Error { message, .. } => self.status = Some(message),
                     PluginEvent::Initialized { .. }
                     | PluginEvent::SearchResults { .. }
                     | PluginEvent::ConfigurationItems { .. }
