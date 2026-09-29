@@ -28,7 +28,7 @@ Plugins advertise `search.cancel` in `initialized.features`. Only those plugins
 receive `cancel_search { query_id }`. Search messages also carry `timeout_ms`;
 legacy plugins ignore this additive field. The SDK starts the deadline at receipt,
 coalesces adjacent queued searches and preserves execute/configure barriers.
-The queue is bounded to 64 messages; overflow ends the session with an error.
+The queue is bounded to 64 messages and 32 MiB; overflow ends the session with an error.
 
 `Plugin::search_with_context` is optional. Existing implementations remain valid;
 cooperative implementations check `SearchContext` during expensive work. HTTP,
@@ -73,3 +73,19 @@ validates configuration schemas, including defaults and duplicate field IDs.
 `protocol/fixtures/v1.json` is consumed by both Rust and Swift tests. Keep old
 fixtures when adding new ones; existing input kinds remain text/integer until a
 separately negotiated form extension is introduced.
+
+## Transport and readiness
+
+Both sides cap a newline-delimited JSON message at 16 MiB, including incomplete
+frames. The SDK bounds serialization before writing and truncates search results
+to the requested limit (at most 100). Host validation also bounds result/action/
+field counts. Invalid known events fail the session with a diagnostic; unknown
+event types remain ignorable for forward compatibility. Diagnostics name the
+plugin and, where parseable, request/query IDs, without echoing message payloads.
+
+The host writes on a dedicated serial queue (64 queued frames, 32 MiB outstanding)
+and limits decoded events awaiting main-thread delivery to 128 events and 32 MiB. Pipe writes use
+macOS F_SETNOSIGPIPE so plugin exit becomes an I/O failure, not a host crash.
+Business requests wait for a validated handshake; startup has a five-second
+deadline. Queued pre-initialization searches are coalesced and bounded. Shutdown
+terminates the process and releases queues without a main-thread pipe write.

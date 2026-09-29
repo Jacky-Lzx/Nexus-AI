@@ -1,6 +1,7 @@
 mod command;
 pub use command::command_output;
 mod scheduling;
+mod transport;
 use clipkeep_protocol::{
     ConfigurationField, ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent,
     PluginNotification, PluginPresentationItem, SearchResult,
@@ -9,7 +10,7 @@ pub use scheduling::SearchContext;
 use scheduling::{ReaderMessage, RequestQueue};
 use std::{
     collections::BTreeMap,
-    io::{self, BufRead, BufReader, BufWriter, Write},
+    io::{self, BufReader, BufWriter, Write},
     sync::Arc,
     thread,
     time::{Duration, Instant},
@@ -125,8 +126,8 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
     let mut output = BufWriter::new(stdout.lock());
     let mut running = true;
     let mut session = Session::default();
-    let mut poll_interval = plugin.poll_interval();
-    let mut next_poll = poll_interval.map(|interval| Instant::now() + interval);
+    let mut poll_interval = None;
+    let mut next_poll = None;
 
     while running {
         let message = requests.receive(next_poll);
@@ -147,7 +148,11 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
                 }
                 ReaderMessage::Closed => return Ok(()),
             }
-            let updated_interval = plugin.poll_interval();
+            let updated_interval = if session.initialized {
+                plugin.poll_interval()
+            } else {
+                None
+            };
             if updated_interval != poll_interval {
                 poll_interval = updated_interval;
                 next_poll = poll_interval.map(|interval| Instant::now() + interval);
@@ -258,6 +263,7 @@ fn handle_request(
         } => {
             let fallback = SearchContext::new(query_id, timeout_ms);
             let context = context.unwrap_or(&fallback);
+            let limit = limit.min(100);
             let result = plugin.search_with_context(&query, limit, context);
             let result = context.check().and(result).and_then(|mut items| {
                 if !session
@@ -267,6 +273,7 @@ fn handle_request(
                 {
                     adapt_legacy_host_actions(&mut items)?;
                 }
+                items.truncate(limit);
                 Ok(items)
             });
             match result {
@@ -398,7 +405,12 @@ fn configure_plugin(
 }
 
 fn send(output: &mut impl Write, event: &PluginEvent) -> io::Result<()> {
-    serde_json::to_writer(&mut *output, event).map_err(io::Error::other)?;
+    let mut frame = transport::LimitedFrame {
+        bytes: Vec::new(),
+        limit: transport::MAX_MESSAGE_BYTES,
+    };
+    serde_json::to_writer(&mut frame, event).map_err(io::Error::other)?;
+    output.write_all(&frame.bytes)?;
     output.write_all(b"\n")?;
     output.flush()
 }
@@ -408,18 +420,28 @@ fn request_reader() -> Arc<RequestQueue> {
     let reader_queue = queue.clone();
     thread::spawn(move || {
         let stdin = io::stdin();
-        for line in BufReader::new(stdin.lock()).lines() {
-            match line {
-                Ok(line) => match serde_json::from_str(&line) {
+        let mut reader = BufReader::new(stdin.lock());
+        loop {
+            match transport::read_frame(&mut reader, transport::MAX_MESSAGE_BYTES) {
+                Ok(Some(line)) if line.is_empty() => continue,
+                Ok(Some(line)) => match serde_json::from_slice(&line) {
                     Ok(request) => {
-                        if !reader_queue.push(request) {
+                        if !reader_queue.push_sized(request, line.len()) {
                             return;
                         }
                     }
-                    Err(error) => reader_queue.invalid(format!("invalid request: {error}")),
+                    Err(error) => {
+                        reader_queue.invalid(format!(
+                            "invalid request at line {} column {}",
+                            error.line(),
+                            error.column()
+                        ));
+                        break;
+                    }
                 },
+                Ok(None) => break,
                 Err(error) => {
-                    reader_queue.invalid(format!("could not read request: {error}"));
+                    reader_queue.invalid(error.to_string());
                     break;
                 }
             }

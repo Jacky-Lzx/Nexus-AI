@@ -153,9 +153,9 @@ open dist/Nexus.app
 For UI testing or scripted launch, an initial search can be supplied with
 `open -n dist/Nexus.app --args --query Safari`.
 
-The generated bundle is unsigned. On another Mac, Gatekeeper may require the
-user to right-click the app and choose **Open**. Public distribution should add
-Developer ID signing and notarization.
+The generated bundle is signed with `Nexus Development` or the explicitly
+configured identity. Public distribution requires Developer ID signing and
+notarization.
 
 Direct paste requires macOS Accessibility permission so Nexus can send the
 `Command-V` keystroke to the previously focused application. The first direct
@@ -438,6 +438,12 @@ search results.
 Plugins run as separate executables and exchange newline-delimited JSON with Nexus
 on stdin/stdout. Rust plugins can use `clipkeep-plugin-sdk`; other languages can
 implement the same protocol. No dynamic linking or host rebuild is required.
+
+See [the protocol evolution contract](docs/plugin-protocol-evolution.md) and
+[shared wire fixtures](protocol/fixtures/v1.json) for correlated errors, search
+cancellation/deadlines, typed arguments/settings, feature negotiation and limits.
+Existing protocol-v1 binaries remain compatible; Rust source using the updated
+protocol crate must add `host_action: None` to existing `ResultAction` literals.
 
 ### Install, update, and remove
 

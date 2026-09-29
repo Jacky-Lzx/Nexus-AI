@@ -46,7 +46,8 @@ pub(crate) enum ReaderMessage {
 
 #[derive(Default)]
 struct QueueState {
-    messages: VecDeque<ReaderMessage>,
+    messages: VecDeque<(ReaderMessage, usize)>,
+    bytes: usize,
     latest: Option<SearchContext>,
     closed: bool,
 }
@@ -58,7 +59,12 @@ pub(crate) struct RequestQueue {
 }
 
 impl RequestQueue {
+    #[cfg(test)]
     pub fn push(&self, request: HostRequest) -> bool {
+        let bytes = serde_json::to_vec(&request).unwrap().len();
+        self.push_sized(request, bytes)
+    }
+    pub fn push_sized(&self, request: HostRequest, bytes: usize) -> bool {
         let mut state = self.state.lock().unwrap();
         if state.closed {
             return false;
@@ -69,7 +75,7 @@ impl RequestQueue {
             {
                 context.cancel();
             }
-            for (_, context) in state.messages.iter().filter_map(|m| match m {
+            for (_, context) in state.messages.iter().filter_map(|(m, _)| match m {
                 ReaderMessage::Request(r, Some(c)) => Some((r, c)),
                 _ => None,
             }) {
@@ -93,9 +99,10 @@ impl RequestQueue {
             // Only adjacent searches are interchangeable. Never reorder an action/configure.
             if matches!(
                 state.messages.back(),
-                Some(ReaderMessage::Request(HostRequest::Search { .. }, _))
+                Some((ReaderMessage::Request(HostRequest::Search { .. }, _), _))
             ) {
-                state.messages.pop_back();
+                let (_, removed) = state.messages.pop_back().unwrap();
+                state.bytes -= removed;
             }
             Some(context)
         } else {
@@ -106,19 +113,22 @@ impl RequestQueue {
         {
             context.cancel();
         }
-        if state.messages.len() >= 64 {
+        if state.messages.len() >= 64 || state.bytes.saturating_add(bytes) > 32 * 1024 * 1024 {
             if let Some(context) = &state.latest {
                 context.cancel();
             }
             state.messages.clear();
-            state.messages.push_back(ReaderMessage::Invalid(
-                "request queue limit exceeded".into(),
+            state.bytes = 0;
+            state.messages.push_back((
+                ReaderMessage::Invalid("request queue limit exceeded".into()),
+                0,
             ));
             state.closed = true;
         } else {
+            state.bytes += bytes;
             state
                 .messages
-                .push_back(ReaderMessage::Request(request, context));
+                .push_back((ReaderMessage::Request(request, context), bytes));
         }
         self.ready.notify_one();
         !state.closed
@@ -126,7 +136,9 @@ impl RequestQueue {
     pub fn invalid(&self, message: String) {
         let mut state = self.state.lock().unwrap();
         if state.messages.len() < 64 {
-            state.messages.push_back(ReaderMessage::Invalid(message));
+            state
+                .messages
+                .push_back((ReaderMessage::Invalid(message), 0));
         }
         self.ready.notify_one();
     }
@@ -144,7 +156,8 @@ impl RequestQueue {
             if deadline.is_some_and(|d| Instant::now() >= d) {
                 return None;
             }
-            if let Some(message) = state.messages.pop_front() {
+            if let Some((message, bytes)) = state.messages.pop_front() {
+                state.bytes -= bytes;
                 return Some(message);
             }
             if state.closed {
@@ -199,6 +212,20 @@ mod tests {
             Some(ReaderMessage::Request(HostRequest::Execute { .. }, _))
         ));
         assert_eq!(id(q.receive(None)), 4);
+    }
+    #[test]
+    fn byte_limit_applies_even_below_message_count_limit() {
+        let q = RequestQueue::default();
+        assert!(q.push_sized(
+            HostRequest::ListConfigurationItems { request_id: 1 },
+            20 * 1024 * 1024
+        ));
+        assert!(!q.push_sized(
+            HostRequest::ListConfigurationItems { request_id: 2 },
+            20 * 1024 * 1024
+        ));
+        assert!(matches!(q.receive(None), Some(ReaderMessage::Invalid(_))));
+        assert!(matches!(q.receive(None), Some(ReaderMessage::Closed)));
     }
     #[test]
     fn superseding_and_explicit_cancel_reach_running_search() {

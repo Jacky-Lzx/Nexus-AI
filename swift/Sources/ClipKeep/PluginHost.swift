@@ -27,7 +27,26 @@ final class PluginProcess {
     private let output = Pipe()
     private let logHandle: FileHandle?
     private let decodeQueue: DispatchQueue
-    private var buffer = Data()
+    private var framer = PluginLineFramer()
+    private lazy var writer = PluginWriteQueue(handle: input.fileHandleForWriting) { [weak self] message in
+        self?.transportFailure(message)
+    }
+    private(set) var isReady = false
+    private var stopped = false
+    private var waitingRequests: [[String: Any]] = []
+    private var waitingBytes = 0
+    private let deliveryLock = NSLock()
+    private var pendingDeliveries = 0
+    private var pendingDeliveryBytes = 0
+    private var transportFailed = false
+
+    private struct EventIdentity: Decodable {
+        let type: String
+        let queryId: UInt64?
+        let requestId: UInt64?
+        enum CodingKeys: String, CodingKey { case type; case queryId = "query_id"; case requestId = "request_id" }
+        var summary: String { "\(type) (query=\(queryId.map(String.init) ?? "none"), request=\(requestId.map(String.init) ?? "none"))" }
+    }
 
     struct EventEnvelope: Decodable {
         let type: String
@@ -67,6 +86,9 @@ final class PluginProcess {
         logHandle = Self.makeLogHandle(pluginId: descriptor.id)
         decodeQueue = DispatchQueue(label: "io.clipkeep.plugin.decode.\(descriptor.id)")
         process.executableURL = executableURL
+        guard fcntl(input.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1) != -1 else {
+            throw PluginTransportError(message: "Could not configure plugin pipe: \(errno)")
+        }
         process.standardInput = input
         process.standardOutput = output
         process.standardError = logHandle ?? FileHandle.standardError
@@ -76,8 +98,14 @@ final class PluginProcess {
 
         output.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty else { return }
-            self?.decodeQueue.async { [weak self] in self?.consume(data) }
+            guard let self else { return }
+            self.decodeQueue.sync {
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                    do { try self.framer.finish() }
+                    catch { self.transportFailure(error.localizedDescription) }
+                } else { self.consume(data) }
+            }
         }
         try process.run()
     }
@@ -87,15 +115,32 @@ final class PluginProcess {
         configurationSchema = schema
     }
 
-    func initialize() {
+    func initialize(timeout: TimeInterval = 5) {
         send(PluginContract.initializeRequest)
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            guard let self, !self.isReady, !self.stopped else { return }
+            self.transportFailure("Plugin initialization timed out")
+        }
+    }
+
+    func markReady(settings: [String: String]) {
+        guard !isReady, !stopped else { transportFailure("Duplicate initialization"); return }
+        isReady = true
+        configure(settings: settings)
+        let requests = waitingRequests
+        waitingRequests.removeAll()
+        waitingBytes = 0
+        for request in requests { send(request) }
     }
 
     func stop() {
+        stopped = true
+        waitingRequests.removeAll()
+        waitingBytes = 0
+        writer.close()
         onEvent = nil
         output.fileHandleForReading.readabilityHandler = nil
         if process.isRunning {
-            send(["type": "shutdown"])
             process.terminate()
             let retiringProcess = process
             DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
@@ -132,7 +177,9 @@ final class PluginProcess {
     }
 
     func cancelSearch(queryId: UInt64) {
-        guard features.contains("search.cancel") else { return }
+        waitingRequests.removeAll { ($0["query_id"] as? UInt64) == queryId && ($0["type"] as? String) == "search" }
+        waitingBytes = waitingRequests.reduce(0) { $0 + ((try? JSONSerialization.data(withJSONObject: $1).count) ?? 0) }
+        guard isReady, features.contains("search.cancel") else { return }
         send(["type": "cancel_search", "query_id": queryId])
     }
 
@@ -168,35 +215,102 @@ final class PluginProcess {
     }
 
     private func send(_ object: [String: Any]) {
-        guard process.isRunning,
-              var data = try? JSONSerialization.data(withJSONObject: object) else { return }
-        data.append(0x0A)
+        guard !stopped, process.isRunning else { return }
         do {
-            try input.fileHandleForWriting.write(contentsOf: data)
-        } catch {
-            onEvent?(.error(PluginFailure(message: error.localizedDescription)))
+            var data = try JSONSerialization.data(withJSONObject: object)
+            guard data.count <= PluginLineFramer.maxBytes else {
+                throw PluginTransportError(message: "Plugin request exceeds message limit")
+            }
+            if !isReady, object["type"] as? String != "initialize" {
+                // Before readiness retain only the latest adjacent search.
+                if object["type"] as? String == "search", waitingRequests.last?["type"] as? String == "search" {
+                    let removed = waitingRequests.removeLast()
+                    waitingBytes -= (try? JSONSerialization.data(withJSONObject: removed).count) ?? 0
+                }
+                guard waitingRequests.count < 64, waitingBytes + data.count <= 32 * 1024 * 1024 else {
+                    throw PluginTransportError(message: "Plugin initialization queue limit exceeded")
+                }
+                waitingRequests.append(object)
+                waitingBytes += data.count
+                return
+            }
+            data.append(0x0A)
+            guard writer.enqueue(data) else { throw PluginTransportError(message: "Plugin write queue limit exceeded") }
+        } catch { transportFailure(error.localizedDescription) }
+    }
+
+    private func transportFailure(_ message: String) {
+        deliveryLock.lock()
+        guard !transportFailed else { deliveryLock.unlock(); return }
+        transportFailed = true
+        deliveryLock.unlock()
+        // Never log payloads: clipboard and action inputs may contain private text.
+        let diagnostic = "[\(descriptor.id)] \(message)"
+        if let data = (diagnostic + "\n").data(using: .utf8) { try? logHandle?.write(contentsOf: data) }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.stopped else { return }
+            let handler = self.onEvent
+            self.stop()
+            handler?(.error(PluginFailure(message: diagnostic, code: "transport_error")))
+            handler?(.terminated)
+        }
+    }
+
+    private func deliver(_ event: Event, bytes: Int) {
+        deliveryLock.lock()
+        guard !transportFailed else { deliveryLock.unlock(); return }
+        guard pendingDeliveries < 128, pendingDeliveryBytes + bytes <= 32 * 1024 * 1024 else {
+            deliveryLock.unlock(); transportFailure("Plugin event queue limit exceeded"); return
+        }
+        pendingDeliveries += 1
+        pendingDeliveryBytes += bytes
+        deliveryLock.unlock()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.deliveryLock.lock()
+            self.pendingDeliveries -= 1
+            self.pendingDeliveryBytes -= bytes
+            let failed = self.transportFailed
+            self.deliveryLock.unlock()
+            guard !self.stopped, !failed else { return }
+            if case .initialized = event {
+                guard !self.isReady else { self.transportFailure("Duplicate initialization"); return }
+            } else if !self.isReady {
+                if case .error = event { self.onEvent?(event); return }
+                self.transportFailure("Plugin sent an event before initialization")
+                return
+            }
+            self.onEvent?(event)
         }
     }
 
     private func consume(_ data: Data) {
-        buffer.append(data)
-        while let newline = buffer.firstIndex(of: 0x0A) {
-            let line = buffer[..<newline]
-            buffer.removeSubrange(...newline)
-            guard !line.isEmpty else { continue }
-            decode(Data(line))
-        }
+        do { try framer.consume(data) { try decode($0) } }
+        catch { transportFailure(error.localizedDescription) }
     }
 
-    private func decode(_ data: Data) {
-        guard let envelope = try? JSONDecoder().decode(EventEnvelope.self, from: data) else { return }
+    private func decode(_ data: Data) throws {
+        let identity = try? JSONDecoder().decode(EventIdentity.self, from: data)
+        let envelope: EventEnvelope
+        do { envelope = try JSONDecoder().decode(EventEnvelope.self, from: data) }
+        catch let DecodingError.dataCorrupted(context) {
+            throw PluginTransportError(message: "Malformed plugin JSON at \(context.codingPath.map(\.stringValue).joined(separator: "."))")
+        } catch {
+            throw PluginTransportError(message: "Invalid plugin event schema: \(identity?.summary ?? "unknown event")")
+        }
+        func invalid(_ detail: String) -> PluginTransportError {
+            PluginTransportError(message: "Invalid \(envelope.type) event (query=\(envelope.queryId.map(String.init) ?? "none"), request=\(envelope.requestId.map(String.init) ?? "none")): \(detail)")
+        }
         let event: Event?
         switch envelope.type {
         case "initialized":
-            guard let pluginId = envelope.pluginId, let protocolVersion = envelope.protocolVersion else { return }
+            guard let pluginId = envelope.pluginId, let protocolVersion = envelope.protocolVersion else { throw invalid("missing identity or version") }
             event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion, features: envelope.features ?? [], schema: envelope.configurationSchema ?? [], requiredFeatures: envelope.requiredFeatures ?? [], requiredServices: envelope.requiredServices ?? [:])
         case "search_results":
-            guard let queryId = envelope.queryId, let items = envelope.items else { return }
+            guard let queryId = envelope.queryId, let items = envelope.items else { throw invalid("missing results") }
+            guard items.count <= 100, (envelope.presentationItems?.count ?? 0) <= 64,
+                  items.allSatisfy({ $0.actions.count <= 64 && $0.actions.allSatisfy { $0.inputFields.count <= 32 } })
+            else { throw invalid("result count limit exceeded") }
             event = .searchResults(
                 queryId: queryId,
                 items: items,
@@ -204,29 +318,29 @@ final class PluginProcess {
             )
         case "configuration_items":
             guard let requestId = envelope.requestId,
-                  let items = envelope.configurationItems else { return }
+                  let items = envelope.configurationItems, items.count <= 10_000 else { throw invalid("invalid configuration items") }
             event = .configurationItems(requestId: requestId, items: items)
         case "notification":
-            guard let notification = envelope.notification else { return }
+            guard let notification = envelope.notification else { throw invalid("missing notification") }
             event = .notification(notification)
         case "catalog_changed":
             event = .catalogChanged
         case "action_finished":
+            guard let requestId = envelope.requestId, let success = envelope.success else { throw invalid("missing action identity or outcome") }
             event = .actionFinished(
-                requestId: envelope.requestId ?? 0,
-                success: envelope.success ?? false,
+                requestId: requestId,
+                success: success,
                 message: envelope.message
             )
         case "error":
+            guard envelope.queryId == nil || envelope.requestId == nil else { throw invalid("ambiguous error identity") }
             event = .error(PluginFailure(message: envelope.message ?? "Plugin error",
                 queryId: envelope.queryId, requestId: envelope.requestId,
                 code: envelope.code, retryable: envelope.retryable ?? false))
         default:
             event = nil
         }
-        if let event {
-            DispatchQueue.main.async { [weak self] in self?.onEvent?(event) }
-        }
+        if let event { deliver(event, bytes: data.count) }
     }
 }
 
@@ -587,7 +701,7 @@ final class SearchCoordinator {
             }
             processes[descriptor.id] = plugin
             plugin.initialize()
-            plugin.configure(settings: settings(for: descriptor.id))
+
         } catch {
             onStatusChanged?("Could not start \(descriptor.name): \(error.localizedDescription)")
         }
@@ -628,7 +742,7 @@ final class SearchCoordinator {
                 return
             }
             process.acceptFeatures(features, schema: schema)
-            process.configure(settings: settings(for: pluginId))
+            process.markReady(settings: settings(for: pluginId))
             onPluginStateChanged?()
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self, weak process] in
                 guard let self, let process, self.processes[pluginId] === process else { return }

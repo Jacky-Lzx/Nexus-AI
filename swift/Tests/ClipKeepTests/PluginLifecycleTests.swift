@@ -239,3 +239,105 @@ private func eventually(_ predicate: () -> Bool) async -> Bool {
     coordinator.activateWhenSearchSettles { opened += 1 }
     #expect(opened == 1)
 }
+
+private func replaceFixtureScript(_ bundle: URL, body: String) throws {
+    let executable = bundle.appendingPathComponent("plugin")
+    try ("#!/usr/bin/env python3\nimport json, sys, time\n" + body + "\n")
+        .write(to: executable, atomically: true, encoding: .utf8)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+}
+
+@Test @MainActor func initializationDeadlineStopsSilentPlugin() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    try replaceFixtureScript(bundle, body: "time.sleep(10)")
+    let descriptor = try PluginRegistry.load(bundle)
+    let process = try PluginProcess(descriptor: descriptor, executableURL: descriptor.executableURL)
+    defer { process.stop() }
+    var message = ""
+    var ended = false
+    process.onEvent = { event in
+        if case .error(let failure) = event { message = failure.message }
+        if case .terminated = event { ended = true }
+    }
+    process.initialize(timeout: 0.1)
+    #expect(await eventually { ended })
+    #expect(message.contains("initialization timed out"))
+}
+
+@Test @MainActor func malformedEventFailsExplicitlyWithoutLeakingPayload() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    try replaceFixtureScript(bundle, body: """
+    sys.stdin.readline()
+    print('{"type":"search_results","query_id":7,"items":"private-payload"}', flush=True)
+    time.sleep(10)
+    """)
+    let descriptor = try PluginRegistry.load(bundle)
+    let process = try PluginProcess(descriptor: descriptor, executableURL: descriptor.executableURL)
+    defer { process.stop() }
+    var message = ""
+    process.onEvent = { if case .error(let failure) = $0 { message = failure.message } }
+    process.initialize()
+    #expect(await eventually { !message.isEmpty })
+    #expect(message.contains("schema"))
+    #expect(!message.contains("private-payload"))
+}
+
+@Test @MainActor func blockedPluginInputDoesNotBlockMainThreadAndQueueIsBounded() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    try replaceFixtureScript(bundle, body: """
+    sys.stdin.readline()
+    print(json.dumps(dict(type='initialized', plugin_id='com.example.test', protocol_version=1)), flush=True)
+    time.sleep(10)
+    """)
+    let descriptor = try PluginRegistry.load(bundle)
+    let process = try PluginProcess(descriptor: descriptor, executableURL: descriptor.executableURL)
+    defer { process.stop() }
+    var message = ""
+    process.onEvent = { event in
+        if case .initialized = event { process.markReady(settings: [:]) }
+        if case .error(let failure) = event { message = failure.message }
+    }
+    process.initialize()
+    #expect(await eventually { process.isReady })
+    let started = Date()
+    for id in 0..<80 { process.search(queryId: UInt64(id), query: String(repeating: "x", count: 100_000), timeout: 2) }
+    #expect(Date().timeIntervalSince(started) < 2)
+    #expect(await eventually { message.contains("queue limit") })
+}
+
+@Test @MainActor func noBusinessRequestIsSentUntilPluginIsReady() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    try replaceFixtureScript(bundle, body: """
+    import select
+    sys.stdin.readline()
+    if select.select([sys.stdin], [], [], 0.15)[0]:
+        print(json.dumps(dict(type='error', message='request before ready')), flush=True)
+    print(json.dumps(dict(type='initialized', plugin_id='com.example.test', protocol_version=1)), flush=True)
+    for line in sys.stdin:
+        request = json.loads(line)
+        if request['type'] == 'search':
+            print(json.dumps(dict(type='search_results', query_id=request['query_id'], items=[])), flush=True)
+    """)
+    let descriptor = try PluginRegistry.load(bundle)
+    let process = try PluginProcess(descriptor: descriptor, executableURL: descriptor.executableURL)
+    defer { process.stop() }
+    var errors: [String] = []
+    var completed = false
+    process.onEvent = { event in
+        if case .initialized = event { process.markReady(settings: [:]) }
+        if case .error(let failure) = event { errors.append(failure.message) }
+        if case .searchResults = event { completed = true }
+    }
+    process.initialize()
+    process.search(queryId: 1, query: "queued", timeout: 2)
+    #expect(await eventually { completed })
+    #expect(errors.isEmpty)
+}
