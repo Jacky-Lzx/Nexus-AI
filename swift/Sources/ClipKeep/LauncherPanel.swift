@@ -1557,7 +1557,8 @@ final class LauncherPanelController: NSWindowController,
         row.layer?.cornerCurve = .continuous
         row.layer?.backgroundColor = presentationColor(for: item.style).cgColor
         row.heightAnchor.constraint(equalToConstant: 32).isActive = true
-        row.widthAnchor.constraint(equalToConstant: 244).isActive = true
+        row.widthAnchor.constraint(lessThanOrEqualToConstant: 244).isActive = true
+        row.setContentHuggingPriority(.required, for: .horizontal)
 
         let icon = NSImageView()
         icon.image = NSImage(systemSymbolName: plugin.symbolName, accessibilityDescription: plugin.name)
@@ -1571,6 +1572,7 @@ final class LauncherPanelController: NSWindowController,
         value.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
         value.textColor = .secondaryLabelColor
         value.lineBreakMode = .byTruncatingTail
+        value.setContentHuggingPriority(.required, for: .horizontal)
         value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         row.addArrangedSubview(icon)
