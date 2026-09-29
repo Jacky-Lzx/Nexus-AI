@@ -8,6 +8,10 @@ pub const PROTOCOL_VERSION: u32 = 1;
 pub enum HostRequest {
     Initialize {
         protocol_version: u32,
+        #[serde(default)]
+        host_features: Vec<String>,
+        #[serde(default)]
+        host_services: BTreeMap<String, u32>,
     },
     Configure {
         #[serde(default)]
@@ -50,6 +54,10 @@ pub enum PluginEvent {
         features: Vec<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         configuration_schema: Vec<ConfigurationField>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        required_features: Vec<String>,
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        required_services: BTreeMap<String, u32>,
     },
     SearchResults {
         query_id: u64,
@@ -355,5 +363,42 @@ mod tests {
                 arguments: None,
             }
         );
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+    #[test]
+    fn shared_fixtures_roundtrip_without_losing_present_fields() {
+        let cases: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../../protocol/fixtures/v1.json")).unwrap();
+        fn contains(actual: &serde_json::Value, expected: &serde_json::Value) {
+            match expected {
+                serde_json::Value::Object(map) => {
+                    for (key, value) in map {
+                        contains(&actual[key], value);
+                    }
+                }
+                serde_json::Value::Array(array) => {
+                    assert_eq!(actual.as_array().unwrap().len(), array.len());
+                    for (a, b) in actual.as_array().unwrap().iter().zip(array) {
+                        contains(a, b);
+                    }
+                }
+                _ => assert_eq!(actual, expected),
+            }
+        }
+        for case in cases {
+            let value = case["message"].clone();
+            let actual = if case["direction"] == "request" {
+                serde_json::to_value(serde_json::from_value::<HostRequest>(value.clone()).unwrap())
+                    .unwrap()
+            } else {
+                serde_json::to_value(serde_json::from_value::<PluginEvent>(value.clone()).unwrap())
+                    .unwrap()
+            };
+            contains(&actual, &value);
+        }
     }
 }

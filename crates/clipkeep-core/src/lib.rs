@@ -43,6 +43,8 @@ impl PluginClient {
         };
         client.send(&HostRequest::Initialize {
             protocol_version: PROTOCOL_VERSION,
+            host_features: Vec::new(),
+            host_services: Default::default(),
         })?;
         Ok(client)
     }

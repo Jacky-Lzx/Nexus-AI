@@ -2,7 +2,7 @@ import Foundation
 
 final class PluginProcess {
     enum Event {
-        case initialized(pluginId: String, protocolVersion: Int, features: [String], schema: [PluginConfigurationField])
+        case initialized(pluginId: String, protocolVersion: Int, features: [String], schema: [PluginConfigurationField], requiredFeatures: [String], requiredServices: [String: Int])
         case searchResults(
             queryId: UInt64,
             items: [SearchResult],
@@ -29,7 +29,7 @@ final class PluginProcess {
     private let decodeQueue: DispatchQueue
     private var buffer = Data()
 
-    private struct EventEnvelope: Decodable {
+    struct EventEnvelope: Decodable {
         let type: String
         let queryId: UInt64?
         let items: [SearchResult]?
@@ -45,10 +45,14 @@ final class PluginProcess {
         let retryable: Bool?
         let features: [String]?
         let configurationSchema: [PluginConfigurationField]?
+        let requiredFeatures: [String]?
+        let requiredServices: [String: Int]?
 
         enum CodingKeys: String, CodingKey {
             case type, items, notification, success, message, code, retryable, features
             case configurationSchema = "configuration_schema"
+            case requiredFeatures = "required_features"
+            case requiredServices = "required_services"
             case queryId = "query_id"
             case requestId = "request_id"
             case pluginId = "plugin_id"
@@ -79,12 +83,12 @@ final class PluginProcess {
     }
 
     func acceptFeatures(_ offered: [String], schema: [PluginConfigurationField]) {
-        features = Set(offered)
+        features = Set(offered).intersection(PluginContract.features)
         configurationSchema = schema
     }
 
     func initialize() {
-        send(["type": "initialize", "protocol_version": 1])
+        send(PluginContract.initializeRequest)
     }
 
     func stop() {
@@ -190,7 +194,7 @@ final class PluginProcess {
         switch envelope.type {
         case "initialized":
             guard let pluginId = envelope.pluginId, let protocolVersion = envelope.protocolVersion else { return }
-            event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion, features: envelope.features ?? [], schema: envelope.configurationSchema ?? [])
+            event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion, features: envelope.features ?? [], schema: envelope.configurationSchema ?? [], requiredFeatures: envelope.requiredFeatures ?? [], requiredServices: envelope.requiredServices ?? [:])
         case "search_results":
             guard let queryId = envelope.queryId, let items = envelope.items else { return }
             event = .searchResults(
@@ -608,9 +612,18 @@ final class SearchCoordinator {
     private func handle(_ event: PluginProcess.Event, from pluginId: String, process: PluginProcess) {
         guard processes[pluginId] === process else { return }
         switch event {
-        case let .initialized(actualPluginId, protocolVersion, features, schema):
+        case let .initialized(actualPluginId, protocolVersion, features, schema, requiredFeatures, requiredServices):
             guard actualPluginId == pluginId, protocolVersion == 1 else {
                 onStatusChanged?("Rejected incompatible plugin: \(pluginId)")
+                failSearch(pluginId: pluginId, queryId: queryId)
+                stopPlugin(pluginId)
+                return
+            }
+            do {
+                try PluginContract.validate(requiredFeatures: requiredFeatures, requiredServices: requiredServices, schema: schema)
+            } catch {
+                onStatusChanged?(error.localizedDescription)
+                failSearch(pluginId: pluginId, queryId: queryId)
                 stopPlugin(pluginId)
                 return
             }

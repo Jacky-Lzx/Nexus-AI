@@ -57,3 +57,19 @@ An action may declare `host_action: {service, parameters}`. The object takes
 precedence over legacy metadata, and parameters belong to that specific action.
 Capability checks still apply. ResultAction source literals in bundled plugins
 now specify `host_action: None`; their wire representation is unchanged.
+
+## Negotiation and compatibility fixtures
+
+`initialize` advertises `host_features` and `host_services` (service name to exact
+API version). `initialized` returns supported `features`, plus optional
+`required_features` and `required_services`. Missing required support rejects the
+session before work starts; optional features use the intersection. Missing lists
+mean a legacy v1 peer. A newer SDK adapts typed service objects to old metadata for
+legacy hosts; conflicting per-action parameters require the modern feature and
+fail explicitly rather than selecting the wrong parameters.
+
+The SDK rejects work before initialization and duplicate initialization. The host
+validates configuration schemas, including defaults and duplicate field IDs.
+`protocol/fixtures/v1.json` is consumed by both Rust and Swift tests. Keep old
+fixtures when adding new ones; existing input kinds remain text/integer until a
+separately negotiated form extension is introduced.

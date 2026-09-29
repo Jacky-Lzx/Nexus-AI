@@ -15,7 +15,27 @@ use std::{
     time::{Duration, Instant},
 };
 
+pub const SDK_FEATURES: &[&str] = &[
+    "search.cancel",
+    "action.arguments",
+    "configuration.values",
+    "host_action.object",
+];
+
+#[derive(Default)]
+struct Session {
+    initialized: bool,
+    host_features: Vec<String>,
+}
+
 pub trait Plugin {
+    fn required_features(&self) -> Vec<String> {
+        Vec::new()
+    }
+    fn required_services(&self) -> BTreeMap<String, u32> {
+        BTreeMap::new()
+    }
+
     fn id(&self) -> &'static str;
 
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String>;
@@ -104,6 +124,7 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
     let stdout = io::stdout();
     let mut output = BufWriter::new(stdout.lock());
     let mut running = true;
+    let mut session = Session::default();
     let mut poll_interval = plugin.poll_interval();
     let mut next_poll = poll_interval.map(|interval| Instant::now() + interval);
 
@@ -113,7 +134,13 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
         if let Some(message) = message {
             match message {
                 ReaderMessage::Request(request, context) => {
-                    running = handle_request(&mut plugin, request, context.as_ref(), &mut output)?;
+                    running = handle_request(
+                        &mut plugin,
+                        request,
+                        context.as_ref(),
+                        &mut session,
+                        &mut output,
+                    )?;
                 }
                 ReaderMessage::Invalid(message) => {
                     send(&mut output, &PluginEvent::error(message))?;
@@ -150,10 +177,48 @@ fn handle_request(
     plugin: &mut impl Plugin,
     request: HostRequest,
     context: Option<&SearchContext>,
+    session: &mut Session,
     output: &mut impl Write,
 ) -> io::Result<bool> {
+    if !session.initialized
+        && !matches!(
+            request,
+            HostRequest::Initialize { .. } | HostRequest::Shutdown
+        )
+    {
+        send(
+            output,
+            &PluginEvent::error("initialize must be the first request"),
+        )?;
+        return Ok(false);
+    }
     match request {
-        HostRequest::Initialize { protocol_version } => {
+        HostRequest::Initialize {
+            protocol_version,
+            host_features,
+            host_services,
+        } => {
+            if session.initialized {
+                send(output, &PluginEvent::error("duplicate initialize"))?;
+                return Ok(false);
+            }
+            if plugin
+                .required_features()
+                .iter()
+                .any(|feature| !host_features.contains(feature))
+                || plugin
+                    .required_services()
+                    .iter()
+                    .any(|(service, version)| host_services.get(service) != Some(version))
+            {
+                send(
+                    output,
+                    &PluginEvent::error(
+                        "host does not support this plugin's required features or service versions",
+                    ),
+                )?;
+                return Ok(false);
+            }
             if protocol_version != PROTOCOL_VERSION {
                 send(
                     output,
@@ -161,18 +226,18 @@ fn handle_request(
                         "unsupported protocol version {protocol_version}; expected {PROTOCOL_VERSION}"
                     )),
                 )?;
+                return Ok(false);
             } else {
+                session.initialized = true;
+                session.host_features = host_features;
                 send(
                     output,
                     &PluginEvent::Initialized {
                         plugin_id: plugin.id().to_owned(),
                         protocol_version: PROTOCOL_VERSION,
-                        features: vec![
-                            "search.cancel".into(),
-                            "action.arguments".into(),
-                            "configuration.values".into(),
-                            "host_action.object".into(),
-                        ],
+                        features: SDK_FEATURES.iter().map(|s| (*s).into()).collect(),
+                        required_features: plugin.required_features(),
+                        required_services: plugin.required_services(),
                         configuration_schema: plugin.configuration_schema(),
                     },
                 )?;
@@ -194,7 +259,16 @@ fn handle_request(
             let fallback = SearchContext::new(query_id, timeout_ms);
             let context = context.unwrap_or(&fallback);
             let result = plugin.search_with_context(&query, limit, context);
-            let result = context.check().and(result);
+            let result = context.check().and(result).and_then(|mut items| {
+                if !session
+                    .host_features
+                    .iter()
+                    .any(|f| f == "host_action.object")
+                {
+                    adapt_legacy_host_actions(&mut items)?;
+                }
+                Ok(items)
+            });
             match result {
                 Ok(items) => send(
                     output,
@@ -251,6 +325,30 @@ fn handle_request(
         HostRequest::Shutdown => return Ok(false),
     }
     Ok(true)
+}
+
+fn adapt_legacy_host_actions(items: &mut [SearchResult]) -> Result<(), String> {
+    for item in items {
+        let mut parameters = BTreeMap::new();
+        for action in &mut item.actions {
+            if let Some(call) = action.host_action.take() {
+                item.metadata
+                    .insert(format!("host_action.{}", action.id), call.service);
+                for (key, value) in call.parameters {
+                    let value = value
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| value.to_string());
+                    if parameters.get(&key).is_some_and(|old| old != &value) {
+                        return Err("This result needs a host supporting host_action.object".into());
+                    }
+                    parameters.insert(key, value);
+                }
+            }
+        }
+        item.metadata.extend(parameters);
+    }
+    Ok(())
 }
 
 fn configure_plugin(
@@ -358,6 +456,10 @@ mod tests {
                 timeout_ms: None,
             },
             None,
+            &mut Session {
+                initialized: true,
+                host_features: Vec::new(),
+            },
             &mut output,
         )
         .unwrap();
@@ -456,5 +558,66 @@ mod typed_tests {
             serde_json::from_str::<serde_json::Value>(plugin.input.as_ref().unwrap()).unwrap(),
             serde_json::json!({"count":3,"flag":true})
         );
+    }
+}
+
+#[cfg(test)]
+mod negotiation_tests {
+    use super::*;
+    struct Modern;
+    impl Plugin for Modern {
+        fn id(&self) -> &'static str {
+            "modern"
+        }
+        fn required_features(&self) -> Vec<String> {
+            vec!["action.arguments".into()]
+        }
+        fn search(&mut self, _: &str, _: usize) -> Result<Vec<SearchResult>, String> {
+            Ok(vec![])
+        }
+        fn execute(&mut self, _: &str, _: &str) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+    }
+    #[test]
+    fn refuses_missing_required_features_before_ready() {
+        let mut output = Vec::new();
+        let mut session = Session::default();
+        let keep_running = handle_request(
+            &mut Modern,
+            HostRequest::Initialize {
+                protocol_version: 1,
+                host_features: vec![],
+                host_services: BTreeMap::new(),
+            },
+            None,
+            &mut session,
+            &mut output,
+        )
+        .unwrap();
+        assert!(!keep_running);
+        assert!(!session.initialized);
+        assert!(matches!(
+            serde_json::from_slice::<PluginEvent>(&output).unwrap(),
+            PluginEvent::Error { .. }
+        ));
+    }
+    #[test]
+    fn typed_host_action_has_legacy_wire_adapter() {
+        let fixture: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../../protocol/fixtures/v1.json")).unwrap();
+        let case = fixture
+            .iter()
+            .find(|v| v["name"] == "typed_results")
+            .unwrap();
+        let PluginEvent::SearchResults { mut items, .. } =
+            serde_json::from_value(case["message"].clone()).unwrap()
+        else {
+            panic!()
+        };
+        adapt_legacy_host_actions(&mut items).unwrap();
+        assert_eq!(items[0].metadata["host_action.run"], "system.media");
+        assert_eq!(items[0].metadata["command"], "mute");
+        assert!(items[0].actions[0].host_action.is_none());
     }
 }
