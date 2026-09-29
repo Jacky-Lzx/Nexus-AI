@@ -111,7 +111,17 @@ python3 scripts/test-plugin-protocol.py dist/Nexus.app \
   --hello dist/plugins/com.example.nexus.hello.clipkeepplugin --cancellation
 ```
 
-The currently installed `/Applications/Nexus.app` has not been replaced. Desktop
-UI verification of the new bundle is pending explicit restart authorization;
-automatic approval rejected terminating the active app because it may contain
-unfinished state. This does not affect the completed process/protocol tests.
+After explicit restart authorization, the old `/Applications/Nexus.app` process
+was stopped and the signed `dist/Nexus.app` launched. Its running executable path
+and Nexus Development signature were verified. Desktop checks passed for:
+
+- Calculator search `2+3` displaying `5`.
+- Hot-loading the independently signed Hello plugin without restarting the host.
+- Return executing Hello's plugin action and displaying its success message.
+- Searching Settings and pressing Return to open the settings window.
+- The Hello plugin's schema-generated Configure form displaying Greeting/Hello,
+  Save and Cancel correctly. The form was cancelled without changing preferences;
+  typed configuration application was verified separately by the protocol smoke.
+
+The temporary Hello plugin was removed after testing. The app continues running
+from `dist/Nexus.app`; the bundle in `/Applications` has not been replaced.
