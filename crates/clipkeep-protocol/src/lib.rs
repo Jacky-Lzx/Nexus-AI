@@ -17,6 +17,8 @@ pub enum HostRequest {
         query_id: u64,
         query: String,
         limit: usize,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeout_ms: Option<u64>,
     },
     ListConfigurationItems {
         request_id: u64,
@@ -28,6 +30,9 @@ pub enum HostRequest {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         input: Option<String>,
     },
+    CancelSearch {
+        query_id: u64,
+    },
     Shutdown,
 }
 
@@ -37,6 +42,8 @@ pub enum PluginEvent {
     Initialized {
         plugin_id: String,
         protocol_version: u32,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        features: Vec<String>,
     },
     SearchResults {
         query_id: u64,
@@ -201,6 +208,7 @@ mod tests {
             query_id: 7,
             query: "safari".into(),
             limit: 20,
+            timeout_ms: None,
         };
         let json = serde_json::to_value(request).unwrap();
         assert_eq!(json["type"], "search");

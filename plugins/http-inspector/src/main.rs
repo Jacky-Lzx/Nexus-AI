@@ -1,4 +1,4 @@
-use clipkeep_plugin_sdk::{Plugin, run_plugin};
+use clipkeep_plugin_sdk::{Plugin, SearchContext, run_plugin};
 use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
 use std::{collections::BTreeMap, io, process::Command};
 use url::Url;
@@ -41,6 +41,16 @@ impl Plugin for HttpInspectorPlugin {
     }
 
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
+        self.search_with_context(query, limit, &SearchContext::new(0, None))
+    }
+
+    fn search_with_context(
+        &mut self,
+        query: &str,
+        limit: usize,
+        context: &SearchContext,
+    ) -> Result<Vec<SearchResult>, String> {
+        context.check()?;
         self.action_values.clear();
         if limit == 0 {
             return Ok(Vec::new());
@@ -50,7 +60,7 @@ impl Plugin for HttpInspectorPlugin {
             Ok(None) => return Ok(Vec::new()),
             Err(message) => return Ok(vec![invalid_result(query, &message)]),
         };
-        let probe = match run_probe(&request.url) {
+        let probe = match run_probe(&request.url, context) {
             Ok(probe) => probe,
             Err(message) => return Ok(vec![invalid_result(query, &message)]),
         };
@@ -206,11 +216,13 @@ fn curl_arguments(url: &str) -> Vec<String> {
     ]
 }
 
-fn run_probe(url: &str) -> Result<HttpProbe, String> {
-    let output = Command::new(CURL_PATH)
-        .args(curl_arguments(url))
-        .output()
-        .map_err(|error| format!("could not start HTTP probe: {error}"))?;
+fn run_probe(url: &str, context: &SearchContext) -> Result<HttpProbe, String> {
+    let output = clipkeep_plugin_sdk::command_output(
+        Command::new(CURL_PATH).args(curl_arguments(url)),
+        context,
+        MAX_OUTPUT_BYTES,
+    )
+    .map_err(|error| format!("could not start HTTP probe: {error}"))?;
     if output.stdout.len() > MAX_OUTPUT_BYTES || output.stderr.len() > MAX_OUTPUT_BYTES {
         return Err("HTTP probe output exceeded 256 KiB".into());
     }

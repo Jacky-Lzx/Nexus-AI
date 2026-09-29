@@ -1,11 +1,16 @@
+mod command;
+pub use command::command_output;
+mod scheduling;
 use clipkeep_protocol::{
     ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent, PluginNotification,
     PluginPresentationItem, SearchResult,
 };
+pub use scheduling::SearchContext;
+use scheduling::{ReaderMessage, RequestQueue};
 use std::{
     collections::BTreeMap,
     io::{self, BufRead, BufReader, BufWriter, Write},
-    sync::mpsc::{self, Receiver, RecvError, RecvTimeoutError},
+    sync::Arc,
     thread,
     time::{Duration, Instant},
 };
@@ -14,6 +19,16 @@ pub trait Plugin {
     fn id(&self) -> &'static str;
 
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String>;
+
+    fn search_with_context(
+        &mut self,
+        query: &str,
+        limit: usize,
+        context: &SearchContext,
+    ) -> Result<Vec<SearchResult>, String> {
+        context.check()?;
+        self.search(query, limit)
+    }
 
     fn execute(&mut self, result_id: &str, action_id: &str) -> Result<Option<String>, String>;
 
@@ -60,24 +75,12 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
     let mut next_poll = poll_interval.map(|interval| Instant::now() + interval);
 
     while running {
-        let message = match next_poll {
-            Some(deadline) => {
-                match requests.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-                    Ok(message) => Some(message),
-                    Err(RecvTimeoutError::Timeout) => None,
-                    Err(RecvTimeoutError::Disconnected) => return Ok(()),
-                }
-            }
-            None => match requests.recv() {
-                Ok(message) => Some(message),
-                Err(RecvError) => return Ok(()),
-            },
-        };
+        let message = requests.receive(next_poll);
 
         if let Some(message) = message {
             match message {
-                ReaderMessage::Request(request) => {
-                    running = handle_request(&mut plugin, request, &mut output)?;
+                ReaderMessage::Request(request, context) => {
+                    running = handle_request(&mut plugin, request, context.as_ref(), &mut output)?;
                 }
                 ReaderMessage::Invalid(message) => {
                     send(&mut output, &PluginEvent::error(message))?;
@@ -113,6 +116,7 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
 fn handle_request(
     plugin: &mut impl Plugin,
     request: HostRequest,
+    context: Option<&SearchContext>,
     output: &mut impl Write,
 ) -> io::Result<bool> {
     match request {
@@ -130,6 +134,7 @@ fn handle_request(
                     &PluginEvent::Initialized {
                         plugin_id: plugin.id().to_owned(),
                         protocol_version: PROTOCOL_VERSION,
+                        features: vec!["search.cancel".into()],
                     },
                 )?;
             }
@@ -143,26 +148,33 @@ fn handle_request(
             query_id,
             query,
             limit,
-        } => match plugin.search(&query, limit) {
-            Ok(items) => send(
-                output,
-                &PluginEvent::SearchResults {
-                    query_id,
-                    items,
-                    presentation_items: plugin.presentation_items(),
-                },
-            )?,
-            Err(message) => send(
-                output,
-                &PluginEvent::Error {
-                    message,
-                    query_id: Some(query_id),
-                    request_id: None,
-                    code: Some("search_failed".into()),
-                    retryable: false,
-                },
-            )?,
-        },
+            timeout_ms,
+        } => {
+            let fallback = SearchContext::new(query_id, timeout_ms);
+            let context = context.unwrap_or(&fallback);
+            let result = plugin.search_with_context(&query, limit, context);
+            let result = context.check().and(result);
+            match result {
+                Ok(items) => send(
+                    output,
+                    &PluginEvent::SearchResults {
+                        query_id,
+                        items,
+                        presentation_items: plugin.presentation_items(),
+                    },
+                )?,
+                Err(message) => send(
+                    output,
+                    &PluginEvent::Error {
+                        message,
+                        query_id: Some(query_id),
+                        request_id: None,
+                        code: Some("search_failed".into()),
+                        retryable: false,
+                    },
+                )?,
+            }
+        }
         HostRequest::ListConfigurationItems { request_id } => send(
             output,
             &PluginEvent::ConfigurationItems {
@@ -190,6 +202,7 @@ fn handle_request(
                 },
             )?;
         }
+        HostRequest::CancelSearch { .. } => {}
         HostRequest::Shutdown => return Ok(false),
     }
     Ok(true)
@@ -201,31 +214,30 @@ fn send(output: &mut impl Write, event: &PluginEvent) -> io::Result<()> {
     output.flush()
 }
 
-enum ReaderMessage {
-    Request(HostRequest),
-    Invalid(String),
-    Closed,
-}
-
-fn request_reader() -> Receiver<ReaderMessage> {
-    let (sender, receiver) = mpsc::channel();
+fn request_reader() -> Arc<RequestQueue> {
+    let queue = Arc::new(RequestQueue::default());
+    let reader_queue = queue.clone();
     thread::spawn(move || {
         let stdin = io::stdin();
         for line in BufReader::new(stdin.lock()).lines() {
-            let message = match line {
+            match line {
                 Ok(line) => match serde_json::from_str(&line) {
-                    Ok(request) => ReaderMessage::Request(request),
-                    Err(error) => ReaderMessage::Invalid(format!("invalid request: {error}")),
+                    Ok(request) => {
+                        if !reader_queue.push(request) {
+                            return;
+                        }
+                    }
+                    Err(error) => reader_queue.invalid(format!("invalid request: {error}")),
                 },
-                Err(error) => ReaderMessage::Invalid(format!("could not read request: {error}")),
-            };
-            if sender.send(message).is_err() {
-                return;
+                Err(error) => {
+                    reader_queue.invalid(format!("could not read request: {error}"));
+                    break;
+                }
             }
         }
-        let _ = sender.send(ReaderMessage::Closed);
+        reader_queue.close();
     });
-    receiver
+    queue
 }
 
 #[cfg(test)]
@@ -252,7 +264,9 @@ mod tests {
                 query_id: 42,
                 query: "x".into(),
                 limit: 1,
+                timeout_ms: None,
             },
+            None,
             &mut output,
         )
         .unwrap();

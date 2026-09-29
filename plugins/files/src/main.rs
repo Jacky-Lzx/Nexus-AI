@@ -1,10 +1,10 @@
-use clipkeep_plugin_sdk::{Plugin, run_plugin};
+use clipkeep_plugin_sdk::{Plugin, SearchContext, run_plugin};
 use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
 use directories::UserDirs;
 use std::{
     collections::{BTreeMap, HashSet},
     ffi::OsStr,
-    io::{self, BufRead, BufReader},
+    io,
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -39,13 +39,23 @@ impl Plugin for FilesPlugin {
     }
 
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
+        self.search_with_context(query, limit, &SearchContext::new(0, None))
+    }
+
+    fn search_with_context(
+        &mut self,
+        query: &str,
+        limit: usize,
+        context: &SearchContext,
+    ) -> Result<Vec<SearchResult>, String> {
+        context.check()?;
         let query = query.trim();
         if limit == 0 || query.chars().count() < MIN_QUERY_CHARACTERS {
             self.recent_results.clear();
             return Ok(Vec::new());
         }
 
-        let paths = spotlight_search(&self.home, query, limit)?;
+        let paths = spotlight_search(&self.home, query, limit, context)?;
         self.recent_results = paths.iter().cloned().collect();
         Ok(paths
             .into_iter()
@@ -90,55 +100,36 @@ impl Plugin for FilesPlugin {
     }
 }
 
-fn spotlight_search(home: &Path, query: &str, limit: usize) -> Result<Vec<PathBuf>, String> {
-    let mut child = Command::new("/usr/bin/mdfind")
-        .args([OsStr::new("-0"), OsStr::new("-onlyin")])
-        .arg(home)
-        .args([OsStr::new("-name"), OsStr::new(query)])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|error| format!("could not start Spotlight search: {error}"))?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "could not read Spotlight results".to_owned())?;
-    let mut reader = BufReader::new(stdout);
-    let mut paths = Vec::with_capacity(limit);
+fn spotlight_search(
+    home: &Path,
+    query: &str,
+    limit: usize,
+    context: &SearchContext,
+) -> Result<Vec<PathBuf>, String> {
+    let output = clipkeep_plugin_sdk::command_output(
+        Command::new("/usr/bin/mdfind")
+            .args([OsStr::new("-0"), OsStr::new("-onlyin")])
+            .arg(home)
+            .args([OsStr::new("-name"), OsStr::new(query)]),
+        context,
+        8 * 1024 * 1024,
+    )
+    .map_err(|error| format!("Spotlight search failed: {error}"))?;
+    if !output.status.success() {
+        return Err(format!("Spotlight search returned {}", output.status));
+    }
     let mut seen = HashSet::new();
-    let mut bytes = Vec::new();
-
-    while paths.len() < limit {
-        bytes.clear();
-        let count = reader
-            .read_until(0, &mut bytes)
-            .map_err(|error| format!("could not read Spotlight results: {error}"))?;
-        if count == 0 {
-            break;
-        }
-        if bytes.last() == Some(&0) {
-            bytes.pop();
-        }
-        let Ok(value) = std::str::from_utf8(&bytes) else {
-            continue;
-        };
-        let path = PathBuf::from(value);
-        if is_visible_user_item(home, &path) && path.exists() && seen.insert(path.clone()) {
-            paths.push(path);
-        }
-    }
-
-    if paths.len() == limit {
-        let _ = child.kill();
-    }
-    let status = child
-        .wait()
-        .map_err(|error| format!("could not finish Spotlight search: {error}"))?;
-    if !status.success() && paths.len() < limit {
-        return Err(format!("Spotlight search returned {status}"));
-    }
-    Ok(paths)
+    Ok(output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter_map(|bytes| std::str::from_utf8(bytes).ok())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .filter(|path| {
+            is_visible_user_item(home, path) && path.exists() && seen.insert(path.clone())
+        })
+        .take(limit)
+        .collect())
 }
 
 fn is_visible_user_item(home: &Path, path: &Path) -> bool {

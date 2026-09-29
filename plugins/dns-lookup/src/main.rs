@@ -1,4 +1,4 @@
-use clipkeep_plugin_sdk::{Plugin, run_plugin};
+use clipkeep_plugin_sdk::{Plugin, SearchContext, run_plugin};
 use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -31,6 +31,16 @@ impl Plugin for DnsLookupPlugin {
     }
 
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
+        self.search_with_context(query, limit, &SearchContext::new(0, None))
+    }
+
+    fn search_with_context(
+        &mut self,
+        query: &str,
+        limit: usize,
+        context: &SearchContext,
+    ) -> Result<Vec<SearchResult>, String> {
+        context.check()?;
         self.action_values.clear();
         if limit == 0 {
             return Ok(Vec::new());
@@ -40,7 +50,7 @@ impl Plugin for DnsLookupPlugin {
             Ok(None) => return Ok(Vec::new()),
             Err(message) => return Ok(vec![invalid_result(query, &message)]),
         };
-        let lookup = match run_lookup(&request) {
+        let lookup = match run_lookup(&request, context) {
             Ok(lookup) => lookup,
             Err(message) => return Ok(vec![invalid_result(query, &message)]),
         };
@@ -257,9 +267,14 @@ fn validate_domain(value: &str) -> Result<String, String> {
     Ok(value.to_ascii_lowercase())
 }
 
-fn run_lookup(request: &DnsRequest) -> Result<Vec<DigResponse>, String> {
+fn run_lookup(request: &DnsRequest, context: &SearchContext) -> Result<Vec<DigResponse>, String> {
     if request.reverse {
-        return Ok(vec![run_dig(&request.target, RecordType::Ptr, true)?]);
+        return Ok(vec![run_dig(
+            &request.target,
+            RecordType::Ptr,
+            true,
+            context,
+        )?]);
     }
     thread::scope(|scope| {
         let handles: Vec<_> = request
@@ -268,7 +283,7 @@ fn run_lookup(request: &DnsRequest) -> Result<Vec<DigResponse>, String> {
             .copied()
             .map(|record_type| {
                 let target = request.target.as_str();
-                scope.spawn(move || run_dig(target, record_type, false))
+                scope.spawn(move || run_dig(target, record_type, false, context))
             })
             .collect();
         handles
@@ -303,13 +318,19 @@ fn dig_arguments(target: &str, record_type: RecordType, reverse: bool) -> Vec<St
     arguments
 }
 
-fn run_dig(target: &str, record_type: RecordType, reverse: bool) -> Result<DigResponse, String> {
+fn run_dig(
+    target: &str,
+    record_type: RecordType,
+    reverse: bool,
+    context: &SearchContext,
+) -> Result<DigResponse, String> {
     let arguments = dig_arguments(target, record_type, reverse);
-    let output = Command::new(DIG_PATH)
-        .args(&arguments)
-        .env("LC_ALL", "C")
-        .output()
-        .map_err(|error| format!("could not start the macOS DNS tool: {error}"))?;
+    let output = clipkeep_plugin_sdk::command_output(
+        Command::new(DIG_PATH).args(&arguments).env("LC_ALL", "C"),
+        context,
+        MAX_OUTPUT_BYTES,
+    )
+    .map_err(|error| format!("could not start the macOS DNS tool: {error}"))?;
     if output.stdout.len() > MAX_OUTPUT_BYTES || output.stderr.len() > MAX_OUTPUT_BYTES {
         return Err("DNS tool output exceeded 256 KiB".into());
     }

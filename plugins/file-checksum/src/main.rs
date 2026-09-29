@@ -1,4 +1,4 @@
-use clipkeep_plugin_sdk::{Plugin, run_plugin};
+use clipkeep_plugin_sdk::{Plugin, SearchContext, run_plugin};
 use clipkeep_protocol::{ResultAction, ResultKind, SearchResult};
 use ring::digest::{Algorithm, Context, SHA1_FOR_LEGACY_USE_ONLY, SHA256, SHA512};
 use std::{
@@ -31,6 +31,16 @@ impl Plugin for FileChecksumPlugin {
     }
 
     fn search(&mut self, query: &str, limit: usize) -> Result<Vec<SearchResult>, String> {
+        self.search_with_context(query, limit, &SearchContext::new(0, None))
+    }
+
+    fn search_with_context(
+        &mut self,
+        query: &str,
+        limit: usize,
+        context: &SearchContext,
+    ) -> Result<Vec<SearchResult>, String> {
+        context.check()?;
         self.action_values.clear();
         if limit == 0 {
             return Ok(Vec::new());
@@ -40,7 +50,7 @@ impl Plugin for FileChecksumPlugin {
             Ok(None) => return Ok(Vec::new()),
             Err(message) => return Ok(vec![invalid_result(query, &message)]),
         };
-        let evaluation = match evaluate(&request) {
+        let evaluation = match evaluate_with_context(&request, context) {
             Ok(evaluation) => evaluation,
             Err(message) => return Ok(vec![invalid_result(query, &message)]),
         };
@@ -274,20 +284,39 @@ fn strip_paired_quotes(value: &str) -> &str {
     value
 }
 
+#[cfg(test)]
 fn evaluate(request: &ChecksumRequest) -> Result<Evaluation, String> {
+    evaluate_with_context(request, &SearchContext::new(0, None))
+}
+fn evaluate_with_context(
+    request: &ChecksumRequest,
+    context: &SearchContext,
+) -> Result<Evaluation, String> {
     match request {
         ChecksumRequest::Calculate { algorithms, path } => {
-            calculate_results(hash_file(path, algorithms)?)
+            calculate_results(hash_file_with_context(path, algorithms, context)?)
         }
         ChecksumRequest::Verify {
             algorithm,
             expected,
             path,
-        } => verify_result(hash_file(path, &[*algorithm])?, *algorithm, expected),
+        } => verify_result(
+            hash_file_with_context(path, &[*algorithm], context)?,
+            *algorithm,
+            expected,
+        ),
     }
 }
 
+#[cfg(test)]
 fn hash_file(path: &Path, algorithms: &[HashAlgorithm]) -> Result<HashedFile, String> {
+    hash_file_with_context(path, algorithms, &SearchContext::new(0, None))
+}
+fn hash_file_with_context(
+    path: &Path,
+    algorithms: &[HashAlgorithm],
+    context: &SearchContext,
+) -> Result<HashedFile, String> {
     let canonical = fs::canonicalize(path)
         .map_err(|error| format!("cannot resolve {}: {error}", safe_path(path)))?;
     let file = File::open(&canonical)
@@ -314,6 +343,7 @@ fn hash_file(path: &Path, algorithms: &[HashAlgorithm]) -> Result<HashedFile, St
     let mut reader = BufReader::with_capacity(READ_BUFFER_BYTES, file);
     let mut buffer = vec![0_u8; READ_BUFFER_BYTES];
     loop {
+        context.check()?;
         let read = reader
             .read(&mut buffer)
             .map_err(|error| format!("cannot read {}: {error}", safe_path(&canonical)))?;

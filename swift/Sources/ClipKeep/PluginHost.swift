@@ -2,7 +2,7 @@ import Foundation
 
 final class PluginProcess {
     enum Event {
-        case initialized(pluginId: String, protocolVersion: Int)
+        case initialized(pluginId: String, protocolVersion: Int, features: [String])
         case searchResults(
             queryId: UInt64,
             items: [SearchResult],
@@ -18,6 +18,7 @@ final class PluginProcess {
 
     let descriptor: PluginDescriptor
     let instanceId = UUID().uuidString
+    private(set) var features: Set<String> = []
     var onEvent: ((Event) -> Void)?
 
     private let process = Process()
@@ -41,9 +42,10 @@ final class PluginProcess {
         let protocolVersion: Int?
         let code: String?
         let retryable: Bool?
+        let features: [String]?
 
         enum CodingKeys: String, CodingKey {
-            case type, items, notification, success, message, code, retryable
+            case type, items, notification, success, message, code, retryable, features
             case queryId = "query_id"
             case requestId = "request_id"
             case pluginId = "plugin_id"
@@ -72,6 +74,8 @@ final class PluginProcess {
         }
         try process.run()
     }
+
+    func acceptFeatures(_ offered: [String]) { features = Set(offered) }
 
     func initialize() {
         send(["type": "initialize", "protocol_version": 1])
@@ -107,13 +111,19 @@ final class PluginProcess {
         return handle
     }
 
-    func search(queryId: UInt64, query: String) {
+    func search(queryId: UInt64, query: String, timeout: TimeInterval) {
         send([
             "type": "search",
             "query_id": queryId,
             "query": query,
             "limit": 100,
+            "timeout_ms": max(1, Int(timeout * 1000)),
         ])
+    }
+
+    func cancelSearch(queryId: UInt64) {
+        guard features.contains("search.cancel") else { return }
+        send(["type": "cancel_search", "query_id": queryId])
     }
 
     func listConfigurationItems(requestId: UInt64) {
@@ -165,7 +175,7 @@ final class PluginProcess {
         switch envelope.type {
         case "initialized":
             guard let pluginId = envelope.pluginId, let protocolVersion = envelope.protocolVersion else { return }
-            event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion)
+            event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion, features: envelope.features ?? [])
         case "search_results":
             guard let queryId = envelope.queryId, let items = envelope.items else { return }
             event = .searchResults(
@@ -377,6 +387,7 @@ final class SearchCoordinator {
         currentPluginIds = requestedPluginIds
         currentSearchIsGlobal = isGlobal
         currentShowsAllPluginItems = showsAllPluginItems
+        for (pluginId, oldQuery) in pendingSearches { processes[pluginId]?.cancelSearch(queryId: oldQuery) }
         queryId += 1
         searchActivation.begin(queryId: queryId)
         pendingSearches.removeAll()
@@ -397,7 +408,7 @@ final class SearchCoordinator {
         for pluginId in availablePluginIds {
             guard let process = processes[pluginId] else { continue }
             pendingSearches[pluginId] = sentQueryId
-            process.search(queryId: sentQueryId, query: query)
+            process.search(queryId: sentQueryId, query: query, timeout: searchTimeout)
             DispatchQueue.main.asyncAfter(deadline: .now() + searchTimeout) { [weak self, weak process] in
                 guard let self, let process,
                       self.processes[pluginId] === process,
@@ -573,12 +584,13 @@ final class SearchCoordinator {
     private func handle(_ event: PluginProcess.Event, from pluginId: String, process: PluginProcess) {
         guard processes[pluginId] === process else { return }
         switch event {
-        case let .initialized(actualPluginId, protocolVersion):
+        case let .initialized(actualPluginId, protocolVersion, features):
             guard actualPluginId == pluginId, protocolVersion == 1 else {
                 onStatusChanged?("Rejected incompatible plugin: \(pluginId)")
                 stopPlugin(pluginId)
                 return
             }
+            process.acceptFeatures(features)
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self, weak process] in
                 guard let self, let process, self.processes[pluginId] === process else { return }
                 self.restartAttempts[pluginId] = 0
@@ -666,6 +678,7 @@ final class SearchCoordinator {
     private func failSearch(pluginId: String, queryId failedQuery: UInt64) {
         guard failedQuery == queryId, pendingSearches[pluginId] == failedQuery else { return }
         cancelPendingActivation()
+        processes[pluginId]?.cancelSearch(queryId: failedQuery)
         pendingSearches[pluginId] = nil
         stagedResultsByPlugin[pluginId] = []
         presentationItemsByPlugin[pluginId] = []

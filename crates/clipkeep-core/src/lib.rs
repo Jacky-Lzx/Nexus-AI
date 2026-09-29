@@ -195,6 +195,7 @@ impl SearchCore {
             query_id: self.current_query_id,
             query: self.current_query.clone(),
             limit: 100,
+            timeout_ms: None,
         };
         for plugin in &mut self.plugins {
             let Some(client) = &mut plugin.client else {
