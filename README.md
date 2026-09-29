@@ -424,6 +424,11 @@ stops the process and unregisters its shortcut.
 Plugins can also publish compact presentation items for their dedicated search page.
 The host renders their icon, title, value, and semantic style consistently; countdown
 metadata is updated locally by the GUI without continuously querying the plugin.
+Plugins built with the current SDK also publish status snapshots independently of
+search. The Plugins page shows up to three plugin summaries above its list;
+click a summary to open that plugin. Caffeinate shows its remaining time, and
+Reminders shows the pending count and next due time. Status clears when a plugin
+stops or exits. Older plugins continue to use search-bound presentation items.
 Actions may declare typed inline input fields with placeholders and numeric bounds.
 The AppKit host renders them in the search bar, provides Tab/Shift-Tab navigation,
 and returns their values to the Rust plugin as JSON when the user presses Return.

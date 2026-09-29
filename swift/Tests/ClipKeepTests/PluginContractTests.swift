@@ -21,6 +21,12 @@ private struct WireFixture: Decodable {
             if fixture.name == "typed_results" {
                 #expect(event.items?.first?.hostParameter("command", actionId: "run") == "mute")
             }
+            if fixture.name == "status_snapshot" {
+                #expect(event.presentationItems?.first?.value == "Running")
+            }
+            if fixture.name == "status_cleared" {
+                #expect(event.presentationItems?.isEmpty == true)
+            }
         } else if fixture.name == "modern_initialize" {
             let actual = try JSONDecoder().decode(PluginValue.self, from: JSONSerialization.data(withJSONObject: PluginContract.initializeRequest))
             #expect(actual == fixture.message)

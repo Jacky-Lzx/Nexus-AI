@@ -8,6 +8,7 @@ final class PluginProcess {
             items: [SearchResult],
             presentationItems: [PluginPresentationItem]
         )
+        case statusChanged([PluginPresentationItem])
         case configurationItems(requestId: UInt64, items: [PluginConfigurationItem])
         case notification(PluginNotification)
         case catalogChanged
@@ -291,7 +292,7 @@ final class PluginProcess {
 
     private func decode(_ data: Data) throws {
         let identity = try? JSONDecoder().decode(EventIdentity.self, from: data)
-        let knownTypes: Set<String> = ["initialized", "search_results", "configuration_items", "notification", "catalog_changed", "action_finished", "error"]
+        let knownTypes: Set<String> = ["initialized", "search_results", "status_changed", "configuration_items", "notification", "catalog_changed", "action_finished", "error"]
         if let identity, !knownTypes.contains(identity.type) { return }
         let envelope: EventEnvelope
         do { envelope = try JSONDecoder().decode(EventEnvelope.self, from: data) }
@@ -318,6 +319,11 @@ final class PluginProcess {
                 items: items,
                 presentationItems: envelope.presentationItems ?? []
             )
+        case "status_changed":
+            guard let items = envelope.presentationItems, items.count <= 64 else {
+                throw invalid("missing or excessive status items")
+            }
+            event = .statusChanged(items)
         case "configuration_items":
             guard let requestId = envelope.requestId,
                   let items = envelope.configurationItems, items.count <= 10_000 else { throw invalid("invalid configuration items") }
@@ -348,6 +354,7 @@ final class PluginProcess {
 
 final class SearchCoordinator {
     var onResultsChanged: (([SearchResult]) -> Void)?
+    var onPresentationChanged: (() -> Void)?
     var onStatusChanged: ((String) -> Void)?
     var onPluginStateChanged: (() -> Void)?
     var onNotification: ((PluginNotification) -> Void)?
@@ -409,6 +416,7 @@ final class SearchCoordinator {
         resultsByPlugin[id] = nil
         stagedResultsByPlugin[id] = nil
         presentationItemsByPlugin[id] = nil
+        onPresentationChanged?()
         let actions = actionCompletions.filter { $0.value.pluginId == id }
         actions.keys.forEach { actionCompletions[$0] = nil }
         let configurations = configurationCompletions.filter { $0.value.pluginId == id }
@@ -428,6 +436,11 @@ final class SearchCoordinator {
 
     func presentationItems(for pluginId: String) -> [PluginPresentationItem] {
         presentationItemsByPlugin[pluginId] ?? []
+    }
+
+    func liveStatusItems(for pluginId: String) -> [PluginPresentationItem] {
+        guard processes[pluginId]?.features.contains("status.snapshots") == true else { return [] }
+        return presentationItems(for: pluginId)
     }
 
     func setEnabled(_ enabled: Bool, descriptor: PluginDescriptor) {
@@ -758,11 +771,18 @@ final class SearchCoordinator {
                 item.metadata["_nexus_process"] = process.instanceId
                 return item
             }
-            presentationItemsByPlugin[pluginId] = presentationItems
+            if !process.features.contains("status.snapshots") {
+                presentationItemsByPlugin[pluginId] = presentationItems
+                onPresentationChanged?()
+            }
             if pendingSearches.isEmpty {
                 commitStagedResults(queryId: eventQueryId)
                 searchActivation.finish(queryId: eventQueryId)
             }
+        case let .statusChanged(items):
+            guard process.features.contains("status.snapshots") else { break }
+            presentationItemsByPlugin[pluginId] = items
+            onPresentationChanged?()
         case let .configurationItems(requestId, items):
             guard let pending = configurationCompletions[requestId],
                   pending.pluginId == pluginId else { break }
@@ -823,6 +843,8 @@ final class SearchCoordinator {
             processes[pluginId] = nil
             resultsByPlugin[pluginId] = nil
             stagedResultsByPlugin[pluginId] = nil
+            presentationItemsByPlugin[pluginId] = nil
+            onPresentationChanged?()
             publishResults()
             scheduleRestart(pluginId: pluginId)
         default:
@@ -836,7 +858,10 @@ final class SearchCoordinator {
         processes[pluginId]?.cancelSearch(queryId: failedQuery)
         pendingSearches[pluginId] = nil
         stagedResultsByPlugin[pluginId] = []
-        presentationItemsByPlugin[pluginId] = []
+        if processes[pluginId]?.features.contains("status.snapshots") != true {
+            presentationItemsByPlugin[pluginId] = []
+            onPresentationChanged?()
+        }
         commitStagedResults(queryId: failedQuery)
         if pendingSearches.isEmpty { searchActivation.finish(queryId: failedQuery) }
     }

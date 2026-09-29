@@ -1,7 +1,8 @@
 use chrono::{DateTime, Local, LocalResult, NaiveDateTime, NaiveTime, TimeZone};
 use clipkeep_plugin_sdk::{Plugin, run_plugin};
 use clipkeep_protocol::{
-    ActionInputField, ActionInputKind, PluginNotification, ResultAction, ResultKind, SearchResult,
+    ActionInputField, ActionInputKind, PluginNotification, PluginPresentationItem,
+    PresentationStyle, ResultAction, ResultKind, SearchResult,
 };
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
@@ -185,6 +186,28 @@ impl Plugin for RemindersPlugin {
         }
         Ok(notifications)
     }
+
+    fn presentation_items(&self) -> Vec<PluginPresentationItem> {
+        let pending: Vec<_> = self
+            .reminders
+            .iter()
+            .filter(|reminder| !reminder.delivered)
+            .collect();
+        let Some(next) = pending.iter().min_by_key(|reminder| reminder.due_at) else {
+            return Vec::new();
+        };
+        vec![PluginPresentationItem {
+            id: "reminders-upcoming".into(),
+            title: "Upcoming reminders".into(),
+            value: format!(
+                "{} pending · Next {}",
+                pending.len(),
+                format_due_time(next.due_at)
+            ),
+            style: PresentationStyle::Info,
+            metadata: BTreeMap::from([("symbol_name".into(), "bell.badge".into())]),
+        }]
+    }
 }
 
 fn new_reminder_result() -> SearchResult {
@@ -363,6 +386,24 @@ mod tests {
         );
         let reloaded = RemindersPlugin::from_path(plugin.storage_path.clone());
         assert_eq!(reloaded.reminders[0].content, "Call Alice");
+        assert!(reloaded.presentation_items()[0].value.contains("1 pending"));
+        let _ = fs::remove_file(plugin.storage_path);
+    }
+
+    #[test]
+    fn status_clears_after_reminder_delivery() {
+        let mut plugin = test_plugin();
+        assert!(plugin.presentation_items().is_empty());
+        plugin.reminders.push(Reminder {
+            id: 1,
+            content: "Due".into(),
+            due_at: now_seconds() - 1,
+            delivered: false,
+            created_at: now_seconds() - 60,
+        });
+        assert_eq!(plugin.presentation_items().len(), 1);
+        assert_eq!(plugin.notifications().unwrap().len(), 1);
+        assert!(plugin.presentation_items().is_empty());
         let _ = fs::remove_file(plugin.storage_path);
     }
 

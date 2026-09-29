@@ -21,12 +21,14 @@ pub const SDK_FEATURES: &[&str] = &[
     "action.arguments",
     "configuration.values",
     "host_action.object",
+    "status.snapshots",
 ];
 
 #[derive(Default)]
 struct Session {
     initialized: bool,
     host_features: Vec<String>,
+    last_status: Option<Vec<PluginPresentationItem>>,
 }
 
 pub trait Plugin {
@@ -174,6 +176,34 @@ pub fn run_plugin(mut plugin: impl Plugin) -> io::Result<()> {
             poll_interval = plugin.poll_interval();
             next_poll = poll_interval.map(|interval| Instant::now() + interval);
         }
+        if running && session.initialized {
+            emit_status_if_changed(&plugin, &mut session, &mut output)?;
+        }
+    }
+    Ok(())
+}
+
+fn emit_status_if_changed(
+    plugin: &impl Plugin,
+    session: &mut Session,
+    output: &mut impl Write,
+) -> io::Result<()> {
+    if !session
+        .host_features
+        .iter()
+        .any(|feature| feature == "status.snapshots")
+    {
+        return Ok(());
+    }
+    let items: Vec<_> = plugin.presentation_items().into_iter().take(64).collect();
+    if session.last_status.as_ref() != Some(&items) {
+        send(
+            output,
+            &PluginEvent::StatusChanged {
+                presentation_items: items.clone(),
+            },
+        )?;
+        session.last_status = Some(items);
     }
     Ok(())
 }
@@ -454,6 +484,7 @@ fn request_reader() -> Arc<RequestQueue> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clipkeep_protocol::PresentationStyle;
     struct Failing;
     impl Plugin for Failing {
         fn id(&self) -> &'static str {
@@ -481,6 +512,7 @@ mod tests {
             &mut Session {
                 initialized: true,
                 host_features: Vec::new(),
+                last_status: None,
             },
             &mut output,
         )
@@ -506,6 +538,59 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn status_snapshots_emit_only_when_negotiated_and_changed() {
+        struct StatusPlugin(bool);
+        impl Plugin for StatusPlugin {
+            fn id(&self) -> &'static str {
+                "test"
+            }
+            fn search(&mut self, _: &str, _: usize) -> Result<Vec<SearchResult>, String> {
+                Ok(vec![])
+            }
+            fn execute(&mut self, _: &str, _: &str) -> Result<Option<String>, String> {
+                Ok(None)
+            }
+            fn presentation_items(&self) -> Vec<PluginPresentationItem> {
+                if !self.0 {
+                    return vec![];
+                }
+                vec![PluginPresentationItem {
+                    id: "active".into(),
+                    title: "Active".into(),
+                    value: "Running".into(),
+                    style: PresentationStyle::Success,
+                    metadata: BTreeMap::new(),
+                }]
+            }
+        }
+        let mut output = Vec::new();
+        let mut session = Session {
+            initialized: true,
+            ..Session::default()
+        };
+        let mut plugin = StatusPlugin(true);
+        emit_status_if_changed(&plugin, &mut session, &mut output).unwrap();
+        assert!(output.is_empty());
+        session.host_features.push("status.snapshots".into());
+        emit_status_if_changed(&plugin, &mut session, &mut output).unwrap();
+        emit_status_if_changed(&plugin, &mut session, &mut output).unwrap();
+        plugin.0 = false;
+        emit_status_if_changed(&plugin, &mut session, &mut output).unwrap();
+        let events: Vec<PluginEvent> = output
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).unwrap())
+            .collect();
+        assert_eq!(events.len(), 2);
+        assert!(
+            matches!(&events[0], PluginEvent::StatusChanged { presentation_items } if presentation_items.len() == 1)
+        );
+        assert!(
+            matches!(&events[1], PluginEvent::StatusChanged { presentation_items } if presentation_items.is_empty())
+        );
     }
 }
 

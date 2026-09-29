@@ -1,13 +1,15 @@
 [
   {"name":"legacy_initialize","direction":"request","message":{"type":"initialize","protocol_version":1}},
-  {"name":"modern_initialize","direction":"request","message":{"type":"initialize","protocol_version":1,"host_features":["action.arguments","configuration.values","host_action.object","search.cancel"],"host_services":{"system.media":1,"text.edit":1,"notifications.authorize":1,"menu.press":1}}},
+  {"name":"modern_initialize","direction":"request","message":{"type":"initialize","protocol_version":1,"host_features":["action.arguments","configuration.values","host_action.object","search.cancel","status.snapshots"],"host_services":{"system.media":1,"text.edit":1,"notifications.authorize":1,"menu.press":1}}},
   {"name":"legacy_ready","direction":"event","message":{"type":"initialized","plugin_id":"com.example.test","protocol_version":1}},
-  {"name":"modern_ready","direction":"event","message":{"type":"initialized","plugin_id":"com.example.test","protocol_version":1,"features":["action.arguments","configuration.values","host_action.object","search.cancel"],"required_features":["action.arguments"],"required_services":{"system.media":1},"configuration_schema":[{"id":"enabled","label":"Enabled","kind":"boolean","default":true}]}},
+  {"name":"modern_ready","direction":"event","message":{"type":"initialized","plugin_id":"com.example.test","protocol_version":1,"features":["action.arguments","configuration.values","host_action.object","search.cancel","status.snapshots"],"required_features":["action.arguments"],"required_services":{"system.media":1},"configuration_schema":[{"id":"enabled","label":"Enabled","kind":"boolean","default":true}]}},
   {"name":"legacy_search","direction":"request","message":{"type":"search","query_id":7,"query":"hello","limit":100}},
   {"name":"cancel","direction":"request","message":{"type":"cancel_search","query_id":7}},
   {"name":"typed_execute","direction":"request","message":{"type":"execute","request_id":9,"result_id":"one","action_id":"run","arguments":{"count":3,"flag":true},"input":"{\"count\":3,\"flag\":true}"}},
   {"name":"typed_configure","direction":"request","message":{"type":"configure","settings":{"enabled":"true"},"values":{"enabled":true}}},
   {"name":"legacy_results","direction":"event","message":{"type":"search_results","query_id":7,"items":[]}},
+  {"name":"status_snapshot","direction":"event","message":{"type":"status_changed","presentation_items":[{"id":"active","title":"Active","value":"Running","style":"success","metadata":{"symbol_name":"clock"}}]}},
+  {"name":"status_cleared","direction":"event","message":{"type":"status_changed","presentation_items":[]}},
   {"name":"typed_results","direction":"event","message":{"type":"search_results","query_id":8,"items":[{"plugin_id":"com.example.test","id":"one","title":"Mute","kind":"command","actions":[{"id":"run","title":"Mute","host_action":{"service":"system.media","parameters":{"command":"mute"}},"input_fields":[{"id":"count","label":"Count","kind":"integer","minimum":1,"maximum":5}]}]}]}},
   {"name":"legacy_error","direction":"event","message":{"type":"error","message":"failed"}},
   {"name":"scoped_error","direction":"event","message":{"type":"error","message":"failed","query_id":7,"code":"search_failed","retryable":false}}

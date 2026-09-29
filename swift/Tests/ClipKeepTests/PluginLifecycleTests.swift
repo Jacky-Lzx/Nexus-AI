@@ -247,6 +247,30 @@ private func replaceFixtureScript(_ bundle: URL, body: String) throws {
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 }
 
+@Test @MainActor func statusSnapshotArrivesWithoutPluginSearchAndClearsOnExit() async throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    try replaceFixtureScript(bundle, body: """
+    for line in sys.stdin:
+        request = json.loads(line)
+        if request['type'] == 'initialize':
+            print(json.dumps(dict(type='initialized', plugin_id='com.example.test', protocol_version=1, features=['status.snapshots'])), flush=True)
+            print(json.dumps(dict(type='status_changed', presentation_items=[dict(id='active', title='Active', value='Running', style='success')])), flush=True)
+            time.sleep(0.2)
+            break
+    """)
+    let coordinator = SearchCoordinator(descriptors: [try PluginRegistry.load(bundle)])
+    defer { coordinator.updatePlugins([]) }
+    coordinator.searchPluginEntries("")
+    var changes = 0
+    coordinator.onPresentationChanged = { changes += 1 }
+    #expect(await eventually { coordinator.presentationItems(for: "com.example.test").first?.value == "Running" })
+    #expect(coordinator.liveStatusItems(for: "com.example.test").first?.value == "Running")
+    #expect(await eventually { coordinator.presentationItems(for: "com.example.test").isEmpty && changes >= 2 })
+    #expect(coordinator.liveStatusItems(for: "com.example.test").isEmpty)
+}
+
 @Test @MainActor func initializationDeadlineStopsSilentPlugin() async throws {
     let root = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: root) }

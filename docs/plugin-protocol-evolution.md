@@ -90,6 +90,23 @@ Business requests wait for a validated handshake; startup has a five-second
 deadline. Queued pre-initialization searches are coalesced and bounded. Shutdown
 terminates the process and releases queues without a main-thread pipe write.
 
+## Plugin status snapshots
+
+The optional `status.snapshots` feature adds a `status_changed` event containing
+the complete `presentation_items` array. An empty array explicitly clears a
+plugin's status. The SDK sends an initial snapshot after initialization and
+subsequent snapshots only when the items change, including after actions and
+background polling. It sends no status events to older hosts that do not
+advertise the feature. The host keeps snapshots by the current plugin process,
+clears them on disable or process exit, and caps each snapshot at 64 items.
+Search-bound presentation items remain the fallback for older plugins.
+
+The Plugins page displays the first status item from each reporting plugin, up
+to three plugins; selecting a row opens that plugin's own page. Time countdowns
+use `countdown_until` and update in the UI without polling the plugin every
+second. Reminders reports a pending count and its nearest due time, while its
+existing search list holds each reminder's details.
+
 ## Validation (2026-09-29)
 
 - Rust workspace: 436 tests passed. Socket-based Clash tests ran outside the

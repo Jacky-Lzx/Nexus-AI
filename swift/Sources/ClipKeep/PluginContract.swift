@@ -1,7 +1,7 @@
 import Foundation
 
 enum PluginContract {
-    static let features: Set<String> = ["search.cancel", "action.arguments", "configuration.values", "host_action.object"]
+    static let features: Set<String> = ["search.cancel", "action.arguments", "configuration.values", "host_action.object", "status.snapshots"]
     static let services: [String: Int] = ["system.media": 1, "text.edit": 1, "notifications.authorize": 1, "menu.press": 1]
     static var initializeRequest: [String: Any] {
         ["type": "initialize", "protocol_version": 1, "host_features": features.sorted(), "host_services": services]

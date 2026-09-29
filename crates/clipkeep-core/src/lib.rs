@@ -258,6 +258,7 @@ impl SearchCore {
                     PluginEvent::Error { message, .. } => self.status = Some(message),
                     PluginEvent::Initialized { .. }
                     | PluginEvent::SearchResults { .. }
+                    | PluginEvent::StatusChanged { .. }
                     | PluginEvent::ConfigurationItems { .. }
                     | PluginEvent::Notification { .. } => {}
                 }

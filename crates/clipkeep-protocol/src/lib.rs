@@ -65,6 +65,9 @@ pub enum PluginEvent {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         presentation_items: Vec<PluginPresentationItem>,
     },
+    StatusChanged {
+        presentation_items: Vec<PluginPresentationItem>,
+    },
     ConfigurationItems {
         request_id: u64,
         configuration_items: Vec<ConfigurationItem>,
@@ -290,6 +293,16 @@ mod tests {
                 presentation_items: Vec::new(),
             }
         );
+    }
+
+    #[test]
+    fn status_changed_keeps_an_explicit_empty_snapshot() {
+        let event = PluginEvent::StatusChanged {
+            presentation_items: Vec::new(),
+        };
+        let wire = serde_json::to_string(&event).unwrap();
+        assert_eq!(wire, r#"{"type":"status_changed","presentation_items":[]}"#);
+        assert_eq!(serde_json::from_str::<PluginEvent>(&wire).unwrap(), event);
     }
 
     #[test]

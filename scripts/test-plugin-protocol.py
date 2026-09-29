@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only wire smoke for packaged plugins; no clipboard actions or external requests."""
+"""Packaged plugin wire smoke; Caffeinate starts and stops a short local session."""
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -9,7 +9,7 @@ import threading
 import time
 from pathlib import Path
 
-FEATURES = ['action.arguments', 'configuration.values', 'host_action.object', 'search.cancel']
+FEATURES = ['action.arguments', 'configuration.values', 'host_action.object', 'search.cancel', 'status.snapshots']
 SERVICES = {'system.media': 1, 'text.edit': 1, 'notifications.authorize': 1, 'menu.press': 1}
 
 class Client:
@@ -142,6 +142,25 @@ def smoke(app, hello):
     finally:
         client.close()
 
+
+def status_smoke(app):
+    client = Client(binary(app / 'Contents/PlugIns/io.clipkeep.caffeinate.clipkeepplugin'))
+    try:
+        client.send(type='initialize', protocol_version=1, host_features=FEATURES, host_services=SERVICES)
+        assert 'status.snapshots' in client.receive('initialized')['features']
+        assert client.receive('status_changed')['presentation_items'] == []
+        client.send(type='execute', request_id=10, result_id='caffeinate:start', action_id='start',
+                    arguments={'seconds': 15})
+        assert client.receive('action_finished')['success']
+        active = client.receive('status_changed')['presentation_items']
+        assert len(active) == 1 and int(active[0]['metadata']['countdown_until']) > time.time()
+        client.send(type='execute', request_id=11, result_id='caffeinate:stop', action_id='stop')
+        assert client.receive('action_finished')['success']
+        assert client.receive('status_changed')['presentation_items'] == []
+        print('PASS packaged Caffeinate status start/clear without search')
+    finally:
+        client.close()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('app', type=Path)
@@ -149,5 +168,6 @@ if __name__ == '__main__':
     parser.add_argument('--cancellation', action='store_true', help='test cancellation using a local HTTP fixture')
     args = parser.parse_args()
     smoke(args.app.resolve(), args.hello.resolve() if args.hello else None)
+    status_smoke(args.app.resolve())
     if args.cancellation:
         cancellation_smoke(args.app.resolve())

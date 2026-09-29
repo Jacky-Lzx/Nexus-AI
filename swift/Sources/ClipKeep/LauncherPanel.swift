@@ -254,6 +254,7 @@ final class LauncherPanelController: NSWindowController,
         position(panel)
         panel.alphaValue = 0
         panel.orderFrontRegardless()
+        updatePresentationItems()
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKey()
         panel.makeFirstResponder(searchField)
@@ -276,6 +277,8 @@ final class LauncherPanelController: NSWindowController,
             return
         }
         hiding = true
+        presentationTimer?.invalidate()
+        presentationTimer = nil
         let applicationToRestore = restorePreviousApplication ? previousApplication : nil
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.13
@@ -548,6 +551,9 @@ final class LauncherPanelController: NSWindowController,
             self.updateDetails()
             self.updatePresentationItems()
             self.updateInlineArguments()
+        }
+        coordinator.onPresentationChanged = { [weak self] in
+            self?.updatePresentationItems()
         }
         coordinator.onStatusChanged = { [weak self] status in self?.statusLabel.stringValue = status }
         coordinator.onPluginStateChanged = { [weak self] in self?.onPluginStateChanged?() }
@@ -1449,11 +1455,22 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func updatePresentationItems() {
-        let items: [PluginPresentationItem]
+        let rows: [(PluginDescriptor?, PluginPresentationItem)]
+        let isOverview: Bool
         if case let .plugin(plugin) = searchMode {
-            items = Array(coordinator.presentationItems(for: plugin.id).prefix(3))
+            rows = coordinator.presentationItems(for: plugin.id).prefix(3).map { (nil, $0) }
+            isOverview = false
+        } else if searchMode == .plugins,
+                  searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            rows = Array(coordinator.descriptors.compactMap { plugin in
+                guard coordinator.isEnabled(plugin.id),
+                      let item = coordinator.liveStatusItems(for: plugin.id).first else { return nil }
+                return (plugin, item)
+            }.prefix(3))
+            isOverview = true
         } else {
-            items = []
+            rows = []
+            isOverview = false
         }
 
         for view in presentationStack.arrangedSubviews {
@@ -1464,12 +1481,19 @@ final class LauncherPanelController: NSWindowController,
         presentationTimer?.invalidate()
         presentationTimer = nil
 
-        for item in items {
-            presentationStack.addArrangedSubview(makePresentationRow(item))
+        if isOverview, !rows.isEmpty {
+            let heading = NSTextField(labelWithString: "Plugin status")
+            heading.font = .systemFont(ofSize: 11, weight: .semibold)
+            heading.textColor = .secondaryLabelColor
+            heading.heightAnchor.constraint(equalToConstant: 18).isActive = true
+            presentationStack.addArrangedSubview(heading)
         }
-        let visible = !items.isEmpty
+        for (plugin, item) in rows {
+            presentationStack.addArrangedSubview(makePresentationRow(item, plugin: plugin))
+        }
+        let visible = !rows.isEmpty
         let height = visible
-            ? CGFloat(items.count * 36 + max(items.count - 1, 0) * 6)
+            ? CGFloat(rows.count * 36 + max(rows.count - 1, 0) * 6 + (isOverview ? 24 : 0))
             : 0
         let layoutChanged = presentationContainer.isHidden == visible
             || presentationTopConstraint?.constant != (visible ? Layout.contentSpacing : 0)
@@ -1482,7 +1506,8 @@ final class LauncherPanelController: NSWindowController,
         }
         updateScrollerVisibility()
 
-        if items.contains(where: { $0.metadata["countdown_until"] != nil }) {
+        if window?.isVisible == true,
+           rows.contains(where: { $0.1.metadata["countdown_until"] != nil }) {
             let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
                 self?.refreshPresentationValues()
             }
@@ -1491,7 +1516,7 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    private func makePresentationRow(_ item: PluginPresentationItem) -> NSView {
+    private func makePresentationRow(_ item: PluginPresentationItem, plugin: PluginDescriptor?) -> NSView {
         let row = NSStackView()
         row.orientation = .horizontal
         row.alignment = .centerY
@@ -1504,7 +1529,7 @@ final class LauncherPanelController: NSWindowController,
         row.heightAnchor.constraint(equalToConstant: 36).isActive = true
 
         let icon = NSImageView()
-        let symbolName = item.metadata["symbol_name"] ?? "info.circle.fill"
+        let symbolName = plugin?.symbolName ?? item.metadata["symbol_name"] ?? "info.circle.fill"
         icon.image = NSImage(systemSymbolName: symbolName, accessibilityDescription: item.title)
         icon.contentTintColor = .secondaryLabelColor
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
@@ -1512,7 +1537,7 @@ final class LauncherPanelController: NSWindowController,
         icon.widthAnchor.constraint(equalToConstant: 18).isActive = true
         icon.heightAnchor.constraint(equalToConstant: 18).isActive = true
 
-        let title = NSTextField(labelWithString: item.title)
+        let title = NSTextField(labelWithString: plugin?.name ?? item.title)
         title.font = .systemFont(ofSize: 13, weight: .medium)
         title.textColor = .labelColor
         title.lineBreakMode = .byTruncatingTail
@@ -1529,7 +1554,19 @@ final class LauncherPanelController: NSWindowController,
         row.addArrangedSubview(title)
         row.addArrangedSubview(value)
         presentationValueLabels.append((value, item))
+        if let plugin {
+            row.identifier = NSUserInterfaceItemIdentifier(plugin.id)
+            row.toolTip = "Open \(plugin.name) · \(item.title): \(item.value)"
+            row.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(openPresentationPlugin(_:))))
+        }
         return row
+    }
+
+    @objc private func openPresentationPlugin(_ sender: NSClickGestureRecognizer) {
+        guard let pluginId = sender.view?.identifier?.rawValue,
+              let plugin = coordinator.descriptors.first(where: { $0.id == pluginId }),
+              coordinator.isEnabled(pluginId) else { return }
+        switchSearchMode(to: .plugin(plugin))
     }
 
     private func refreshPresentationValues() {
