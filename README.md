@@ -429,6 +429,10 @@ search. The Plugins page shows up to three plugin summaries above its list;
 click a summary to open that plugin. Caffeinate shows its remaining time, and
 Reminders shows the pending count and next due time. Status clears when a plugin
 stops or exits. Older plugins continue to use search-bound presentation items.
+Status items can also include an optional `compact_value`. The empty main search
+page shows up to three reporting plugins in one row below the search field,
+using each plugin's icon and compact description. Plugins without a compact
+description do not appear there. Countdown metadata updates both layouts locally.
 Actions may declare typed inline input fields with placeholders and numeric bounds.
 The AppKit host renders them in the search bar, provides Tab/Shift-Tab navigation,
 and returns their values to the Rust plugin as JSON when the user presses Return.

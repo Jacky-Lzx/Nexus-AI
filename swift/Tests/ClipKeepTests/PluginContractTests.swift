@@ -23,6 +23,7 @@ private struct WireFixture: Decodable {
             }
             if fixture.name == "status_snapshot" {
                 #expect(event.presentationItems?.first?.value == "Running")
+                #expect(event.presentationItems?.first?.compactValue == "On")
             }
             if fixture.name == "status_cleared" {
                 #expect(event.presentationItems?.isEmpty == true)

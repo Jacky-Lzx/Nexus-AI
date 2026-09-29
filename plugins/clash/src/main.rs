@@ -199,6 +199,11 @@ impl Plugin for ClashPlugin {
             id: "clash-status".into(),
             title: "Current Mode".into(),
             value,
+            compact_value: Some(
+                self.current_mode
+                    .map(|mode| mode.title().to_owned())
+                    .unwrap_or_else(|| "Unavailable".into()),
+            ),
             style,
             metadata: BTreeMap::from([("symbol_name".into(), symbol.into())]),
         }]

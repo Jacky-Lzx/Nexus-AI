@@ -8,7 +8,7 @@
   {"name":"typed_execute","direction":"request","message":{"type":"execute","request_id":9,"result_id":"one","action_id":"run","arguments":{"count":3,"flag":true},"input":"{\"count\":3,\"flag\":true}"}},
   {"name":"typed_configure","direction":"request","message":{"type":"configure","settings":{"enabled":"true"},"values":{"enabled":true}}},
   {"name":"legacy_results","direction":"event","message":{"type":"search_results","query_id":7,"items":[]}},
-  {"name":"status_snapshot","direction":"event","message":{"type":"status_changed","presentation_items":[{"id":"active","title":"Active","value":"Running","style":"success","metadata":{"symbol_name":"clock"}}]}},
+  {"name":"status_snapshot","direction":"event","message":{"type":"status_changed","presentation_items":[{"id":"active","title":"Active","value":"Running","compact_value":"On","style":"success","metadata":{"symbol_name":"clock"}}]}},
   {"name":"status_cleared","direction":"event","message":{"type":"status_changed","presentation_items":[]}},
   {"name":"typed_results","direction":"event","message":{"type":"search_results","query_id":8,"items":[{"plugin_id":"com.example.test","id":"one","title":"Mute","kind":"command","actions":[{"id":"run","title":"Mute","host_action":{"service":"system.media","parameters":{"command":"mute"}},"input_fields":[{"id":"count","label":"Count","kind":"integer","minimum":1,"maximum":5}]}]}]}},
   {"name":"legacy_error","direction":"event","message":{"type":"error","message":"failed"}},

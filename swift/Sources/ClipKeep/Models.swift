@@ -248,11 +248,13 @@ struct PluginPresentationItem: Codable {
     let id: String
     let title: String
     let value: String
+    let compactValue: String?
     let style: PluginPresentationStyle
     let metadata: [String: String]
 
     enum CodingKeys: String, CodingKey {
         case id, title, value, style, metadata
+        case compactValue = "compact_value"
     }
 
     init(from decoder: Decoder) throws {
@@ -260,6 +262,7 @@ struct PluginPresentationItem: Codable {
         id = try values.decode(String.self, forKey: .id)
         title = try values.decode(String.self, forKey: .title)
         value = try values.decodeIfPresent(String.self, forKey: .value) ?? ""
+        compactValue = try values.decodeIfPresent(String.self, forKey: .compactValue)
         style = try values.decodeIfPresent(PluginPresentationStyle.self, forKey: .style) ?? .info
         metadata = try values.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
     }

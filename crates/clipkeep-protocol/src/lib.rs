@@ -100,6 +100,8 @@ pub struct PluginPresentationItem {
     pub title: String,
     #[serde(default)]
     pub value: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub compact_value: Option<String>,
     #[serde(default)]
     pub style: PresentationStyle,
     #[serde(default)]
@@ -303,6 +305,17 @@ mod tests {
         let wire = serde_json::to_string(&event).unwrap();
         assert_eq!(wire, r#"{"type":"status_changed","presentation_items":[]}"#);
         assert_eq!(serde_json::from_str::<PluginEvent>(&wire).unwrap(), event);
+    }
+
+    #[test]
+    fn compact_status_is_optional_for_existing_plugins() {
+        let old = r#"{"id":"active","title":"Active","value":"Running"}"#;
+        let item: PluginPresentationItem = serde_json::from_str(old).unwrap();
+        assert_eq!(item.compact_value, None);
+        assert_eq!(
+            serde_json::to_string(&item).unwrap(),
+            r#"{"id":"active","title":"Active","value":"Running","style":"info","metadata":{}}"#
+        );
     }
 
     #[test]

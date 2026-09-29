@@ -154,6 +154,7 @@ def status_smoke(app):
         assert client.receive('action_finished')['success']
         active = client.receive('status_changed')['presentation_items']
         assert len(active) == 1 and int(active[0]['metadata']['countdown_until']) > time.time()
+        assert active[0]['compact_value'] == 'Time left'
         client.send(type='execute', request_id=11, result_id='caffeinate:stop', action_id='stop')
         assert client.receive('action_finished')['success']
         assert client.receive('status_changed')['presentation_items'] == []

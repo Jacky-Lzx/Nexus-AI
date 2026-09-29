@@ -561,6 +561,7 @@ mod tests {
                     id: "active".into(),
                     title: "Active".into(),
                     value: "Running".into(),
+                    compact_value: None,
                     style: PresentationStyle::Success,
                     metadata: BTreeMap::new(),
                 }]

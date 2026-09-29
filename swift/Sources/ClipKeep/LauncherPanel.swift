@@ -130,6 +130,7 @@ final class LauncherPanelController: NSWindowController,
     private var contentTopConstraint: NSLayoutConstraint?
     private var footerHeightConstraint: NSLayoutConstraint?
     private var presentationValueLabels: [(NSTextField, PluginPresentationItem)] = []
+    private var showsCompactStatus = false
     private var presentationTimer: Timer?
     private var activeActionInput: ActiveActionInput?
     private var inlineActionInput = false
@@ -564,6 +565,7 @@ final class LauncherPanelController: NSWindowController,
         let query = searchField.stringValue
         endActionInputForm(restoreSearchFocus: false)
         requestSearch(query)
+        updatePresentationItems()
         setExpanded(shouldExpand(for: query), animated: true)
     }
 
@@ -1457,9 +1459,11 @@ final class LauncherPanelController: NSWindowController,
     private func updatePresentationItems() {
         let rows: [(PluginDescriptor?, PluginPresentationItem)]
         let isOverview: Bool
+        let isCompact: Bool
         if case let .plugin(plugin) = searchMode {
             rows = coordinator.presentationItems(for: plugin.id).prefix(3).map { (nil, $0) }
             isOverview = false
+            isCompact = false
         } else if searchMode == .plugins,
                   searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             rows = Array(coordinator.descriptors.compactMap { plugin in
@@ -1468,9 +1472,21 @@ final class LauncherPanelController: NSWindowController,
                 return (plugin, item)
             }.prefix(3))
             isOverview = true
+            isCompact = false
+        } else if searchMode == .global,
+                  searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            rows = Array(coordinator.descriptors.compactMap { plugin in
+                guard coordinator.isEnabled(plugin.id),
+                      let item = coordinator.liveStatusItems(for: plugin.id).first,
+                      item.compactValue?.isEmpty == false else { return nil }
+                return (plugin, item)
+            }.prefix(3))
+            isOverview = false
+            isCompact = true
         } else {
             rows = []
             isOverview = false
+            isCompact = false
         }
 
         for view in presentationStack.arrangedSubviews {
@@ -1480,6 +1496,9 @@ final class LauncherPanelController: NSWindowController,
         presentationValueLabels.removeAll()
         presentationTimer?.invalidate()
         presentationTimer = nil
+        showsCompactStatus = isCompact && !rows.isEmpty
+        presentationStack.orientation = isCompact ? .horizontal : .vertical
+        presentationStack.distribution = .fill
 
         if isOverview, !rows.isEmpty {
             let heading = NSTextField(labelWithString: "Plugin status")
@@ -1489,11 +1508,18 @@ final class LauncherPanelController: NSWindowController,
             presentationStack.addArrangedSubview(heading)
         }
         for (plugin, item) in rows {
-            presentationStack.addArrangedSubview(makePresentationRow(item, plugin: plugin))
+            if isCompact, let plugin {
+                presentationStack.addArrangedSubview(makeCompactStatus(item, plugin: plugin))
+            } else {
+                presentationStack.addArrangedSubview(makePresentationRow(item, plugin: plugin))
+            }
+        }
+        if isCompact, !rows.isEmpty {
+            presentationStack.addArrangedSubview(NSView())
         }
         let visible = !rows.isEmpty
         let height = visible
-            ? CGFloat(rows.count * 36 + max(rows.count - 1, 0) * 6 + (isOverview ? 24 : 0))
+            ? (isCompact ? 32 : CGFloat(rows.count * 36 + max(rows.count - 1, 0) * 6 + (isOverview ? 24 : 0)))
             : 0
         let layoutChanged = presentationContainer.isHidden == visible
             || presentationTopConstraint?.constant != (visible ? Layout.contentSpacing : 0)
@@ -1503,6 +1529,10 @@ final class LauncherPanelController: NSWindowController,
         presentationHeightConstraint?.constant = height
         if layoutChanged {
             root.layoutSubtreeIfNeeded()
+            if isPresented, searchMode == .global, !expanded,
+               !shouldExpand(for: searchField.stringValue) {
+                setExpanded(false, animated: false)
+            }
         }
         updateScrollerVisibility()
 
@@ -1514,6 +1544,42 @@ final class LauncherPanelController: NSWindowController,
             presentationTimer = timer
             RunLoop.main.add(timer, forMode: .common)
         }
+    }
+
+    private func makeCompactStatus(_ item: PluginPresentationItem, plugin: PluginDescriptor) -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 7
+        row.edgeInsets = NSEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
+        row.wantsLayer = true
+        row.layer?.cornerRadius = 10
+        row.layer?.cornerCurve = .continuous
+        row.layer?.backgroundColor = presentationColor(for: item.style).cgColor
+        row.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        row.widthAnchor.constraint(equalToConstant: 244).isActive = true
+
+        let icon = NSImageView()
+        icon.image = NSImage(systemSymbolName: plugin.symbolName, accessibilityDescription: plugin.name)
+        icon.contentTintColor = .secondaryLabelColor
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.widthAnchor.constraint(equalToConstant: 16).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 16).isActive = true
+
+        let value = NSTextField(labelWithString: presentationValue(for: item, compact: true))
+        value.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        value.textColor = .secondaryLabelColor
+        value.lineBreakMode = .byTruncatingTail
+        value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        row.addArrangedSubview(icon)
+        row.addArrangedSubview(value)
+        row.identifier = NSUserInterfaceItemIdentifier(plugin.id)
+        row.toolTip = "Open \(plugin.name) · \(item.title): \(item.value)"
+        row.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(openPresentationPlugin(_:))))
+        presentationValueLabels.append((value, item))
+        return row
     }
 
     private func makePresentationRow(_ item: PluginPresentationItem, plugin: PluginDescriptor?) -> NSView {
@@ -1571,18 +1637,23 @@ final class LauncherPanelController: NSWindowController,
 
     private func refreshPresentationValues() {
         for (label, item) in presentationValueLabels {
-            label.stringValue = presentationValue(for: item)
+            label.stringValue = presentationValue(for: item, compact: showsCompactStatus)
         }
     }
 
-    private func presentationValue(for item: PluginPresentationItem) -> String {
+    private func presentationValue(for item: PluginPresentationItem, compact: Bool = false) -> String {
         guard let rawTarget = item.metadata["countdown_until"],
               let target = TimeInterval(rawTarget)
-        else { return item.value }
+        else { return compact ? item.compactValue ?? item.value : item.value }
         let remaining = max(Int(ceil(target - Date().timeIntervalSince1970)), 0)
         let hours = remaining / 3_600
         let minutes = (remaining % 3_600) / 60
         let seconds = remaining % 60
+        if compact {
+            return hours > 0
+                ? String(format: "%dh %02dm left", hours, minutes)
+                : String(format: "%dm %02ds left", minutes, seconds)
+        }
         if hours > 0 {
             return String(format: "%d:%02d:%02d remaining", hours, minutes, seconds)
         }
@@ -1598,13 +1669,14 @@ final class LauncherPanelController: NSWindowController,
     }
 
     private func setExpanded(_ shouldExpand: Bool, animated: Bool) {
-        guard expanded != shouldExpand || !animated else { return }
-        expanded = shouldExpand
         guard let panel = window else { return }
+        let newHeight = shouldExpand ? Layout.expandedHeight
+            : Layout.collapsedHeight + (showsCompactStatus ? Layout.contentSpacing + 32 + Layout.outerInset : 0)
+        guard expanded != shouldExpand || abs(panel.frame.height - newHeight) > 0.5 else { return }
+        expanded = shouldExpand
         expansionAnimationGeneration &+= 1
         let generation = expansionAnimationGeneration
         var frame = panel.frame
-        let newHeight = shouldExpand ? Layout.expandedHeight : Layout.collapsedHeight
         frame.origin.y += frame.height - newHeight
         frame.size.height = newHeight
 
@@ -1612,7 +1684,7 @@ final class LauncherPanelController: NSWindowController,
             contentTopConstraint?.constant = shouldExpand ? Layout.contentSpacing : 0
             footerHeightConstraint?.constant = shouldExpand ? 46 : 0
             content.alphaValue = shouldExpand ? 1 : 0
-            presentationContainer.alphaValue = shouldExpand ? 1 : 0
+            presentationContainer.alphaValue = shouldExpand || showsCompactStatus ? 1 : 0
             content.isHidden = !shouldExpand
             panel.setFrame(frame, display: true)
             root.layoutSubtreeIfNeeded()
@@ -1649,7 +1721,7 @@ final class LauncherPanelController: NSWindowController,
             })
         } else {
             content.alphaValue = 0
-            presentationContainer.alphaValue = 0
+            presentationContainer.alphaValue = showsCompactStatus ? 1 : 0
             content.isHidden = true
             contentTopConstraint?.constant = 0
             footerHeightConstraint?.constant = 0

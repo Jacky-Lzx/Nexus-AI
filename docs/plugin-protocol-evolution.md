@@ -107,6 +107,11 @@ use `countdown_until` and update in the UI without polling the plugin every
 second. Reminders reports a pending count and its nearest due time, while its
 existing search list holds each reminder's details.
 
+A status item may add `compact_value`, a short label for the empty global search
+page. Only plugins supplying a nonempty compact value appear in its single row
+(up to three). The full `value` remains on the Plugins and dedicated pages.
+The host uses `countdown_until` to update a compact countdown locally, too.
+
 ## Validation (2026-09-29)
 
 - Rust workspace: 436 tests passed. Socket-based Clash tests ran outside the

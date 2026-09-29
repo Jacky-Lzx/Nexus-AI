@@ -204,6 +204,7 @@ impl Plugin for RemindersPlugin {
                 pending.len(),
                 format_due_time(next.due_at)
             ),
+            compact_value: Some(format!("{} pending", pending.len())),
             style: PresentationStyle::Info,
             metadata: BTreeMap::from([("symbol_name".into(), "bell.badge".into())]),
         }]

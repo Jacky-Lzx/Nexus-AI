@@ -187,6 +187,11 @@ impl Plugin for CaffeinatePlugin {
                 .ends_at
                 .map(|_| format!("{} remaining", remaining_duration(active)))
                 .unwrap_or_else(|| "Indefinitely".into()),
+            compact_value: Some(if active.ends_at.is_some() {
+                "Time left".into()
+            } else {
+                "Awake".into()
+            }),
             style: PresentationStyle::Success,
             metadata,
         }]
