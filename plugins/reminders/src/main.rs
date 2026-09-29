@@ -206,6 +206,7 @@ fn new_reminder_result() -> SearchResult {
             ),
         ]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "create".into(),
             title: "Create Reminder".into(),
             destructive: false,

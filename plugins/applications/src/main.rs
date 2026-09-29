@@ -162,6 +162,7 @@ impl Application {
             score,
             metadata,
             actions: vec![ResultAction {
+                host_action: None,
                 id: "open".into(),
                 title: "Open".into(),
                 destructive: false,

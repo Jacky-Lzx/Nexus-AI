@@ -18,7 +18,8 @@ enum PluginHostAction: String {
     }
 
     static func resolve(result: SearchResult, actionId: String, descriptor: PluginDescriptor) throws -> Self? {
-        let declared = result.metadata["host_action.\(actionId)"]
+        let declared = result.actions.first(where: { $0.id == actionId })?.hostAction?.service
+            ?? result.metadata["host_action.\(actionId)"]
         // Compatibility with already distributed v1 bundles. New plugins use metadata only.
         let legacy: Self?
         switch (descriptor.id, actionId) {

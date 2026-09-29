@@ -337,6 +337,7 @@ fn new_note_result() -> SearchResult {
         score: 3_400.0,
         metadata: BTreeMap::from([("symbol_name".into(), "note.text.badge.plus".into())]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "save".into(),
             title: "Save Note".into(),
             destructive: false,
@@ -370,6 +371,7 @@ fn save_result(query: &str, content: &str, result_id: String) -> SearchResult {
             ("symbol_name".into(), "square.and.arrow.down".into()),
         ]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "save".into(),
             title: "Save Note".into(),
             destructive: false,
@@ -415,6 +417,7 @@ fn note_result(note: &Note, index: usize, title_query: Option<&str>) -> SearchRe
         ]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: "Paste".into(),
                 destructive: false,
@@ -424,6 +427,7 @@ fn note_result(note: &Note, index: usize, title_query: Option<&str>) -> SearchRe
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: "Copy".into(),
                 destructive: false,
@@ -433,6 +437,7 @@ fn note_result(note: &Note, index: usize, title_query: Option<&str>) -> SearchRe
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "pin".into(),
                 title: if note.pinned { "Unpin" } else { "Pin" }.into(),
                 destructive: false,
@@ -442,6 +447,7 @@ fn note_result(note: &Note, index: usize, title_query: Option<&str>) -> SearchRe
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "delete".into(),
                 title: "Delete".into(),
                 destructive: true,

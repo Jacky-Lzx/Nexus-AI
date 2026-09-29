@@ -76,6 +76,16 @@ final class SettingsWindowController: NSWindowController,
         showSelectedPlugin()
     }
 
+    @objc private func configurePluginValues() {
+        guard let plugin = selectedPlugin else { return }
+        PluginConfigurationEditor.present(name: plugin.name,
+            fields: coordinator.configurationSchema(for: plugin.id),
+            settings: PluginConfigurationPreference.settings(for: plugin.id)) { values in
+                PluginConfigurationPreference.save(values, for: plugin.id)
+                coordinator.reloadSettings(for: plugin.id)
+            }
+    }
+
     private func configure(_ window: NSWindow) {
         window.title = "Nexus Settings"
         window.titleVisibility = .hidden
@@ -507,6 +517,13 @@ final class SettingsWindowController: NSWindowController,
                 description: "Permissions declared by plugin.toml",
                 control: capabilities
             ))
+        }
+
+        if !coordinator.configurationSchema(for: plugin.id).isEmpty {
+            let configure = NSButton(title: "Configure…", target: self, action: #selector(configurePluginValues))
+            configure.bezelStyle = .rounded
+            options.addArrangedSubview(settingRow(title: "Plugin Settings",
+                description: "Options provided by this plugin", control: configure))
         }
 
         let hasItemConfiguration = plugin.capabilities.contains("configuration.items") || [

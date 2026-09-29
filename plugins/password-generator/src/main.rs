@@ -319,6 +319,7 @@ fn password_result(
         metadata: BTreeMap::from([("symbol_name".into(), password.symbol.into())]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: format!("Paste {action_noun}"),
                 destructive: false,
@@ -328,6 +329,7 @@ fn password_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: format!("Copy {action_noun}"),
                 destructive: false,

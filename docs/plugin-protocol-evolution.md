@@ -37,3 +37,23 @@ and stderr concurrently, and are killed and reaped on cancellation/deadline.
 Legacy synchronous implementations cannot be forcibly interrupted inside Rust;
 the host still rejects their late results. Background poll deadlines are checked
 even when requests continue arriving.
+
+## Typed values and services
+
+`execute.arguments` is a JSON object. The host sends it for declared inline forms
+when a plugin advertises `action.arguments`, retaining `input` for compatibility.
+Raw external-editor text stays raw. The SDK defaults to adapting arguments into
+existing `execute_with_input` implementations.
+
+`initialized.configuration_schema` describes text, integer, boolean and choice
+settings, defaults, help text, integer bounds and choices. Nexus supplies a
+scrollable Configure form and persists values per plugin. `configure.values`
+contains native JSON values when `configuration.values` is supported, alongside
+legacy `settings`. SDK validation occurs before calling the plugin; old hosts'
+string settings are normalized against the same schema. Schemas are for ordinary
+preferences, not credentials. Existing specialized settings pages remain available.
+
+An action may declare `host_action: {service, parameters}`. The object takes
+precedence over legacy metadata, and parameters belong to that specific action.
+Capability checks still apply. ResultAction source literals in bundled plugins
+now specify `host_action: None`; their wire representation is unchanged.

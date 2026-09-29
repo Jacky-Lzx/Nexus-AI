@@ -189,6 +189,7 @@ mod tests {
             result_id: "x".into(),
             action_id: "x".into(),
             input: None,
+            arguments: None,
         });
         q.push(search(3));
         q.push(search(4));

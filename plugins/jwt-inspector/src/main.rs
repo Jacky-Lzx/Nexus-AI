@@ -313,6 +313,7 @@ fn jwt_result(
         ]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: format!("Paste {}", part.label),
                 destructive: false,
@@ -322,6 +323,7 @@ fn jwt_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: format!("Copy {}", part.label),
                 destructive: false,

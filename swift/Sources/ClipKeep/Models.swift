@@ -73,12 +73,14 @@ struct ResultAction: Codable {
     let closesWindow: Bool
     let pasteToPrevious: Bool
     let inputFields: [ActionInputField]
+    let hostAction: HostServiceCall?
 
     enum CodingKeys: String, CodingKey {
         case id, title, destructive, `default`
         case closesWindow = "closes_window"
         case pasteToPrevious = "paste_to_previous"
         case inputFields = "input_fields"
+        case hostAction = "host_action"
     }
 
 
@@ -91,6 +93,7 @@ struct ResultAction: Codable {
         closesWindow = try values.decodeIfPresent(Bool.self, forKey: .closesWindow) ?? false
         pasteToPrevious = try values.decodeIfPresent(Bool.self, forKey: .pasteToPrevious) ?? false
         inputFields = try values.decodeIfPresent([ActionInputField].self, forKey: .inputFields) ?? []
+        hostAction = try values.decodeIfPresent(HostServiceCall.self, forKey: .hostAction)
     }
 }
 

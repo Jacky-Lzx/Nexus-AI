@@ -2,8 +2,8 @@ mod command;
 pub use command::command_output;
 mod scheduling;
 use clipkeep_protocol::{
-    ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent, PluginNotification,
-    PluginPresentationItem, SearchResult,
+    ConfigurationField, ConfigurationItem, HostRequest, PROTOCOL_VERSION, PluginEvent,
+    PluginNotification, PluginPresentationItem, SearchResult,
 };
 pub use scheduling::SearchContext;
 use scheduling::{ReaderMessage, RequestQueue};
@@ -39,6 +39,39 @@ pub trait Plugin {
         _input: Option<&str>,
     ) -> Result<Option<String>, String> {
         self.execute(result_id, action_id)
+    }
+
+    fn execute_with_arguments(
+        &mut self,
+        result_id: &str,
+        action_id: &str,
+        arguments: &BTreeMap<String, serde_json::Value>,
+    ) -> Result<Option<String>, String> {
+        let input = serde_json::to_string(arguments).map_err(|e| e.to_string())?;
+        self.execute_with_input(result_id, action_id, Some(&input))
+    }
+
+    fn configuration_schema(&self) -> Vec<ConfigurationField> {
+        Vec::new()
+    }
+
+    fn configure_values(
+        &mut self,
+        values: &BTreeMap<String, serde_json::Value>,
+    ) -> Result<bool, String> {
+        let settings = values
+            .iter()
+            .map(|(key, value)| {
+                (
+                    key.clone(),
+                    value
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| value.to_string()),
+                )
+            })
+            .collect();
+        self.configure(&settings)
     }
 
     fn configure(&mut self, _settings: &BTreeMap<String, String>) -> Result<bool, String> {
@@ -134,16 +167,24 @@ fn handle_request(
                     &PluginEvent::Initialized {
                         plugin_id: plugin.id().to_owned(),
                         protocol_version: PROTOCOL_VERSION,
-                        features: vec!["search.cancel".into()],
+                        features: vec![
+                            "search.cancel".into(),
+                            "action.arguments".into(),
+                            "configuration.values".into(),
+                            "host_action.object".into(),
+                        ],
+                        configuration_schema: plugin.configuration_schema(),
                     },
                 )?;
             }
         }
-        HostRequest::Configure { settings } => match plugin.configure(&settings) {
-            Ok(true) => send(output, &PluginEvent::CatalogChanged)?,
-            Ok(false) => {}
-            Err(message) => send(output, &PluginEvent::error(message))?,
-        },
+        HostRequest::Configure { settings, values } => {
+            match configure_plugin(plugin, &settings, values.as_ref()) {
+                Ok(true) => send(output, &PluginEvent::CatalogChanged)?,
+                Ok(false) => {}
+                Err(message) => send(output, &PluginEvent::error(message))?,
+            }
+        }
         HostRequest::Search {
             query_id,
             query,
@@ -187,12 +228,16 @@ fn handle_request(
             result_id,
             action_id,
             input,
+            arguments,
         } => {
-            let (success, message) =
-                match plugin.execute_with_input(&result_id, &action_id, input.as_deref()) {
-                    Ok(message) => (true, message),
-                    Err(message) => (false, Some(message)),
-                };
+            let outcome = match arguments.as_ref() {
+                Some(values) => plugin.execute_with_arguments(&result_id, &action_id, values),
+                None => plugin.execute_with_input(&result_id, &action_id, input.as_deref()),
+            };
+            let (success, message) = match outcome {
+                Ok(message) => (true, message),
+                Err(message) => (false, Some(message)),
+            };
             send(
                 output,
                 &PluginEvent::ActionFinished {
@@ -206,6 +251,52 @@ fn handle_request(
         HostRequest::Shutdown => return Ok(false),
     }
     Ok(true)
+}
+
+fn configure_plugin(
+    plugin: &mut impl Plugin,
+    settings: &BTreeMap<String, String>,
+    values: Option<&BTreeMap<String, serde_json::Value>>,
+) -> Result<bool, String> {
+    let schema = plugin.configuration_schema();
+    if schema.is_empty() && values.is_none() {
+        return plugin.configure(settings);
+    }
+    let mut normalized = values.cloned().unwrap_or_default();
+    for field in &schema {
+        if normalized.contains_key(&field.id) {
+            continue;
+        }
+        let value = match settings.get(&field.id) {
+            Some(text) => match field.kind {
+                clipkeep_protocol::ConfigurationKind::Text
+                | clipkeep_protocol::ConfigurationKind::Choice => {
+                    serde_json::Value::String(text.clone())
+                }
+                _ => serde_json::from_str(text)
+                    .map_err(|_| format!("Invalid setting: {}", field.label))?,
+            },
+            None => field.default.clone(),
+        };
+        normalized.insert(field.id.clone(), value);
+    }
+    let values = &normalized;
+    for field in &schema {
+        if let Some(value) = values.get(&field.id)
+            && !field.accepts(value)
+        {
+            return Err(format!("Invalid setting: {}", field.label));
+        }
+    }
+    let mut merged: BTreeMap<_, _> = settings
+        .iter()
+        .map(|(k, v)| (k.clone(), serde_json::Value::String(v.clone())))
+        .collect();
+    for field in schema {
+        merged.entry(field.id).or_insert(field.default);
+    }
+    merged.extend(values.clone());
+    plugin.configure_values(&merged)
 }
 
 fn send(output: &mut impl Write, event: &PluginEvent) -> io::Result<()> {
@@ -291,5 +382,79 @@ mod tests {
                 ..
             }
         ));
+    }
+}
+
+#[cfg(test)]
+mod typed_tests {
+    use super::*;
+    #[derive(Default)]
+    struct Configurable {
+        applied: usize,
+        input: Option<String>,
+    }
+    impl Plugin for Configurable {
+        fn id(&self) -> &'static str {
+            "test"
+        }
+        fn search(&mut self, _: &str, _: usize) -> Result<Vec<SearchResult>, String> {
+            Ok(vec![])
+        }
+        fn execute(&mut self, _: &str, _: &str) -> Result<Option<String>, String> {
+            Ok(None)
+        }
+        fn execute_with_input(
+            &mut self,
+            _: &str,
+            _: &str,
+            input: Option<&str>,
+        ) -> Result<Option<String>, String> {
+            self.input = input.map(str::to_owned);
+            Ok(None)
+        }
+        fn configure(&mut self, settings: &BTreeMap<String, String>) -> Result<bool, String> {
+            self.applied = settings["count"].parse().unwrap();
+            Ok(false)
+        }
+        fn configuration_schema(&self) -> Vec<ConfigurationField> {
+            vec![ConfigurationField {
+                id: "count".into(),
+                label: "Count".into(),
+                kind: clipkeep_protocol::ConfigurationKind::Integer,
+                default: 2.into(),
+                description: String::new(),
+                options: vec![],
+                minimum: Some(1),
+                maximum: Some(10),
+            }]
+        }
+    }
+    #[test]
+    fn validates_before_configuration_side_effects_and_adapts_old_strings() {
+        let mut plugin = Configurable::default();
+        configure_plugin(&mut plugin, &BTreeMap::new(), Some(&BTreeMap::new())).unwrap();
+        assert_eq!(plugin.applied, 2);
+        let invalid = BTreeMap::from([("count".into(), 11.into())]);
+        assert!(configure_plugin(&mut plugin, &BTreeMap::new(), Some(&invalid)).is_err());
+        assert_eq!(plugin.applied, 2);
+        configure_plugin(
+            &mut plugin,
+            &BTreeMap::from([("count".into(), "3".into())]),
+            None,
+        )
+        .unwrap();
+        assert_eq!(plugin.applied, 3);
+    }
+    #[test]
+    fn typed_arguments_adapt_to_existing_inline_handlers() {
+        let mut plugin = Configurable::default();
+        let args = BTreeMap::from([("count".into(), 3.into()), ("flag".into(), true.into())]);
+        plugin
+            .execute_with_arguments("result", "action", &args)
+            .unwrap();
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(plugin.input.as_ref().unwrap()).unwrap(),
+            serde_json::json!({"count":3,"flag":true})
+        );
     }
 }

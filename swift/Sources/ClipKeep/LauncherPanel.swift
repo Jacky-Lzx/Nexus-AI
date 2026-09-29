@@ -664,12 +664,12 @@ final class LauncherPanelController: NSWindowController,
         do {
             switch try PluginHostAction.resolve(result: result, actionId: action.id, descriptor: descriptor) {
             case .editText:
-                performClipboardEdit(on: result)
+                performClipboardEdit(on: result, actionId: action.id)
                 return
             case .notificationPermission:
                 break
             case .menuPress:
-                performMenuBarPress(on: result)
+                performMenuBarPress(on: result, actionId: action.id)
                 return
             case .media, nil: break
             }
@@ -922,10 +922,10 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    private func performMenuBarPress(on result: SearchResult) {
+    private func performMenuBarPress(on result: SearchResult, actionId: String) {
         guard ensureAccessibilityPermission(),
-              let processIdentifier = result.metadata["target_pid"].flatMap(Int32.init),
-              let encodedPath = result.metadata["menu_path"]?.data(using: .utf8),
+              let processIdentifier = result.hostParameter("target_pid", actionId: actionId).flatMap(Int32.init),
+              let encodedPath = result.hostParameter("menu_path", actionId: actionId)?.data(using: .utf8),
               let menuPath = try? JSONDecoder().decode([String].self, from: encodedPath)
         else { return }
         let application = previousApplication?.processIdentifier == processIdentifier
@@ -1022,7 +1022,7 @@ final class LauncherPanelController: NSWindowController,
         }
     }
 
-    private func performClipboardEdit(on result: SearchResult) {
+    private func performClipboardEdit(on result: SearchResult, actionId: String) {
         let applicationToRestore = previousApplication
         let canPaste = ensureAccessibilityPermission()
         hide { [weak self] in
@@ -1038,7 +1038,7 @@ final class LauncherPanelController: NSWindowController,
                     coordinator.onStatusChanged?(error.localizedDescription)
                     applicationToRestore?.activate()
                 case let .success(editedText):
-                    coordinator.execute(result, actionId: result.metadata["edit_submit_action"] ?? "apply_edit", input: editedText) { success in
+                    coordinator.execute(result, actionId: result.hostParameter("edit_submit_action", actionId: actionId) ?? "apply_edit", input: editedText) { success in
                         applicationToRestore?.activate()
                         guard success, canPaste, let applicationToRestore else { return }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {

@@ -172,6 +172,7 @@ fn file_result(home: &Path, path: &Path, query: &str) -> SearchResult {
         metadata,
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "open".into(),
                 title: "Open".into(),
                 destructive: false,
@@ -181,6 +182,7 @@ fn file_result(home: &Path, path: &Path, query: &str) -> SearchResult {
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "reveal".into(),
                 title: "Show in Finder".into(),
                 destructive: false,

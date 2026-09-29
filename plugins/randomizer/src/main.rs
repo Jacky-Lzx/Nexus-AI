@@ -348,6 +348,7 @@ fn randomizer_result(
         ]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: "Paste Result".into(),
                 destructive: false,
@@ -357,6 +358,7 @@ fn randomizer_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: "Copy Result".into(),
                 destructive: false,

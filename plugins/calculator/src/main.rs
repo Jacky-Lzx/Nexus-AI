@@ -45,6 +45,7 @@ impl Plugin for CalculatorPlugin {
             ]),
             actions: vec![
                 ResultAction {
+                    host_action: None,
                     id: "paste".into(),
                     title: "Paste Result".into(),
                     destructive: false,
@@ -54,6 +55,7 @@ impl Plugin for CalculatorPlugin {
                     input_fields: Vec::new(),
                 },
                 ResultAction {
+                    host_action: None,
                     id: "copy".into(),
                     title: "Copy Result".into(),
                     destructive: false,

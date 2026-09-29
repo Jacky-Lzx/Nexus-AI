@@ -2,7 +2,7 @@ import Foundation
 
 final class PluginProcess {
     enum Event {
-        case initialized(pluginId: String, protocolVersion: Int, features: [String])
+        case initialized(pluginId: String, protocolVersion: Int, features: [String], schema: [PluginConfigurationField])
         case searchResults(
             queryId: UInt64,
             items: [SearchResult],
@@ -19,6 +19,7 @@ final class PluginProcess {
     let descriptor: PluginDescriptor
     let instanceId = UUID().uuidString
     private(set) var features: Set<String> = []
+    private(set) var configurationSchema: [PluginConfigurationField] = []
     var onEvent: ((Event) -> Void)?
 
     private let process = Process()
@@ -43,9 +44,11 @@ final class PluginProcess {
         let code: String?
         let retryable: Bool?
         let features: [String]?
+        let configurationSchema: [PluginConfigurationField]?
 
         enum CodingKeys: String, CodingKey {
             case type, items, notification, success, message, code, retryable, features
+            case configurationSchema = "configuration_schema"
             case queryId = "query_id"
             case requestId = "request_id"
             case pluginId = "plugin_id"
@@ -75,7 +78,10 @@ final class PluginProcess {
         try process.run()
     }
 
-    func acceptFeatures(_ offered: [String]) { features = Set(offered) }
+    func acceptFeatures(_ offered: [String], schema: [PluginConfigurationField]) {
+        features = Set(offered)
+        configurationSchema = schema
+    }
 
     func initialize() {
         send(["type": "initialize", "protocol_version": 1])
@@ -134,10 +140,18 @@ final class PluginProcess {
     }
 
     func configure(settings: [String: String]) {
-        send(["type": "configure", "settings": settings])
+        var request: [String: Any] = ["type": "configure", "settings": settings]
+        if features.contains("configuration.values") {
+            var values: [String: Any] = settings
+            for field in configurationSchema {
+                values[field.id] = (settings[field.id].flatMap(field.parse) ?? field.default).foundationValue
+            }
+            request["values"] = values
+        }
+        send(request)
     }
 
-    func execute(requestId: UInt64, resultId: String, actionId: String, input: String? = nil) {
+    func execute(requestId: UInt64, resultId: String, actionId: String, input: String? = nil, arguments: [String: Any]? = nil) {
         var request: [String: Any] = [
             "type": "execute",
             "request_id": requestId,
@@ -145,6 +159,7 @@ final class PluginProcess {
             "action_id": actionId,
         ]
         if let input { request["input"] = input }
+        if features.contains("action.arguments"), let arguments { request["arguments"] = arguments }
         send(request)
     }
 
@@ -175,7 +190,7 @@ final class PluginProcess {
         switch envelope.type {
         case "initialized":
             guard let pluginId = envelope.pluginId, let protocolVersion = envelope.protocolVersion else { return }
-            event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion, features: envelope.features ?? [])
+            event = .initialized(pluginId: pluginId, protocolVersion: protocolVersion, features: envelope.features ?? [], schema: envelope.configurationSchema ?? [])
         case "search_results":
             guard let queryId = envelope.queryId, let items = envelope.items else { return }
             event = .searchResults(
@@ -457,7 +472,7 @@ final class SearchCoordinator {
               canExecute(result) else { completion?(false); return }
         do {
             if try PluginHostAction.resolve(result: result, actionId: actionId, descriptor: descriptor) == .media {
-                guard let command = SystemMediaController.command(for: result.metadata["command"] ?? "") else {
+                guard let command = SystemMediaController.command(for: result.hostParameter("command", actionId: actionId) ?? "") else {
                     throw PluginInstallationError.invalid("Unknown media command")
                 }
                 let success = SystemMediaController.perform(command)
@@ -480,7 +495,9 @@ final class SearchCoordinator {
             resultId: result.id,
             actionId: actionId,
             input: input,
-            completion: completion
+            completion: completion,
+            arguments: result.actions.first(where: { $0.id == actionId })?.inputFields.isEmpty == false
+                ? input?.data(using: .utf8).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } : nil
         )
     }
 
@@ -499,7 +516,8 @@ final class SearchCoordinator {
         resultId: String,
         actionId: String,
         input: String?,
-        completion: ((Bool) -> Void)?
+        completion: ((Bool) -> Void)?,
+        arguments: [String: Any]? = nil
     ) {
         guard let process = processes[pluginId] else { completion?(false); return }
         requestId += 1
@@ -509,7 +527,8 @@ final class SearchCoordinator {
             requestId: sentRequestId,
             resultId: resultId,
             actionId: actionId,
-            input: input
+            input: input,
+            arguments: arguments
         )
         DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self, weak process] in
             guard let self, let process,
@@ -570,8 +589,12 @@ final class SearchCoordinator {
         }
     }
 
+    func configurationSchema(for pluginId: String) -> [PluginConfigurationField] {
+        processes[pluginId]?.configurationSchema ?? []
+    }
+
     private func settings(for pluginId: String) -> [String: String] {
-        switch pluginId {
+        let base: [String: String] = switch pluginId {
         case "io.clipkeep.clipboard": ClipboardPreference.pluginSettings
         case "io.clipkeep.calendar": CalendarPreference.pluginSettings
         case "io.clipkeep.clash": ClashPreference.pluginSettings
@@ -579,18 +602,21 @@ final class SearchCoordinator {
             PluginItemPreference.pluginSettings(for: pluginId)
         default: PluginItemPreference.pluginSettings(for: pluginId)
         }
+        return base.merging(PluginConfigurationPreference.settings(for: pluginId)) { _, custom in custom }
     }
 
     private func handle(_ event: PluginProcess.Event, from pluginId: String, process: PluginProcess) {
         guard processes[pluginId] === process else { return }
         switch event {
-        case let .initialized(actualPluginId, protocolVersion, features):
+        case let .initialized(actualPluginId, protocolVersion, features, schema):
             guard actualPluginId == pluginId, protocolVersion == 1 else {
                 onStatusChanged?("Rejected incompatible plugin: \(pluginId)")
                 stopPlugin(pluginId)
                 return
             }
-            process.acceptFeatures(features)
+            process.acceptFeatures(features, schema: schema)
+            process.configure(settings: settings(for: pluginId))
+            onPluginStateChanged?()
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self, weak process] in
                 guard let self, let process, self.processes[pluginId] === process else { return }
                 self.restartAttempts[pluginId] = 0

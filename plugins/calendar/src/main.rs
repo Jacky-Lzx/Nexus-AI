@@ -62,6 +62,7 @@ impl CalendarPlugin {
                 "Calendar Access Required",
                 "Allow Nexus to read events in System Settings",
                 Some(ResultAction {
+                    host_action: None,
                     id: "open-settings".into(),
                     title: "Open Privacy Settings".into(),
                     destructive: false,
@@ -160,6 +161,7 @@ impl CalendarPlugin {
                         score: 2_500.0 - ((start_timestamp - now).max(0.0) / 6_000.0) as f32,
                         metadata,
                         actions: vec![ResultAction {
+                            host_action: None,
                             id: "open-calendar".into(),
                             title: "Open Calendar".into(),
                             destructive: false,

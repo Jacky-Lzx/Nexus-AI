@@ -307,6 +307,7 @@ fn field_result(
         metadata: BTreeMap::from([("symbol_name".into(), field.symbol.into())]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: format!("Paste {}", field.label),
                 destructive: false,
@@ -316,6 +317,7 @@ fn field_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: format!("Copy {}", field.label),
                 destructive: false,

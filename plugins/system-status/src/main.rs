@@ -404,6 +404,7 @@ fn status_result(
         metadata: BTreeMap::from([("symbol_name".into(), metric.symbol().into())]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: "Paste".into(),
                 destructive: false,
@@ -413,6 +414,7 @@ fn status_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: "Copy".into(),
                 destructive: false,

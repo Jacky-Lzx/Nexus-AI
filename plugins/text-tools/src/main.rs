@@ -225,6 +225,7 @@ fn text_result(operation: Operation, result_id: String, output: String) -> Searc
         metadata,
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: "Paste Result".into(),
                 destructive: false,
@@ -234,6 +235,7 @@ fn text_result(operation: Operation, result_id: String, output: String) -> Searc
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: "Copy Result".into(),
                 destructive: false,

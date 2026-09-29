@@ -588,6 +588,7 @@ impl ClipItem {
                 0.0
             };
         let mut actions = vec![ResultAction {
+            host_action: None,
             id: "copy".into(),
             title: "Paste".into(),
             destructive: false,
@@ -598,6 +599,7 @@ impl ClipItem {
         }];
         if matches!(self.kind, ClipKind::Text | ClipKind::RichText) && !self.text.is_empty() {
             actions.push(ResultAction {
+                host_action: None,
                 id: "edit".into(),
                 title: "Edit in Neovim".into(),
                 destructive: false,
@@ -609,6 +611,7 @@ impl ClipItem {
         }
         actions.extend([
             ResultAction {
+                host_action: None,
                 id: "favorite".into(),
                 title: "Favorite".into(),
                 destructive: false,
@@ -618,6 +621,7 @@ impl ClipItem {
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "delete".into(),
                 title: "Delete".into(),
                 destructive: true,

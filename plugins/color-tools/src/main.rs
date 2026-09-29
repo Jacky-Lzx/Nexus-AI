@@ -419,6 +419,7 @@ fn color_result(
         ]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: "Paste Color".into(),
                 destructive: false,
@@ -428,6 +429,7 @@ fn color_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: "Copy Color".into(),
                 destructive: false,

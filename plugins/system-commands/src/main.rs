@@ -299,6 +299,7 @@ fn as_result(command: SystemCommand, index: usize) -> SearchResult {
         score: 2_000.0 - index as f32,
         metadata,
         actions: vec![ResultAction {
+            host_action: None,
             id: "run".into(),
             title: command.title.into(),
             destructive: command.destructive,

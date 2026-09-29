@@ -12,6 +12,8 @@ pub enum HostRequest {
     Configure {
         #[serde(default)]
         settings: BTreeMap<String, String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        values: Option<BTreeMap<String, serde_json::Value>>,
     },
     Search {
         query_id: u64,
@@ -29,6 +31,8 @@ pub enum HostRequest {
         action_id: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         input: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        arguments: Option<BTreeMap<String, serde_json::Value>>,
     },
     CancelSearch {
         query_id: u64,
@@ -44,6 +48,8 @@ pub enum PluginEvent {
         protocol_version: u32,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         features: Vec<String>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        configuration_schema: Vec<ConfigurationField>,
     },
     SearchResults {
         query_id: u64,
@@ -160,6 +166,8 @@ pub struct ResultAction {
     pub paste_to_previous: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub input_fields: Vec<ActionInputField>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_action: Option<HostServiceCall>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,6 +192,53 @@ pub enum ActionInputKind {
     #[default]
     Text,
     Integer,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HostServiceCall {
+    pub service: String,
+    #[serde(default)]
+    pub parameters: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ConfigurationField {
+    pub id: String,
+    pub label: String,
+    pub kind: ConfigurationKind,
+    pub default: serde_json::Value,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub minimum: Option<i64>,
+    #[serde(default)]
+    pub maximum: Option<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ConfigurationKind {
+    Text,
+    Integer,
+    Boolean,
+    Choice,
+}
+
+impl ConfigurationField {
+    pub fn accepts(&self, value: &serde_json::Value) -> bool {
+        match self.kind {
+            ConfigurationKind::Text => value.is_string(),
+            ConfigurationKind::Boolean => value.is_boolean(),
+            ConfigurationKind::Choice => value
+                .as_str()
+                .is_some_and(|s| self.options.iter().any(|o| o == s)),
+            ConfigurationKind::Integer => value.as_i64().is_some_and(|n| {
+                self.minimum.is_none_or(|min| n >= min) && self.maximum.is_none_or(|max| n <= max)
+            }),
+        }
+    }
 }
 
 impl PluginEvent {
@@ -248,6 +303,7 @@ mod tests {
             request,
             HostRequest::Configure {
                 settings: BTreeMap::from([("retention_days".into(), "30".into())]),
+                values: None,
             }
         );
     }
@@ -296,6 +352,7 @@ mod tests {
                 result_id: "clipboard:1".into(),
                 action_id: "apply_edit".into(),
                 input: Some("changed".into()),
+                arguments: None,
             }
         );
     }

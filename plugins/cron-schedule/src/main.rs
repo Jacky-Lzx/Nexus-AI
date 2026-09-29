@@ -544,6 +544,7 @@ fn invalid_result(message: &str) -> SearchResult {
 
 fn action(id: &str, title: &str, default: bool, paste_to_previous: bool) -> ResultAction {
     ResultAction {
+        host_action: None,
         id: id.into(),
         title: title.into(),
         destructive: false,

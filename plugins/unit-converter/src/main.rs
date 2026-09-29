@@ -52,6 +52,7 @@ impl Plugin for UnitConverterPlugin {
             ]),
             actions: vec![
                 ResultAction {
+                    host_action: None,
                     id: "paste".into(),
                     title: "Paste Result".into(),
                     destructive: false,
@@ -61,6 +62,7 @@ impl Plugin for UnitConverterPlugin {
                     input_fields: Vec::new(),
                 },
                 ResultAction {
+                    host_action: None,
                     id: "copy".into(),
                     title: "Copy Result".into(),
                     destructive: false,

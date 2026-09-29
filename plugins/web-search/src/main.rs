@@ -165,6 +165,7 @@ fn search_result(
             ("url".into(), url),
         ]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "open".into(),
             title: "Search in Browser".into(),
             destructive: false,

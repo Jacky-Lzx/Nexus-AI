@@ -57,3 +57,31 @@ import Testing
         try PluginHostAction.resolve(result: result, actionId: "create", descriptor: withoutPermission)
     }
 }
+
+@Test func typedHostServiceUsesItsOwnParametersAndCapabilityCheck() throws {
+    let result = try JSONDecoder().decode(SearchResult.self, from: Data("""
+    {"plugin_id":"com.example.audio","id":"quiet","title":"Quiet","kind":"command",
+     "metadata":{"command":"volume-up"},
+     "actions":[{"id":"toggle","title":"Mute","host_action":{"service":"system.media","parameters":{"command":"mute"}}}]}
+    """.utf8))
+    let descriptor = PluginDescriptor(
+        id: "com.example.audio", name: "Audio", version: "1", protocolVersion: 1,
+        executable: "audio", executableURL: URL(fileURLWithPath: "/tmp/audio"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: true, capabilities: ["system.control"])
+    #expect(try PluginHostAction.resolve(result: result, actionId: "toggle", descriptor: descriptor) == .media)
+    #expect(result.hostParameter("command", actionId: "toggle") == "mute")
+    #expect(result.hostParameter("target_pid", actionId: "toggle") == nil)
+}
+
+@Test func configurationTypesKeepBooleansAndNumbersDistinct() throws {
+    let field = try JSONDecoder().decode(PluginConfigurationField.self, from: Data("""
+    {"id":"count","label":"Count","kind":"integer","default":2,"minimum":1,"maximum":10}
+    """.utf8))
+    #expect(field.parse("3") == .integer(3))
+    #expect(field.parse("3.5") == nil)
+    #expect(field.parse("true") == nil)
+    #expect(field.parse("11") == nil)
+    let value = try JSONDecoder().decode(PluginValue.self, from: Data("{\"flag\":true,\"count\":2,\"text\":\"2\"}".utf8))
+    #expect(value == .object(["flag": .boolean(true), "count": .integer(2), "text": .string("2")]))
+    #expect(try JSONDecoder().decode(PluginValue.self, from: JSONEncoder().encode(value)) == value)
+}

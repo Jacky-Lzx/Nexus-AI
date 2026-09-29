@@ -234,6 +234,7 @@ fn mode_result(mode: ClashMode, current: Option<ClashMode>) -> SearchResult {
             ("current".into(), selected.to_string()),
         ]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "set".into(),
             title: format!("Switch to {}", mode.title()),
             destructive: false,

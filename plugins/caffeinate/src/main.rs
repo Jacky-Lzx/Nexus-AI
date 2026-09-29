@@ -215,6 +215,7 @@ fn start_result(active: Option<&ActiveCaffeination>) -> SearchResult {
         score: 4_000.0,
         metadata: BTreeMap::from([("symbol_name".into(), "cup.and.saucer.fill".into())]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "start".into(),
             title: "Caffeinate".into(),
             destructive: false,
@@ -244,6 +245,7 @@ fn stop_result(active: &ActiveCaffeination) -> SearchResult {
         score: 3_900.0,
         metadata: BTreeMap::from([("symbol_name".into(), "cup.and.saucer".into())]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "stop".into(),
             title: "Decaffeinate".into(),
             destructive: false,

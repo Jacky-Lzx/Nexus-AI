@@ -200,6 +200,7 @@ fn process_result(process: ProcessEntry, score: u32) -> SearchResult {
             ),
         ]),
         actions: vec![ResultAction {
+            host_action: None,
             id: "terminate".into(),
             title: "Terminate Process".into(),
             destructive: true,

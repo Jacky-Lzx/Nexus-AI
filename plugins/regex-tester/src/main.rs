@@ -327,6 +327,7 @@ fn match_result(
     } else {
         vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: "Paste Matches".into(),
                 destructive: false,
@@ -336,6 +337,7 @@ fn match_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: "Copy Matches".into(),
                 destructive: false,

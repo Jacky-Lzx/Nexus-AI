@@ -285,6 +285,7 @@ fn identifier_result(
         metadata: BTreeMap::from([("symbol_name".into(), identifier.symbol.into())]),
         actions: vec![
             ResultAction {
+                host_action: None,
                 id: "paste".into(),
                 title: "Paste Identifier".into(),
                 destructive: false,
@@ -294,6 +295,7 @@ fn identifier_result(
                 input_fields: Vec::new(),
             },
             ResultAction {
+                host_action: None,
                 id: "copy".into(),
                 title: "Copy Identifier".into(),
                 destructive: false,

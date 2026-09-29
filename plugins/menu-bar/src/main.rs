@@ -96,6 +96,7 @@ impl MenuBarItem {
                 ("target_pid".into(), target_pid.to_string()),
             ]),
             actions: vec![ResultAction {
+                host_action: None,
                 id: "press".into(),
                 title: "Run Menu Command".into(),
                 destructive: false,

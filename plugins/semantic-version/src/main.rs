@@ -582,6 +582,7 @@ fn action(
     paste_to_previous: bool,
 ) -> ResultAction {
     ResultAction {
+        host_action: None,
         id: id.into(),
         title: title.into(),
         destructive: false,
