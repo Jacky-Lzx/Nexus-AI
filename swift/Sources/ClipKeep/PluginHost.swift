@@ -291,6 +291,8 @@ final class PluginProcess {
 
     private func decode(_ data: Data) throws {
         let identity = try? JSONDecoder().decode(EventIdentity.self, from: data)
+        let knownTypes: Set<String> = ["initialized", "search_results", "configuration_items", "notification", "catalog_changed", "action_finished", "error"]
+        if let identity, !knownTypes.contains(identity.type) { return }
         let envelope: EventEnvelope
         do { envelope = try JSONDecoder().decode(EventEnvelope.self, from: data) }
         catch let DecodingError.dataCorrupted(context) {

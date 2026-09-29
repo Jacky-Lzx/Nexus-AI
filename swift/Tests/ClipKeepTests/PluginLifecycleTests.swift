@@ -324,6 +324,7 @@ private func replaceFixtureScript(_ bundle: URL, body: String) throws {
     for line in sys.stdin:
         request = json.loads(line)
         if request['type'] == 'search':
+            print(json.dumps(dict(type='future_event', items='new shape')), flush=True)
             print(json.dumps(dict(type='search_results', query_id=request['query_id'], items=[])), flush=True)
     """)
     let descriptor = try PluginRegistry.load(bundle)

@@ -89,3 +89,29 @@ macOS F_SETNOSIGPIPE so plugin exit becomes an I/O failure, not a host crash.
 Business requests wait for a validated handshake; startup has a five-second
 deadline. Queued pre-initialization searches are coalesced and bounded. Shutdown
 terminates the process and releases queues without a main-thread pipe write.
+
+## Validation (2026-09-29)
+
+- Rust workspace: 436 tests passed. Socket-based Clash tests ran outside the
+  restricted sandbox against local test listeners.
+- Swift: 32 Swift Testing cases plus 5 XCTest cases passed, including real child
+  processes for errors, deadlines, stale responses, blocked pipes and readiness.
+- Workspace Clippy with `-D warnings`, Rust formatting and whitespace checks pass.
+- The final `dist/Nexus.app` is signed with Nexus Development and passes
+  `codesign --verify --deep --strict`.
+- The independently packaged Hello plugin passes schema/configuration/typed-action
+  smoke. Calculator passes old and new handshakes. The native Swift OCR plugin
+  passes handshake/search without running clipboard recognition. A local HTTP
+  fixture verifies cancellation followed by a responsive new query.
+
+Reproduce the packaged smoke after building the app and Hello example:
+
+```sh
+python3 scripts/test-plugin-protocol.py dist/Nexus.app \
+  --hello dist/plugins/com.example.nexus.hello.clipkeepplugin --cancellation
+```
+
+The currently installed `/Applications/Nexus.app` has not been replaced. Desktop
+UI verification of the new bundle is pending explicit restart authorization;
+automatic approval rejected terminating the active app because it may contain
+unfinished state. This does not affect the completed process/protocol tests.
