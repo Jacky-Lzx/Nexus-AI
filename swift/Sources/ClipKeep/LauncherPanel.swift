@@ -128,6 +128,8 @@ final class LauncherPanelController: NSWindowController,
     private var presentationTopConstraint: NSLayoutConstraint?
     private var presentationHeightConstraint: NSLayoutConstraint?
     private var contentTopConstraint: NSLayoutConstraint?
+    private var contentBottomConstraint: NSLayoutConstraint?
+    private var expandingContentHeightConstraint: NSLayoutConstraint?
     private var footerHeightConstraint: NSLayoutConstraint?
     private var presentationValueLabels: [(NSTextField, PluginPresentationItem)] = []
     private var showsCompactStatus = false
@@ -141,6 +143,7 @@ final class LauncherPanelController: NSWindowController,
     private var resetScrollOnNextResults = false
     private var detailImageGeneration: UInt64 = 0
     private var expansionAnimationGeneration: UInt64 = 0
+    private var expansionTargetHeight: CGFloat?
 
     private static let detailImageCache = NSCache<NSString, NSImage>()
     private static let thumbnailImageCache = NSCache<NSString, NSImage>()
@@ -368,6 +371,8 @@ final class LauncherPanelController: NSWindowController,
         )
         presentationHeightConstraint = presentationContainer.heightAnchor.constraint(equalToConstant: 0)
         contentTopConstraint = content.topAnchor.constraint(equalTo: presentationContainer.bottomAnchor)
+        contentBottomConstraint = content.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -Layout.outerInset)
+        expandingContentHeightConstraint = content.heightAnchor.constraint(equalToConstant: 0)
         searchTrailingConstraint = searchField.trailingAnchor.constraint(equalTo: searchContainer.trailingAnchor, constant: -12)
         inputLeadingConstraint = actionInputStack.leadingAnchor.constraint(equalTo: searchContainer.leadingAnchor, constant: 17)
         inlineQueryWidthConstraint = searchField.widthAnchor.constraint(equalToConstant: 1)
@@ -403,7 +408,7 @@ final class LauncherPanelController: NSWindowController,
             contentTopConstraint!,
             content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Layout.outerInset),
             content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Layout.outerInset),
-            content.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -Layout.outerInset),
+            contentBottomConstraint!,
         ])
     }
 
@@ -1541,6 +1546,7 @@ final class LauncherPanelController: NSWindowController,
         presentationContainer.isHidden = !visible
         presentationTopConstraint?.constant = visible ? Layout.contentSpacing : 0
         presentationHeightConstraint?.constant = height
+        updateExpandingContentHeight()
         if layoutChanged {
             root.layoutSubtreeIfNeeded()
             if isPresented, searchMode == .global, !expanded,
@@ -1688,7 +1694,8 @@ final class LauncherPanelController: NSWindowController,
         guard let panel = window else { return }
         let newHeight = shouldExpand ? Layout.expandedHeight
             : Layout.collapsedHeight + (showsCompactStatus ? Layout.contentSpacing + 32 + Layout.outerInset : 0)
-        guard expanded != shouldExpand || abs(panel.frame.height - newHeight) > 0.5 else { return }
+        guard expanded != shouldExpand
+            || abs((expansionTargetHeight ?? panel.frame.height) - newHeight) > 0.5 else { return }
         expanded = shouldExpand
         expansionAnimationGeneration &+= 1
         let generation = expansionAnimationGeneration
@@ -1697,6 +1704,8 @@ final class LauncherPanelController: NSWindowController,
         frame.size.height = newHeight
 
         guard animated else {
+            expansionTargetHeight = nil
+            restoreContentBottomConstraint()
             contentTopConstraint?.constant = shouldExpand ? Layout.contentSpacing : 0
             footerHeightConstraint?.constant = shouldExpand ? 46 : 0
             content.alphaValue = shouldExpand ? 1 : 0
@@ -1708,34 +1717,39 @@ final class LauncherPanelController: NSWindowController,
             return
         }
 
+        expansionTargetHeight = newHeight
         if shouldExpand {
-            // Keep result views out of the live glass resize. AppKit otherwise lays
-            // out the table while NSGlassEffectView is resampling its background,
-            // which produces a visible one-frame jump on the first character.
+            // Lay out the list at its final height before resizing the glass.
+            // The root's clipping reveals it as the window grows without repeatedly
+            // resizing the table or waiting for the window animation to finish.
+            contentTopConstraint?.constant = Layout.contentSpacing
+            footerHeightConstraint?.constant = 46
+            contentBottomConstraint?.isActive = false
+            updateExpandingContentHeight()
+            expandingContentHeightConstraint?.isActive = true
             content.alphaValue = 0
-            content.isHidden = true
+            content.isHidden = false
             presentationContainer.alphaValue = 0
+            root.layoutSubtreeIfNeeded()
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.08
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                content.animator().alphaValue = 1
+                presentationContainer.animator().alphaValue = 1
+            }
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.18
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 panel.animator().setFrame(frame, display: true)
             }, completionHandler: { [weak self] in
                 guard let self, self.expansionAnimationGeneration == generation else { return }
-                self.contentTopConstraint?.constant = Layout.contentSpacing
-                self.footerHeightConstraint?.constant = 46
+                self.expansionTargetHeight = nil
+                self.restoreContentBottomConstraint()
                 self.root.layoutSubtreeIfNeeded()
-                self.content.isHidden = false
-                NSAnimationContext.runAnimationGroup({ context in
-                    context.duration = 0.08
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    self.content.animator().alphaValue = 1
-                    self.presentationContainer.animator().alphaValue = 1
-                }, completionHandler: { [weak self] in
-                    guard let self, self.expansionAnimationGeneration == generation else { return }
-                    self.updateScrollerVisibility()
-                })
+                self.updateScrollerVisibility()
             })
         } else {
+            restoreContentBottomConstraint()
             content.alphaValue = 0
             presentationContainer.alphaValue = showsCompactStatus ? 1 : 0
             content.isHidden = true
@@ -1748,9 +1762,23 @@ final class LauncherPanelController: NSWindowController,
                 panel.animator().setFrame(frame, display: true)
             }, completionHandler: { [weak self] in
                 guard let self, self.expansionAnimationGeneration == generation else { return }
+                self.expansionTargetHeight = nil
                 self.updateScrollerVisibility()
             })
         }
+    }
+
+    private func updateExpandingContentHeight() {
+        expandingContentHeightConstraint?.constant = Layout.expandedHeight
+            - 2 * Layout.outerInset - Layout.searchHeight
+            - (presentationTopConstraint?.constant ?? 0)
+            - (presentationHeightConstraint?.constant ?? 0)
+            - (contentTopConstraint?.constant ?? 0)
+    }
+
+    private func restoreContentBottomConstraint() {
+        expandingContentHeightConstraint?.isActive = false
+        contentBottomConstraint?.isActive = true
     }
 
     private func shouldExpand(for query: String) -> Bool {
