@@ -102,7 +102,7 @@ enum ActionInputKind: String, Codable {
     case integer
 }
 
-struct ActionInputField: Codable {
+struct ActionInputField: Codable, Equatable {
     let id: String
     let label: String
     let placeholder: String

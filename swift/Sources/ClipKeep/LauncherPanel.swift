@@ -563,7 +563,11 @@ final class LauncherPanelController: NSWindowController,
     func controlTextDidChange(_ obj: Notification) {
         guard let changedField = obj.object as? NSTextField, changedField === searchField else { return }
         let query = searchField.stringValue
-        endActionInputForm(restoreSearchFocus: false)
+        if inlineActionInput, !query.isEmpty {
+            updateInlineQueryWidth()
+        } else {
+            endActionInputForm(restoreSearchFocus: false)
+        }
         requestSearch(query)
         updatePresentationItems()
         setExpanded(shouldExpand(for: query), animated: true)
@@ -721,7 +725,12 @@ final class LauncherPanelController: NSWindowController,
     ) {
         if let activeActionInput, activeActionInput.result.id == result.id,
            activeActionInput.result.pluginId == result.pluginId,
-           activeActionInput.action.id == action.id {
+           activeActionInput.result.metadata["_nexus_process"] == result.metadata["_nexus_process"],
+           activeActionInput.action.id == action.id,
+           activeActionInput.action.inputFields == action.inputFields {
+            // Keep the controls and entered values, but execute the latest result/action.
+            self.activeActionInput = ActiveActionInput(result: result, action: action, fields: activeActionInput.fields)
+            if inlineActionInput { updateInlineQueryWidth() }
             if takeFocus, let field = focusLastField ? activeActionInput.fields.last?.1 : activeActionInput.fields.first?.1 {
                 window?.makeFirstResponder(field)
             }
@@ -733,11 +742,7 @@ final class LauncherPanelController: NSWindowController,
         searchField.isHidden = !inline
         actionInputStack.isHidden = false
         if inline {
-            let textWidth = (searchField.stringValue as NSString).size(withAttributes: [
-                .font: searchField.font ?? NSFont.systemFont(ofSize: 24),
-            ]).width
-            // Account for the text field's inset while keeping arguments beside the query.
-            inlineQueryWidthConstraint.constant = ceil(textWidth) + 6
+            updateInlineQueryWidth()
             searchTrailingConstraint.isActive = false
             inputLeadingConstraint.isActive = false
             NSLayoutConstraint.activate(inlineInputConstraints)
@@ -777,6 +782,14 @@ final class LauncherPanelController: NSWindowController,
         if takeFocus, let field = focusLastField ? controls.last?.1 : controls.first?.1 {
             window?.makeFirstResponder(field)
         }
+    }
+
+    private func updateInlineQueryWidth() {
+        let textWidth = (searchField.stringValue as NSString).size(withAttributes: [
+            .font: searchField.font ?? NSFont.systemFont(ofSize: 24),
+        ]).width
+        // Account for the text field's inset while keeping arguments beside the query.
+        inlineQueryWidthConstraint.constant = ceil(textWidth) + 6
     }
 
     private func makeActionInputField(_ definition: ActionInputField) -> (NSView, NSTextField) {
@@ -824,7 +837,8 @@ final class LauncherPanelController: NSWindowController,
         actionInputStack.isHidden = true
         searchIcon.isHidden = false
         searchField.isHidden = false
-        if restoreSearchFocus {
+        if restoreSearchFocus,
+           searchField.currentEditor() == nil || searchField.currentEditor() !== window?.firstResponder {
             window?.makeFirstResponder(searchField)
         }
     }
