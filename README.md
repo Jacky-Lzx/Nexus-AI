@@ -598,7 +598,15 @@ See `plugins/caffeinate/src/main.rs` for the complete reusable action declaratio
 and execution handler; no plugin-specific host UI is needed.
 
 
-### OCR clipboard images
+### OCR screenshots and clipboard images
+
+Search `ocr` (or `截图`) and press Return on **OCR Screenshot → Copy Text** for
+the all-in-one mode. Nexus hides, then macOS opens its screenshot selector. Drag
+to select an area, or press Space to select a window. The plugin recognizes the
+screenshot locally and copies the text directly to the clipboard, with a
+completion message. Press Esc to cancel. Cancelled captures, failed recognition,
+and screenshots without text leave the clipboard unchanged. If macOS requests
+Screen Recording permission, allow Nexus in System Settings.
 
 Copy an image (for example, take a macOS screenshot to the clipboard), search
 `ocr`, and press Return on **OCR Clipboard Image**. Recognition runs locally in
@@ -609,9 +617,10 @@ copies it. Select **OCR Clipboard Image** again to recognize a new image.
 
 No image, unreadable images, and images with no recognized text produce a visible
 message. Inputs are limited to 64 MB and 80 megapixels. Results are held in memory
-until replaced or the plugin exits. This first version accepts PNG/TIFF clipboard
-images; image-file selection, screen-region capture, and table reconstruction are
-not included.
+until replaced or the plugin exits. OCR accepts PNG/TIFF clipboard
+images, plus interactive screenshots; image-file selection and table
+reconstruction are not included. Screenshots use a private temporary file that
+is removed after capture and are never copied to the clipboard by the plugin.
 
 Plugins may set result metadata `preview_style = "text"` to display a selectable,
 scrollable plain-text `preview`, including in global search. Copy remains a normal
@@ -621,13 +630,14 @@ OCR is a native Swift protocol-v1 plugin in `plugins/ocr`. The packaging script
 accepts either a Rust `Cargo.toml` or native Swift `main.swift`:
 
 ```sh
-python3 scripts/package-plugin.py plugins/ocr
-swiftc -module-cache-path target/swift/module-cache plugins/ocr/tests/integration.swift -o /tmp/nexus-ocr-integration
-/tmp/nexus-ocr-integration "$PWD/target/swift-plugins/clipkeep-plugin-ocr"
+python3 scripts/package-plugin.py plugins/ocr --identity 'Nexus Development'
+sh scripts/test-ocr.sh "$PWD/dist/plugins/io.clipkeep.ocr.clipkeepplugin/Contents/MacOS/clipkeep-plugin-ocr"
 ```
 
-The integration test temporarily replaces and restores the clipboard, checking
-missing-image errors, responsive searches during OCR, Chinese/English recognition,
+The workflow tests check screenshot auto-copy, cancellation, empty recognition,
+capture/recognition/copy errors, and concurrent-operation guards without opening
+the screenshot selector. The integration test temporarily replaces and restores
+the clipboard, checking missing-image errors, responsive searches during OCR, Chinese/English recognition,
 copying, query filtering, and shutdown. Run in a normal macOS session so Vision and
 the pasteboard are available. The binary also supports `--recognize-file <path>`
 for read-only recognizer diagnostics.

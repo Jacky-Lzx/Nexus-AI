@@ -1,10 +1,10 @@
 id = "io.clipkeep.ocr"
 name = "OCR"
-description = "Recognize text in clipboard images locally"
+description = "Screenshot, recognize text locally, and copy it automatically; also supports clipboard images"
 icon = "text.viewfinder"
-version = "0.1.0"
+version = "0.2.0"
 protocol_version = 1
 entrypoint = "clipkeep-plugin-ocr"
 default_enabled = true
 include_in_global_search = true
-capabilities = ["clipboard.read", "clipboard.write"]
+capabilities = ["clipboard.read", "clipboard.write", "screen.capture", "notifications"]
