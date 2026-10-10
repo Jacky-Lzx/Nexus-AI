@@ -22,6 +22,35 @@ struct PluginShortcut: Codable, Equatable {
         self.keyLabel = keyLabel
     }
 
+    init?(definition: String) {
+        let parts = definition.lowercased().split(separator: "+", omittingEmptySubsequences: false).map(String.init)
+        guard let key = parts.last, parts.count >= 2 else { return nil }
+        let keys: [String: Int] = [
+            "a": kVK_ANSI_A, "b": kVK_ANSI_B, "c": kVK_ANSI_C, "d": kVK_ANSI_D,
+            "e": kVK_ANSI_E, "f": kVK_ANSI_F, "g": kVK_ANSI_G, "h": kVK_ANSI_H,
+            "i": kVK_ANSI_I, "j": kVK_ANSI_J, "k": kVK_ANSI_K, "l": kVK_ANSI_L,
+            "m": kVK_ANSI_M, "n": kVK_ANSI_N, "o": kVK_ANSI_O, "p": kVK_ANSI_P,
+            "q": kVK_ANSI_Q, "r": kVK_ANSI_R, "s": kVK_ANSI_S, "t": kVK_ANSI_T,
+            "u": kVK_ANSI_U, "v": kVK_ANSI_V, "w": kVK_ANSI_W, "x": kVK_ANSI_X,
+            "y": kVK_ANSI_Y, "z": kVK_ANSI_Z, "space": kVK_Space,
+        ]
+        guard let code = keys[key] else { return nil }
+        var flags: UInt32 = 0
+        for modifier in parts.dropLast() {
+            let flag: UInt32
+            switch modifier {
+            case "control": flag = UInt32(controlKey)
+            case "option": flag = UInt32(optionKey)
+            case "shift": flag = UInt32(shiftKey)
+            case "command": flag = UInt32(cmdKey)
+            default: return nil
+            }
+            guard flags & flag == 0 else { return nil }
+            flags |= flag
+        }
+        self.init(keyCode: UInt32(code), modifiers: flags, keyLabel: key == "space" ? "Space" : key.uppercased())
+    }
+
     init?(event: NSEvent, requiresModifier: Bool = true) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         var carbonModifiers: UInt32 = 0
@@ -158,7 +187,7 @@ final class GlobalHotKey {
         defaults.set(true, forKey: migrationKey)
     }
 
-    static func shortcut(for pluginId: String) -> PluginShortcut? {
+    static func shortcut(for pluginId: String, defaultShortcut: PluginShortcut? = nil) -> PluginShortcut? {
         if let data = UserDefaults.standard.data(forKey: "plugin.shortcut.\(pluginId)"),
            let shortcut = try? JSONDecoder().decode(PluginShortcut.self, from: data) {
             return shortcut
@@ -169,7 +198,7 @@ final class GlobalHotKey {
         case "io.clipkeep.clipboard":
             return PluginShortcut(keyCode: UInt32(kVK_ANSI_C), modifiers: UInt32(cmdKey | shiftKey), keyLabel: "C")
         default:
-            return nil
+            return defaultShortcut
         }
     }
 
@@ -185,14 +214,14 @@ final class GlobalHotKey {
     private var pluginIdsByEventId: [UInt32: String] = [:]
     private var eventHandler: EventHandlerRef?
 
-    func configure(enabledPluginIds: [String]) -> [String] {
+    func configure(enabledPluginIds: [String], defaultShortcuts: [String: PluginShortcut] = [:]) -> [String] {
         guard installHandlerIfNeeded() else { return enabledPluginIds }
         hotKeys.values.forEach { UnregisterEventHotKey($0) }
         hotKeys.removeAll()
         pluginIdsByEventId.removeAll()
 
         return enabledPluginIds.enumerated().compactMap { offset, pluginId in
-            guard let shortcut = Self.shortcut(for: pluginId) else { return nil }
+            guard let shortcut = Self.shortcut(for: pluginId, defaultShortcut: defaultShortcuts[pluginId]) else { return nil }
             let eventId = UInt32(offset + 1)
             return register(shortcut, pluginId: pluginId, eventId: eventId) ? nil : pluginId
         }

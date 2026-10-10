@@ -1,6 +1,6 @@
 [
   {"name":"legacy_initialize","direction":"request","message":{"type":"initialize","protocol_version":1}},
-  {"name":"modern_initialize","direction":"request","message":{"type":"initialize","protocol_version":1,"host_features":["action.arguments","configuration.values","host_action.object","search.cancel","status.snapshots"],"host_services":{"system.media":1,"text.edit":1,"notifications.authorize":1,"menu.press":1}}},
+  {"name":"modern_initialize","direction":"request","message":{"type":"initialize","protocol_version":1,"host_features":["action.arguments","configuration.values","host_action.object","search.cancel","status.snapshots"],"host_services":{"system.media":1,"text.edit":1,"text.compose":1,"notifications.authorize":1,"menu.press":1}}},
   {"name":"legacy_ready","direction":"event","message":{"type":"initialized","plugin_id":"com.example.test","protocol_version":1}},
   {"name":"modern_ready","direction":"event","message":{"type":"initialized","plugin_id":"com.example.test","protocol_version":1,"features":["action.arguments","configuration.values","host_action.object","search.cancel","status.snapshots"],"required_features":["action.arguments"],"required_services":{"system.media":1},"configuration_schema":[{"id":"enabled","label":"Enabled","kind":"boolean","default":true}]}},
   {"name":"legacy_search","direction":"request","message":{"type":"search","query_id":7,"query":"hello","limit":100}},

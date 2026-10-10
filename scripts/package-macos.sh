@@ -455,6 +455,8 @@ if [ -n "$signing_identity" ]; then
         "$web_search_plugin"
     codesign --force --sign "$signing_identity" --timestamp=none \
         "$bundle_dir/Contents/PlugIns/io.clipkeep.ocr.clipkeepplugin"
+    python3 "$project_dir/scripts/package-plugin.py" "$project_dir/plugins/neovim-input" \
+        --output "$bundle_dir/Contents/PlugIns" --identity "$signing_identity"
     codesign --force --sign "$signing_identity" --timestamp=none \
         --identifier io.clipkeep.ClipKeep "$bundle_dir"
     codesign --verify --deep --strict "$bundle_dir"

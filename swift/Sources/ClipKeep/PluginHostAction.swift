@@ -5,6 +5,7 @@ import Foundation
 enum PluginHostAction: String {
     case media = "system.media"
     case editText = "text.edit"
+    case composeText = "text.compose"
     case notificationPermission = "notifications.authorize"
     case menuPress = "menu.press"
 
@@ -12,6 +13,7 @@ enum PluginHostAction: String {
         switch self {
         case .media: "system.control"
         case .editText: "clipboard.write"
+        case .composeText: "text.compose"
         case .notificationPermission: "notifications"
         case .menuPress: "accessibility.press"
         }

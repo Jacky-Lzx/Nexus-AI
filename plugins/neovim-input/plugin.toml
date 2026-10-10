@@ -1,0 +1,12 @@
+id = "io.clipkeep.neovim-input"
+name = "Neovim Input"
+version = "0.1.0"
+protocol_version = 1
+entrypoint = "clipkeep-plugin-neovim-input"
+default_enabled = true
+include_in_global_search = true
+icon = "square.and.pencil"
+description = "Write in Kitty/Neovim, then save and quit to paste into the original app"
+capabilities = ["text.compose"]
+default_shortcut = "control+command+i"
+shortcut_host_action = "text.compose"

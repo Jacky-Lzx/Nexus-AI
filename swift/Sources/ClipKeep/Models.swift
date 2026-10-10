@@ -310,6 +310,8 @@ struct PluginDescriptor: Equatable {
     var revision: String = ""
     var iconName: String? = nil
     var summary: String? = nil
+    var defaultShortcut: PluginShortcut? = nil
+    var shortcutHostAction: String? = nil
 
     var symbolName: String {
         if let iconName { return iconName }

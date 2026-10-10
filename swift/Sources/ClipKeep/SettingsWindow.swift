@@ -316,7 +316,7 @@ final class SettingsWindowController: NSWindowController,
         options.translatesAutoresizingMaskIntoConstraints = false
 
         let shortcut = ShortcutRecorderButton(
-            shortcut: { GlobalHotKey.shortcut(for: plugin.id) },
+            shortcut: { GlobalHotKey.shortcut(for: plugin.id, defaultShortcut: plugin.defaultShortcut) },
             onChange: { [weak self] shortcut in
                 GlobalHotKey.save(shortcut, for: plugin.id)
                 self?.onShortcutChanged()

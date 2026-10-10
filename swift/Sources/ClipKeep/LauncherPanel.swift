@@ -123,6 +123,7 @@ final class LauncherPanelController: NSWindowController,
     private var hiding = false
     private var ignoreNextResign = false
     private var previousApplication: NSRunningApplication?
+    private let textInputController = TextInputController()
     private var listWidthConstraint: NSLayoutConstraint?
     private var scrollTrailingConstraint: NSLayoutConstraint?
     private var presentationTopConstraint: NSLayoutConstraint?
@@ -683,6 +684,12 @@ final class LauncherPanelController: NSWindowController,
             case .editText:
                 performClipboardEdit(on: result, actionId: action.id)
                 return
+            case .composeText:
+                composeText(configuration: [
+                    "terminal_path": result.hostParameter("terminal_path", actionId: action.id) ?? "",
+                    "editor_path": result.hostParameter("editor_path", actionId: action.id) ?? "",
+                ])
+                return
             case .notificationPermission:
                 break
             case .menuPress:
@@ -1046,6 +1053,21 @@ final class LauncherPanelController: NSWindowController,
                 path.joined(separator: " > ")
             )
             coordinator.onStatusChanged?("The target application rejected the menu command")
+        }
+    }
+
+    func composeText(configuration: [String: String] = [:]) {
+        if textInputController.isEditing {
+            textInputController.focusEditor()
+            return
+        }
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        let target = frontmost?.processIdentifier == ProcessInfo.processInfo.processIdentifier
+            ? previousApplication : frontmost
+        // Capture the window and field before hiding Nexus or activating Kitty.
+        guard let target, let destination = TextInputDestination(application: target) else { return }
+        hide { [weak self] in
+            self?.textInputController.start(destination: destination, configuration: configuration)
         }
     }
 

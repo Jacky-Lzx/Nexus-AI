@@ -114,6 +114,16 @@ enum PluginRegistry {
               let entrypoint = string("entrypoint"), !entrypoint.isEmpty, !entrypoint.contains("/") && !entrypoint.contains(".."),
               let protocolVersion = values["protocol_version"].flatMap(Int.init), protocolVersion == 1
         else { return nil }
+        let defaultShortcut = string("default_shortcut").flatMap(PluginShortcut.init(definition:))
+        guard values["default_shortcut"] == nil || defaultShortcut != nil,
+              values["shortcut_host_action"] == nil || string("shortcut_host_action") != nil else { return nil }
+        let shortcutHostAction = string("shortcut_host_action")
+        if let shortcutHostAction {
+            // Direct shortcuts only support services designed to run without a
+            // search result, and still require the manifest capability.
+            guard shortcutHostAction == PluginHostAction.composeText.rawValue,
+                  capabilities.contains(PluginHostAction.composeText.capability) else { return nil }
+        }
         return PluginDescriptor(
             id: id,
             name: name,
@@ -125,7 +135,9 @@ enum PluginRegistry {
             defaultIncludedInGlobalSearch: values["include_in_global_search"] == "true",
             capabilities: capabilities,
             iconName: string("icon"),
-            summary: string("description")
+            summary: string("description"),
+            defaultShortcut: defaultShortcut,
+            shortcutHostAction: shortcutHostAction
         )
     }
 }

@@ -34,6 +34,7 @@ members = [
     "plugins/markdown-tools",
     "plugins/menu-bar",
     "plugins/network-calculator",
+    "plugins/neovim-input",
     "plugins/number-statistics",
     "plugins/password-generator",
     "plugins/path-tools",

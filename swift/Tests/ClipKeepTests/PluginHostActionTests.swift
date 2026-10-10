@@ -85,3 +85,22 @@ import Testing
     #expect(value == .object(["flag": .boolean(true), "count": .integer(2), "text": .string("2")]))
     #expect(try JSONDecoder().decode(PluginValue.self, from: JSONEncoder().encode(value)) == value)
 }
+
+@Test func compositionServiceRequiresItsOwnCapability() throws {
+    let result = try JSONDecoder().decode(SearchResult.self, from: Data("""
+    {"plugin_id":"com.example.editor","id":"new","title":"Write","kind":"command",
+     "actions":[{"id":"compose","title":"Write","host_action":{"service":"text.compose"}}]}
+    """.utf8))
+    let descriptor = PluginDescriptor(
+        id: "com.example.editor", name: "Editor", version: "1", protocolVersion: 1,
+        executable: "editor", executableURL: URL(fileURLWithPath: "/tmp/editor"),
+        defaultEnabled: true, defaultIncludedInGlobalSearch: true, capabilities: ["text.compose"])
+    #expect(try PluginHostAction.resolve(result: result, actionId: "compose", descriptor: descriptor) == .composeText)
+    let withoutPermission = PluginDescriptor(
+        id: descriptor.id, name: descriptor.name, version: descriptor.version, protocolVersion: 1,
+        executable: descriptor.executable, executableURL: descriptor.executableURL,
+        defaultEnabled: true, defaultIncludedInGlobalSearch: true, capabilities: ["clipboard.write"])
+    #expect(throws: (any Error).self) {
+        try PluginHostAction.resolve(result: result, actionId: "compose", descriptor: withoutPermission)
+    }
+}

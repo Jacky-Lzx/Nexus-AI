@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 FEATURES = ['action.arguments', 'configuration.values', 'host_action.object', 'search.cancel', 'status.snapshots']
-SERVICES = {'system.media': 1, 'text.edit': 1, 'notifications.authorize': 1, 'menu.press': 1}
+SERVICES = {'system.media': 1, 'text.edit': 1, 'text.compose': 1, 'notifications.authorize': 1, 'menu.press': 1}
 
 class Client:
     def __init__(self, executable):

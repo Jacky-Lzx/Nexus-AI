@@ -8,6 +8,27 @@ private func temporaryDirectory() throws -> URL {
     return url
 }
 
+@Test func pluginManifestDeclaresDirectShortcutAndRejectsUndeclaredService() throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = try fixture(root)
+    let manifest = bundle.appendingPathComponent("plugin.toml")
+    let original = try String(contentsOf: manifest, encoding: .utf8)
+    let additions = "\ndefault_shortcut = \"control+command+i\"\nshortcut_host_action = \"text.compose\"\n"
+    let source = original.replacingOccurrences(of: "capabilities = [\"search\"]", with: "capabilities = [\"text.compose\"]")
+    try (source + additions).write(to: manifest, atomically: true, encoding: .utf8)
+    let descriptor = try PluginRegistry.load(bundle)
+    #expect(descriptor.defaultShortcut?.displayName == "⌃⌘I")
+    #expect(descriptor.shortcutHostAction == "text.compose")
+    try (original + additions).write(to: manifest, atomically: true, encoding: .utf8)
+    #expect(throws: (any Error).self) { try PluginRegistry.load(bundle) }
+    try (source + additions.replacingOccurrences(of: "text.compose", with: "unknown.service")).write(to: manifest, atomically: true, encoding: .utf8)
+    #expect(throws: (any Error).self) { try PluginRegistry.load(bundle) }
+    for definition in ["control++i", "command+command+i", "hyper+i", "i", "command+unknown"] {
+        #expect(PluginShortcut(definition: definition) == nil)
+    }
+}
+
 private func fixture(_ root: URL, id: String = "com.example.test", version: String = "1.0", delay: Double = 0) throws -> URL {
     let bundle = root.appendingPathComponent("\(id).clipkeepplugin")
     try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)

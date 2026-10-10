@@ -117,6 +117,7 @@ plugin protocol remains portable to future Windows and Linux frontends.
   as closing the palette and pasting into the previous app is protocol-driven
 - `Command-Shift-Space` opens a combined search across opted-in plugins
 - `Command-Shift-C` searches clipboard history only
+- The **Neovim Input** plugin uses `Control-Command-I` to open a blank Neovim buffer in a Kitty window fixed at the bottom of the current application's screen. Save and quit (`:wq`) to copy the text and paste it at the original cursor; `:q!` cancels. One final LF or CRLF is removed before copying, preserving internal line breaks and spaces. Repeating the shortcut focuses the existing session. Its shortcut and executable paths are configurable in the plugin settings; disabling the plugin unregisters the shortcut.
 - In Clipboard History, `Enter` pastes immediately; `Command-Enter` starts an asynchronous Kitty/Neovim edit session and pastes the saved text after the editor closes
 - Kitty and Neovim executable paths can be configured per Clipboard History plugin; empty paths use automatic discovery
 - Automatically hides when focus moves to another application
@@ -394,6 +395,7 @@ identifier in Settings.
 - `plugins/markdown-tools`: local Markdown anchors, escaping, links, images, code blocks, and quotes
 - `plugins/menu-bar`: searchable left-side application menus through Accessibility
 - `plugins/network-calculator`: offline IPv4 and IPv6 CIDR/subnet calculation
+- `plugins/neovim-input`: bottom-docked Kitty/Neovim writing with clipboard copy and paste into the original app
 - `plugins/number-statistics`: bounded local descriptive statistics for numeric datasets
 - `plugins/password-generator`: secure local password and PIN generation
 - `plugins/path-tools`: local lexical POSIX path inspection and transformation
@@ -491,6 +493,15 @@ review. Install only packages you trust.
 
 ### Build a plugin independently
 
+An optional manifest `default_shortcut = "control+command+i"` supplies a default
+shortcut (letter or Space, with `control`, `option`, `shift`, and/or `command`).
+User shortcut preferences override it. Without `shortcut_host_action`, the
+shortcut opens the plugin's search page. `shortcut_host_action = "text.compose"`
+starts composition directly and requires the `text.compose` capability. The
+service accepts the plugin's `terminal_path` and `editor_path` settings. The
+Neovim Input plugin requires a host advertising `text.compose` version 1, so its
+first installation also needs the updated Nexus host.
+
 The app release script still builds the bundled plugins. To build just one plugin
 without rebuilding or re-signing Nexus (Python 3.11+ and Rust required):
 
@@ -555,6 +566,7 @@ a host integration before execution or in place of it by adding `host_action.<ac
 | `system.media` | `system.control` | `command`: `mute`, `volume-up`, `volume-down`, `play-pause`, `next-track`, or `previous-track` |
 | `menu.press` | `accessibility.press` | `target_pid`, `menu_path` (JSON array), `menu_item_id`; performs the selected application's menu command |
 | `text.edit` | `clipboard.write` | Opens the external text editor using `preview`; submits edited text to `edit_submit_action` (defaults to `apply_edit`) |
+| `text.compose` | `text.compose` | Opens a blank bottom-docked editor; copies saved text and pastes it into the original window. Optional parameters: `terminal_path`, `editor_path`. |
 | `notifications.authorize` | `notifications` | Requests macOS notification permission before submitting a plugin action with inline arguments |
 
 For example, `metadata = {"host_action.toggle": "system.media", "command": "mute"}`

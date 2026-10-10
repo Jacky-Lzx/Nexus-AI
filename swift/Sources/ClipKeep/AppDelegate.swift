@@ -40,6 +40,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             guard self.coordinator.isEnabled(pluginId),
                   let descriptor = self.plugins.first(where: { $0.id == pluginId }) else { return }
+            if descriptor.shortcutHostAction == PluginHostAction.composeText.rawValue,
+               descriptor.capabilities.contains(PluginHostAction.composeText.capability) {
+                self.launcher.composeText(configuration: PluginConfigurationPreference.settings(for: pluginId))
+                return
+            }
             switch pluginId {
             case "io.clipkeep.clipboard": self.launcher.toggle(mode: .clipboard)
             default: self.launcher.toggle(mode: .plugin(descriptor))
@@ -161,7 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func refreshHotKeys() {
         let enabledPluginIds = [GlobalHotKey.globalSearchId]
             + plugins.map(\.id).filter { coordinator.isEnabled($0) }
-        let failures = GlobalHotKey.shared.configure(enabledPluginIds: enabledPluginIds)
+        let defaults = Dictionary(uniqueKeysWithValues: plugins.compactMap { descriptor in
+            descriptor.defaultShortcut.map { (descriptor.id, $0) }
+        })
+        let failures = GlobalHotKey.shared.configure(enabledPluginIds: enabledPluginIds, defaultShortcuts: defaults)
         if !failures.isEmpty {
             coordinator.onStatusChanged?(
                 "Could not register shortcuts for: \(failures.joined(separator: ", "))"
